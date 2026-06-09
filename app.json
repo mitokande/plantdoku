@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Plantdoku",
+    "slug": "plantdoku",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#13251A",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mithat-ck.plantdoku"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.mithat_ck.plantdoku"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
