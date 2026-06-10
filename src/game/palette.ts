@@ -22,18 +22,23 @@ export const PLANT_IDS: string[] = [
   "purple-spike",
 ];
 
-/** Soft region tints. At least as many as the largest board (9). */
+/**
+ * Region tints. At least as many as the largest board (9).
+ * Hues are spaced evenly (~30° apart) at matched saturation/lightness so no
+ * two read as near-twins; the generator additionally assigns them so that
+ * touching clusters get maximally different colours.
+ */
 export const REGION_COLORS: string[] = [
-  "#F7C5CC", // pink
-  "#FBE0A2", // peach
-  "#BFE3B0", // mint
-  "#A9D8EF", // sky
-  "#D7BDE2", // lavender
-  "#F5B7A6", // coral
-  "#C9E4A6", // lime
-  "#F9E79F", // butter
-  "#AEDff1", // light blue
-  "#F8C9DE", // rose
-  "#B5EAD7", // seafoam
-  "#E8C6A0", // sand
+  "#F5A9AD", // pink
+  "#F6BE8E", // orange
+  "#EEDC7C", // yellow
+  "#BFE283", // lime
+  "#92D993", // green
+  "#7EDFB4", // spring
+  "#79D9D9", // cyan
+  "#88C4F0", // sky
+  "#A8AFF4", // blue
+  "#C5A5F0", // purple
+  "#E2A1E6", // orchid
+  "#F4A3CC", // rose
 ];

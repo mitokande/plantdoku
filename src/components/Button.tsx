@@ -8,9 +8,12 @@ interface Props {
   icon?: string;
   onPress: () => void;
   disabled?: boolean;
-  variant?: "solid" | "ghost";
+  variant?: "solid" | "ghost" | "danger";
   flex?: boolean;
 }
+
+// Height of the darker bottom edge that gives buttons their "pressable" depth.
+const EDGE = 4;
 
 export function Button({
   label,
@@ -21,62 +24,97 @@ export function Button({
   flex,
 }: Props) {
   const solid = variant === "solid";
+  const danger = variant === "danger";
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      style={({ pressed }) => [
-        styles.base,
-        solid ? styles.solid : styles.ghost,
+      style={[
+        styles.edge,
+        solid ? styles.edgeSolid : danger ? styles.edgeDanger : styles.edgeGhost,
         flex && { flex: 1 },
-        pressed && !disabled && styles.pressed,
         disabled && styles.disabled,
       ]}
     >
-      <View style={styles.inner}>
-        {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-        <Text style={[styles.label, solid && styles.labelSolid]}>{label}</Text>
-      </View>
+      {({ pressed }) => (
+        <View
+          style={[
+            styles.face,
+            solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
+            pressed && !disabled && styles.facePressed,
+          ]}
+        >
+          {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+          <Text
+            style={[
+              styles.label,
+              solid && styles.labelSolid,
+              danger && styles.labelDanger,
+            ]}
+          >
+            {label}
+          </Text>
+        </View>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  base: {
+  // The edge layer shows through below the face; pressing slides the face
+  // down over it, so total height never changes.
+  edge: {
+    borderRadius: radius.md,
+  },
+  edgeSolid: {
+    backgroundColor: theme.accentDark,
+  },
+  edgeGhost: {
+    backgroundColor: theme.panelEdge,
+  },
+  edgeDanger: {
+    backgroundColor: theme.dangerDark,
+  },
+  face: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: radius.md,
-    alignItems: "center",
-    justifyContent: "center",
+    marginBottom: EDGE,
   },
-  ghost: {
+  facePressed: {
+    marginTop: EDGE,
+    marginBottom: 0,
+  },
+  faceSolid: {
+    backgroundColor: theme.accent,
+  },
+  faceGhost: {
     backgroundColor: theme.panel,
     borderWidth: 1,
     borderColor: theme.panelLine,
   },
-  solid: {
-    backgroundColor: theme.accent,
-  },
-  pressed: {
-    opacity: 0.7,
+  faceDanger: {
+    backgroundColor: theme.danger,
   },
   disabled: {
     opacity: 0.4,
-  },
-  inner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
   },
   icon: {
     fontSize: 16,
   },
   label: {
     color: theme.text,
-    fontWeight: "700",
+    fontWeight: "800",
     fontSize: 15,
   },
   labelSolid: {
     color: "#0E2110",
+  },
+  labelDanger: {
+    color: "#33100B",
   },
 });

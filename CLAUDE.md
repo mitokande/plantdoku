@@ -15,7 +15,19 @@ plant type / colour. The player places one plant marker so there is:
 
 Every generated board has exactly **one** solution.
 
-Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9**.
+Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9** — each also gated by deduction
+tier (see Generator), so every board is solvable by pure logic, no guessing.
+
+**Progression is level-based** (no difficulty picker): 30 curated levels in
+`src/game/levels.ts`, each `{difficulty, seed}` — generation is **seeded and
+deterministic**, so every player gets the identical board for level N. Curve:
+ramp with breathers (L1–8 easy, L9–19 medium with an easy breather at L12,
+L20+ hard with medium breathers at L21/L25). Completing the highest unlocked
+level unlocks the next; after L30 the menu shows "more levels coming soon".
+Seeds are minted offline by `scripts/pick_level_seeds.ts` (`npx tsx`), which
+verifies tier-band fit + reproducibility — rerun it for future level batches.
+NOTE: changing the generator algorithm changes what every seed produces;
+re-pick seeds if generator behaviour changes.
 
 ## Tech stack
 
@@ -46,7 +58,9 @@ SHEET=/path/to/sheet.png python3 scripts/slice_sprites.py
 Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
 
 - **Tap** a cell → toggle an **✕** "no" note (tap again to clear).
-- **Swipe / drag** across cells → paint **✕** marks quickly.
+- **Swipe / drag** across cells → paint **✕** marks quickly. If the drag
+  **starts on an ✕-marked cell**, the whole drag **erases** ✕ marks instead
+  (mode is fixed at drag start; plants are never affected either way).
 - **Double-tap** a cell → place a **plant** (the cluster's plant, revealed on placement).
 
 Discrimination logic: movement past `DRAG_THRESHOLD` (10px) becomes a drag
@@ -54,11 +68,28 @@ Discrimination logic: movement past `DRAG_THRESHOLD` (10px) becomes a drag
 fired on a timer) from double-tap (place) — so a double-tap never leaves a stray
 ✕ behind.
 
-**Cell → touch mapping uses `nativeEvent.locationX/locationY`** (relative to the
-board frame, which is the touch target via `pointerEvents="box-only"`). Do NOT
-switch back to `pageX/pageY` + `measureInWindow` — that caused a vertical offset
-on real devices because the status-bar / safe-area inset differs between the two
+**Cell → touch mapping**: the **grant** uses `nativeEvent.locationX/locationY`
+(relative to the board frame, which is the touch target via
+`pointerEvents="box-only"`); **moves** use grant point + `gestureState.dx/dy`.
+Do NOT read `locationX/Y` on move events — once the finger leaves the board the
+event target is whatever view it is over, so those local coordinates wrap back
+into the grid (marking cells on the far side). And do NOT switch to
+`pageX/pageY` + `measureInWindow` — that caused a vertical offset on real
+devices because the status-bar / safe-area inset differs between the two
 coordinate systems.
+
+### Onboarding
+
+First-ever play of Level 1 runs a 4-step interactive tutorial on the real board
+(state machine in `GameScreen.tsx`, `TUTORIAL_STEPS`): goal text → forced
+placement on the easy board's guaranteed **singleton cluster** (pulsing gold
+ring via `Board`'s `highlight` prop; input locked to that one double-tap) →
+mark-✕ teach (place blocked, advances at 3 ✕s) → free-play dismiss. The coach
+card is `TutorialBubble.tsx` (replaces the hint pill while active);
+Undo/Hint/Reset are disabled until the last step. Completion persists
+`plantdoku:onboarded` (exposed by `useGame` as `onboarded` /
+`completeOnboarding()`). A **"Help ?"** header button opens `HelpOverlay.tsx`
+(rules + gestures) anytime.
 
 ## Visual decisions
 
@@ -80,39 +111,64 @@ Game core is **pure TypeScript, framework-free**, so it runs under plain Node
 ```
 src/game/
   types.ts       Difficulty, CellState, Puzzle, DIFFICULTIES (6/8/9)
+  levels.ts      LEVELS: 30 curated {difficulty, seed} + getLevel — pure data
   palette.ts     PLANT_IDS (17) + REGION_COLORS — pure data, headless-safe
   plants.ts      id -> require(png) sprite map — RN ONLY (do not import in core)
-  generator.ts   generatePuzzle(size) -> unique-solution Puzzle
-  solver.ts      countSolutions / enumerateSolutions / findSolution
+  generator.ts   generatePuzzle(difficulty, seed?) -> logic-solvable, tier-gated
+                 Puzzle; seeded = deterministic (mulberry32 behind all randomness)
+  solver.ts      countSolutions / enumerateSolutions / findSolution (backtracking)
+  logicSolver.ts rateBoard -> {solved, tier 1..3, unsound} human-style propagation
   validator.ts   findConflicts (row/col/cluster/adjacency) + isSolved
   runTests.ts    headless correctness tests (npm test)
-src/state/useGame.ts   reducer hook: PAINT/PLACE/TAP, undo/reset/hint, timer, best
+src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
+                 timer, unlocked level + per-level best + onboarded (AsyncStorage)
 src/components/
-  Board.tsx      n×n grid + PanResponder gestures (the gesture brain)
+  Board.tsx      n×n grid + PanResponder gestures (the gesture brain) + highlight ring
   Cell.tsx       display-only cell (colour, ✕, placed plant + ring)
-  GameScreen.tsx header, stats, board, controls, win overlay; wires haptics
-  DifficultyMenu.tsx, Button.tsx, WinOverlay.tsx, Confetti.tsx
+  GameScreen.tsx header (Level N, Help ?), stats, board, controls, win overlay;
+                 haptics; first-play tutorial state machine
+  MainMenu.tsx   title + single Play button (Level N / all-complete state) + ⚙
+  TutorialBubble.tsx  tutorial coach card · HelpOverlay.tsx  "How to play" card
+  SettingsOverlay.tsx settings modal: flush game data (inline confirm; uses
+                 useGame.flushData — wipes all AsyncStorage keys, back to L1)
+  Button.tsx (solid/ghost/danger), WinOverlay.tsx (Next level / coming soon),
+  Confetti.tsx
 src/theme.ts, src/format.ts
 App.tsx          menu <-> game screen switch
-scripts/slice_sprites.py   sprite-sheet slicer (PIL + SciPy)
+scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
+scripts/pick_level_seeds.ts  offline seed picker for the level table
 ```
 
-### Generator (the crux — guarantees a unique solution)
+### Generator (the crux — guarantees a *logic-solvable* board)
 
-With one marker per row & column, two markers can only touch diagonally between
-consecutive rows, so no-adjacency reduces to `|col(r) − col(r+1)| ≥ 2`. Steps:
+`generatePuzzle(difficulty)` returns a board that is solvable by **pure logic, no
+guessing** — a strictly stronger guarantee than "unique solution" (uniqueness ≠
+fairness: ~70% of merely-unique boards actually require guessing). With one marker
+per row & column, two markers can only touch diagonally between consecutive rows,
+so no-adjacency reduces to `|col(r) − col(r+1)| ≥ 2`. Steps:
 
 1. random valid solution (permutation satisfying that constraint),
 2. flood-grow `size` connected clusters, one seeded per solution cell
-   (growth weighted uniformly over the frontier),
+   (growth weighted uniformly over the frontier). **Easy boards freeze one
+   random cluster at its 1-cell seed** — a guaranteed singleton cluster as an
+   obvious first placement (the uniqueness repair in step 3 is told never to
+   move cells into it),
 3. **repair to uniqueness**: while another solution exists, move one of that
    alternate's **non-owner** cells into a neighbouring cluster. The intended
    solution only sits on cluster "owner" cells, so it stays valid while the
-   alternate loses its one-per-cluster property and dies.
+   alternate loses its one-per-cluster property and dies. (`generateUniqueBoard`
+   does steps 1–3; it is exported for tests.)
+4. **rate + gate** (`logicSolver.ts` `rateBoard`): run a human-style propagation
+   solver (singles → confinement → subsets). Reject the board unless it is fully
+   solved by logic **and** its hardest tier falls in the difficulty's
+   `DIFFICULTY_BANDS` window (easy 6×6 = tier 1–2, medium 8×8 = tier 2–3, hard 9×9
+   = tier 3). A truth-guarded run rejects any board where a rule eliminated the
+   true cell, so a solver bug can only cost yield, never ship a bad board.
 
-Pure random growth almost never yields unique boards at 8–9; the repair step is
-what makes it reliable (≈100% at 6/8, ≈99.5% at 9, generated in <60ms; the
-outer loop retries on the rare miss).
+Difficulty is now an **ordered** property (size + deduction depth), not size alone.
+Logic-solvable yield is ~27–38%, so gating costs retries: latency is ~1ms easy,
+~6ms medium, ~50ms median hard (p95 ~190ms, rare ~400ms tail). The outer loop
+keeps a closest-to-band solvable board as a fallback so it never throws.
 
 ## Sprite assets
 
@@ -124,8 +180,10 @@ background to transparent, then extracts each plant as a **connected component**
 
 ## Verification approach (no device needed)
 
-1. `npm test` — generates many puzzles/size, asserts unique solution, connected
-   clusters, one solution cell per cluster, validator agreement.
+1. `npm test` — generates puzzles/difficulty (asserts unique solution, connected
+   clusters, one solution cell per cluster, validator agreement, **logic-solvable
+   + in tier band**), then audits the logic solver over 600 raw boards/size
+   asserting **0 unsound** (no rule ever eliminates a true-solution cell).
 2. `npm run typecheck`.
 3. `npx expo export -p web` (or `-p android`) — full Metro bundle resolves all
    imports + the 17 assets.
@@ -136,8 +194,9 @@ background to transparent, then extracts each plant as a **connected component**
 ## Status
 
 Feature-complete and verified: generator + unique solutions, gesture model,
-live conflict highlighting, hint, undo/reset, timer + best-time persistence,
-win animation, difficulty menu. Runs on iOS/Android (Expo Go) and web.
+live conflict highlighting, hint, undo/reset, timer + per-level best times,
+win animation, 30-level seeded progression with unlock persistence, first-play
+interactive tutorial + Help overlay. Runs on iOS/Android (Expo Go) and web.
 
 ## Conventions / gotchas
 

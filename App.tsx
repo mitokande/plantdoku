@@ -7,18 +7,20 @@ import {
   StyleSheet,
 } from "react-native";
 
-import { DifficultyMenu } from "./src/components/DifficultyMenu";
+import { MainMenu } from "./src/components/MainMenu";
 import { GameScreen } from "./src/components/GameScreen";
-import type { Difficulty } from "./src/game/types";
+import { SettingsOverlay } from "./src/components/SettingsOverlay";
+import { LEVEL_COUNT } from "./src/game/levels";
 import { useGame } from "./src/state/useGame";
 import { theme } from "./src/theme";
 
 export default function App() {
-  const game = useGame("easy");
+  const game = useGame();
   const [screen, setScreen] = useState<"menu" | "game">("menu");
+  const [showSettings, setShowSettings] = useState(false);
 
-  const start = (d: Difficulty) => {
-    game.newGame(d);
+  const start = () => {
+    game.newGame(Math.min(game.unlockedLevel, LEVEL_COUNT));
     setScreen("game");
   };
 
@@ -26,9 +28,20 @@ export default function App() {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
       {screen === "menu" ? (
-        <DifficultyMenu bestTimes={game.bestTimes} onSelect={start} />
+        <MainMenu
+          unlockedLevel={game.unlockedLevel}
+          allComplete={game.allComplete}
+          onPlay={start}
+          onSettings={() => setShowSettings(true)}
+        />
       ) : (
         <GameScreen game={game} onMenu={() => setScreen("menu")} />
+      )}
+      {showSettings && (
+        <SettingsOverlay
+          onFlush={game.flushData}
+          onClose={() => setShowSettings(false)}
+        />
       )}
     </SafeAreaView>
   );

@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, StyleSheet, Text, View } from "react-native";
 
 import { formatTime } from "../format";
 import { radius, theme } from "../theme";
@@ -7,26 +7,83 @@ import { Button } from "./Button";
 import { Confetti } from "./Confetti";
 
 interface Props {
+  level: number;
   seconds: number;
   bestSeconds?: number;
   isNewBest: boolean;
-  onPlayAgain: () => void;
+  hasNext: boolean;
+  onNext: () => void;
   onMenu: () => void;
 }
 
 export function WinOverlay({
+  level,
   seconds,
   bestSeconds,
   isNewBest,
-  onPlayAgain,
+  hasNext,
+  onNext,
   onMenu,
 }: Props) {
+  // Springy entrance: backdrop fades while the card scales up with overshoot.
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(enter, {
+      toValue: 1,
+      friction: 6,
+      tension: 70,
+      useNativeDriver: true,
+    }).start();
+  }, [enter]);
+
+  // "New best" badge pulses for that arcade-y reward feel.
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!isNewBest) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 550,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 550,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isNewBest, pulse]);
+
+  const fade = enter.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+    extrapolate: "clamp",
+  });
+
   return (
-    <View style={styles.backdrop}>
+    <Animated.View style={[styles.backdrop, { opacity: fade }]}>
       <Confetti />
-      <View style={styles.card}>
-        <Text style={styles.emoji}>🌱</Text>
-        <Text style={styles.title}>Solved!</Text>
+      <Animated.View
+        style={[
+          styles.card,
+          {
+            transform: [
+              {
+                scale: enter.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.7, 1],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Text style={styles.emoji}>{isNewBest ? "🏆" : "🌱"}</Text>
+        <Text style={styles.title}>Level {level} solved!</Text>
 
         <View style={styles.stats}>
           <View style={styles.stat}>
@@ -39,20 +96,44 @@ export function WinOverlay({
           </View>
         </View>
 
-        {isNewBest && <Text style={styles.newBest}>★ New best time!</Text>}
+        {isNewBest && (
+          <Animated.Text
+            style={[
+              styles.newBest,
+              {
+                transform: [
+                  {
+                    scale: pulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            ★ New best time!
+          </Animated.Text>
+        )}
+
+        {!hasNext && (
+          <Text style={styles.comingSoon}>More levels coming soon 🌻</Text>
+        )}
 
         <View style={styles.actions}>
           <Button label="Menu" icon="☰" onPress={onMenu} flex />
-          <Button
-            label="Play again"
-            icon="↻"
-            variant="solid"
-            onPress={onPlayAgain}
-            flex
-          />
+          {hasNext && (
+            <Button
+              label="Next level"
+              icon="▶"
+              variant="solid"
+              onPress={onNext}
+              flex
+            />
+          )}
         </View>
-      </View>
-    </View>
+      </Animated.View>
+    </Animated.View>
   );
 }
 
@@ -111,6 +192,12 @@ const styles = StyleSheet.create({
     color: theme.gold,
     fontSize: 16,
     fontWeight: "800",
+    marginTop: 14,
+  },
+  comingSoon: {
+    color: theme.textDim,
+    fontSize: 14,
+    fontWeight: "700",
     marginTop: 14,
   },
   actions: {

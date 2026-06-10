@@ -1,21 +1,16 @@
-// Game state hook: board, tap-cycle, undo/reset/hint, timer, win + best times.
+// Game state hook: board, tap-cycle, undo/reset/hint, timer, win + level
+// progression (unlocked level + per-level best times persisted).
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { generatePuzzle } from "../game/generator";
+import { getLevel, LEVEL_COUNT } from "../game/levels";
 import { findConflicts, isSolved } from "../game/validator";
-import {
-  DIFFICULTIES,
-  DIFFICULTY_ORDER,
-  type CellState,
-  type Coord,
-  type Difficulty,
-  type Puzzle,
-} from "../game/types";
+import type { CellState, Coord, Puzzle } from "../game/types";
 
 interface GameState {
-  difficulty: Difficulty;
+  level: number;
   puzzle: Puzzle;
   states: CellState[][];
   history: CellState[][][];
@@ -27,8 +22,9 @@ interface GameState {
 }
 
 type Action =
-  | { type: "NEW_GAME"; difficulty: Difficulty }
+  | { type: "NEW_GAME"; level: number }
   | { type: "PAINT"; r: number; c: number } // swipe/drag → mark ✕
+  | { type: "ERASE"; r: number; c: number } // swipe/drag from an ✕ → unmark
   | { type: "PLACE"; r: number; c: number } // double tap → place plant
   | { type: "TAP"; r: number; c: number } // single tap → toggle ✕ / clear
   | { type: "UNDO" }
@@ -36,7 +32,9 @@ type Action =
   | { type: "HINT" }
   | { type: "TICK" };
 
-const bestKey = (d: Difficulty) => `plantdoku:best:${d}`;
+const UNLOCKED_KEY = "plantdoku:unlocked";
+const ONBOARDED_KEY = "plantdoku:onboarded";
+const bestKey = (level: number) => `plantdoku:best:level:${level}`;
 
 const emptyGrid = (size: number): CellState[][] =>
   Array.from({ length: size }, () => new Array<CellState>(size).fill("empty"));
@@ -69,12 +67,13 @@ function settle(state: GameState, grid: CellState[][], started: boolean): GameSt
   };
 }
 
-function freshState(difficulty: Difficulty): GameState {
-  const size = DIFFICULTIES[difficulty].size;
+function freshState(level: number): GameState {
+  const { difficulty, seed } = getLevel(level);
+  const puzzle = generatePuzzle(difficulty, seed);
   return {
-    difficulty,
-    puzzle: generatePuzzle(size),
-    states: emptyGrid(size),
+    level,
+    puzzle,
+    states: emptyGrid(puzzle.size),
     history: [],
     conflicts: new Set(),
     placedCount: 0,
@@ -87,7 +86,7 @@ function freshState(difficulty: Difficulty): GameState {
 function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "NEW_GAME":
-      return freshState(action.difficulty);
+      return freshState(action.level);
 
     case "TICK":
       return state.started && !state.solved
@@ -101,6 +100,16 @@ function reducer(state: GameState, action: Action): GameState {
       if (state.states[r][c] !== "empty") return state;
       const grid = cloneGrid(state.states);
       grid[r][c] = "marked";
+      return settle(state, grid, true);
+    }
+
+    // Swipe/drag starting on an ✕: unmark ✕ cells (never touches plants).
+    case "ERASE": {
+      if (state.solved) return state;
+      const { r, c } = action;
+      if (state.states[r][c] !== "marked") return state;
+      const grid = cloneGrid(state.states);
+      grid[r][c] = "empty";
       return settle(state, grid, true);
     }
 
@@ -175,24 +184,36 @@ function reducer(state: GameState, action: Action): GameState {
   }
 }
 
-export function useGame(initial: Difficulty = "easy") {
-  const [state, dispatch] = useReducer(reducer, initial, freshState);
-  const [bestTimes, setBestTimes] = useState<Partial<Record<Difficulty, number>>>(
-    {},
-  );
+export function useGame(initialLevel = 1) {
+  const [state, dispatch] = useReducer(reducer, initialLevel, freshState);
+  // Highest level the player may attempt (LEVEL_COUNT + 1 = all complete).
+  const [unlockedLevel, setUnlockedLevel] = useState(1);
+  const [bestTimes, setBestTimes] = useState<Record<number, number>>({});
+  // Whether the first-play tutorial has been completed (or dismissed).
+  const [onboarded, setOnboarded] = useState(false);
 
-  // Load saved best times once.
+  // Load saved progression + best times once.
   useEffect(() => {
     let alive = true;
     (async () => {
-      const pairs = await Promise.all(
-        DIFFICULTY_ORDER.map(
-          async (d) => [d, await AsyncStorage.getItem(bestKey(d))] as const,
-        ),
-      );
+      const keys = [
+        UNLOCKED_KEY,
+        ONBOARDED_KEY,
+        ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
+      ];
+      const pairs = await AsyncStorage.multiGet(keys);
       if (!alive) return;
-      const bt: Partial<Record<Difficulty, number>> = {};
-      for (const [d, v] of pairs) if (v != null) bt[d] = parseInt(v, 10);
+      const bt: Record<number, number> = {};
+      for (const [key, v] of pairs) {
+        if (v == null) continue;
+        if (key === UNLOCKED_KEY) {
+          setUnlockedLevel(Math.min(parseInt(v, 10), LEVEL_COUNT + 1));
+        } else if (key === ONBOARDED_KEY) {
+          setOnboarded(true);
+        } else {
+          bt[parseInt(key.slice(key.lastIndexOf(":") + 1), 10)] = parseInt(v, 10);
+        }
+      }
       setBestTimes(bt);
     })().catch(() => {});
     return () => {
@@ -208,20 +229,25 @@ export function useGame(initial: Difficulty = "easy") {
     return () => clearInterval(id);
   }, [running]);
 
-  // Record a new best time on the rising edge of "solved".
+  // On the rising edge of "solved": record best time + unlock the next level.
   const wasSolved = useRef(false);
   const [newBest, setNewBest] = useState(false);
   useEffect(() => {
     if (!state.solved) {
       setNewBest(false);
     } else if (!wasSolved.current) {
-      const d = state.difficulty;
-      const prev = bestTimes[d];
-      const improved = prev == null || state.seconds < prev;
+      const { level, seconds } = state;
+      const prev = bestTimes[level];
+      const improved = prev == null || seconds < prev;
       setNewBest(improved);
       if (improved) {
-        setBestTimes((b) => ({ ...b, [d]: state.seconds }));
-        AsyncStorage.setItem(bestKey(d), String(state.seconds)).catch(() => {});
+        setBestTimes((b) => ({ ...b, [level]: seconds }));
+        AsyncStorage.setItem(bestKey(level), String(seconds)).catch(() => {});
+      }
+      if (level === unlockedLevel) {
+        const next = level + 1; // may be LEVEL_COUNT + 1 = "all complete"
+        setUnlockedLevel(next);
+        AsyncStorage.setItem(UNLOCKED_KEY, String(next)).catch(() => {});
       }
     }
     wasSolved.current = state.solved;
@@ -231,11 +257,33 @@ export function useGame(initial: Difficulty = "easy") {
     ...state,
     running,
     newBest,
-    bestTimes,
-    bestSeconds: bestTimes[state.difficulty],
+    unlockedLevel,
+    allComplete: unlockedLevel > LEVEL_COUNT,
+    hasNextLevel: state.level < LEVEL_COUNT,
+    bestSeconds: bestTimes[state.level],
     canUndo: state.history.length > 0,
-    newGame: (d: Difficulty) => dispatch({ type: "NEW_GAME", difficulty: d }),
+    onboarded,
+    completeOnboarding: () => {
+      setOnboarded(true);
+      AsyncStorage.setItem(ONBOARDED_KEY, "1").catch(() => {});
+    },
+    // Wipe all persisted data (progress, best times, tutorial flag) and
+    // restart from level 1 as a brand-new player.
+    flushData: () => {
+      const keys = [
+        UNLOCKED_KEY,
+        ONBOARDED_KEY,
+        ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
+      ];
+      AsyncStorage.multiRemove(keys).catch(() => {});
+      setUnlockedLevel(1);
+      setBestTimes({});
+      setOnboarded(false);
+      dispatch({ type: "NEW_GAME", level: 1 });
+    },
+    newGame: (level: number) => dispatch({ type: "NEW_GAME", level }),
     paint: (r: number, c: number) => dispatch({ type: "PAINT", r, c }),
+    erase: (r: number, c: number) => dispatch({ type: "ERASE", r, c }),
     place: (r: number, c: number) => dispatch({ type: "PLACE", r, c }),
     tap: (r: number, c: number) => dispatch({ type: "TAP", r, c }),
     undo: () => dispatch({ type: "UNDO" }),
