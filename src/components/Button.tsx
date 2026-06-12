@@ -10,6 +10,7 @@ interface Props {
   disabled?: boolean;
   variant?: "solid" | "ghost" | "danger";
   flex?: boolean;
+  badge?: number; // info count in a gold corner bubble; hidden when 0/undefined
 }
 
 // Height of the darker bottom edge that gives buttons their "pressable" depth.
@@ -22,6 +23,7 @@ export function Button({
   disabled,
   variant = "ghost",
   flex,
+  badge,
 }: Props) {
   const solid = variant === "solid";
   const danger = variant === "danger";
@@ -37,24 +39,31 @@ export function Button({
       ]}
     >
       {({ pressed }) => (
-        <View
-          style={[
-            styles.face,
-            solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
-            pressed && !disabled && styles.facePressed,
-          ]}
-        >
-          {icon ? <Text style={styles.icon}>{icon}</Text> : null}
-          <Text
+        <>
+          <View
             style={[
-              styles.label,
-              solid && styles.labelSolid,
-              danger && styles.labelDanger,
+              styles.face,
+              solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
+              pressed && !disabled && styles.facePressed,
             ]}
           >
-            {label}
-          </Text>
-        </View>
+            {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+            <Text
+              style={[
+                styles.label,
+                solid && styles.labelSolid,
+                danger && styles.labelDanger,
+              ]}
+            >
+              {label}
+            </Text>
+          </View>
+          {badge != null && badge > 0 && (
+            <View pointerEvents="none" style={styles.badge}>
+              <Text style={styles.badgeTxt}>{badge > 9 ? "9+" : badge}</Text>
+            </View>
+          )}
+        </>
       )}
     </Pressable>
   );
@@ -102,6 +111,23 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.4,
+  },
+  badge: {
+    position: "absolute",
+    top: -6,
+    right: -4,
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 4,
+    borderRadius: 999,
+    backgroundColor: theme.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeTxt: {
+    color: "#3D2E08",
+    fontSize: 11,
+    fontWeight: "900",
   },
   icon: {
     fontSize: 16,

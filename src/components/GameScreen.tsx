@@ -3,13 +3,20 @@ import {
   Animated,
   Platform,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 
+import { LinearGradient } from "expo-linear-gradient";
+
 import type { Game } from "../state/useGame";
+import { nextCard } from "../game/cards";
+import { dailyNumber } from "../game/daily";
+import { parSeconds } from "../game/stars";
 import { formatTime } from "../format";
+import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Board } from "./Board";
 import { Button } from "./Button";
@@ -48,6 +55,12 @@ const TUTORIAL_STEPS: { text: string; button?: string }[] = [
   },
 ];
 
+const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
+
+// Garden-at-dusk depth: slightly lighter glade behind the board, darker
+// canopy at the top and bottom edges.
+const BG_GRADIENT = ["#0E1F14", "#1D3826", "#0B1710"] as const;
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
@@ -60,6 +73,13 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function GameScreen({ game, onMenu }: Props) {
   const { size } = game.puzzle;
   const [showHelp, setShowHelp] = useState(false);
+
+  // Android back returns to the menu (an open overlay registers later and
+  // consumes the press first).
+  useBackHandler(() => {
+    onMenu();
+    return true;
+  });
 
   // --- First-play tutorial -------------------------------------------------
   // The forced first move: Level 1 (easy) always has a singleton cluster, and
@@ -166,13 +186,23 @@ export function GameScreen({ game, onMenu }: Props) {
   }, [game.placedCount, size, progress]);
 
   return (
-    <View style={styles.wrap}>
+    <LinearGradient
+      colors={BG_GRADIENT}
+      locations={[0, 0.42, 1]}
+      style={styles.wrap}
+    >
       <View style={styles.header}>
         <Pressable hitSlop={10} onPress={onMenu} style={styles.iconBtn}>
           <Text style={styles.iconTxt}>‹ Menu</Text>
         </Pressable>
         <View style={styles.pill}>
-          <Text style={styles.pillTxt}>Level {game.level}</Text>
+          <Text style={styles.pillTxt}>
+            {game.mode === "daily" && game.dailyKey
+              ? `🌞 Daily #${dailyNumber(game.dailyKey)}`
+              : game.mode === "endless" && game.endlessDifficulty
+                ? `🌿 ${DIFF_LABEL[game.endlessDifficulty]}`
+                : `Level ${game.level}`}
+          </Text>
         </View>
         <Pressable
           hitSlop={10}
@@ -183,10 +213,14 @@ export function GameScreen({ game, onMenu }: Props) {
         </Pressable>
       </View>
 
-      <View style={styles.statsCard}>
-        <Stat label="TIME" value={formatTime(game.seconds)} />
-        <View style={styles.statDivider} />
-        <Stat label="BEST" value={formatTime(game.bestSeconds)} />
+      <View style={styles.statsRow}>
+        <Text style={styles.statsLeaf}>🌿</Text>
+        <View style={styles.statsCard}>
+          <Stat label="TIME" value={formatTime(game.seconds)} />
+          <View style={styles.statDivider} />
+          <Stat label="BEST" value={formatTime(game.bestSeconds)} />
+        </View>
+        <Text style={[styles.statsLeaf, styles.statsLeafFlip]}>🌿</Text>
       </View>
 
       <View style={styles.progressRow}>
@@ -226,7 +260,20 @@ export function GameScreen({ game, onMenu }: Props) {
           onErase={erase}
           onPlace={place}
           onTap={tapCell}
-          highlight={tutorial && tutStep === 1 ? tutTarget : null}
+          highlight={
+            tutorial
+              ? tutStep === 1
+                ? tutTarget
+                : null
+              : game.activeHint?.action === "place"
+                ? game.activeHint.cell
+                : null
+          }
+          hintCells={
+            !tutorial && game.activeHint?.action === "mark"
+              ? game.activeHint.cells
+              : null
+          }
         />
       </Animated.View>
 
@@ -239,6 +286,10 @@ export function GameScreen({ game, onMenu }: Props) {
           buttonLabel={TUTORIAL_STEPS[tutStep].button}
           onButton={tutStep === 0 ? () => setTutStep(1) : finishTutorial}
         />
+      ) : game.activeHint ? (
+        <View style={styles.hintCard}>
+          <Text style={styles.hintCardTxt}>{game.activeHint.message}</Text>
+        </View>
       ) : (
         <View style={styles.hintPill}>
           <Text style={styles.hintLine}>
@@ -253,13 +304,16 @@ export function GameScreen({ game, onMenu }: Props) {
           icon="↶"
           onPress={game.undo}
           disabled={!game.canUndo || (tutorial && tutStep < 3)}
+          badge={game.undoDepth}
           flex
         />
         <Button
-          label="Hint"
-          icon="💡"
-          onPress={game.hint}
+          label={game.activeHint ? "Apply" : "Hint"}
+          icon={game.activeHint ? "✓" : "💡"}
+          variant={game.activeHint ? "solid" : "ghost"}
+          onPress={game.activeHint ? game.applyHint : game.requestHint}
           disabled={tutorial && tutStep < 3}
+          badge={game.hintsUsed}
           flex
         />
         <Button
@@ -280,11 +334,48 @@ export function GameScreen({ game, onMenu }: Props) {
           bestSeconds={game.bestSeconds}
           isNewBest={game.newBest}
           hasNext={game.hasNextLevel}
-          onNext={() => game.newGame(game.level + 1)}
+          daily={
+            game.mode === "daily" && game.dailyKey
+              ? { number: dailyNumber(game.dailyKey), streak: game.dailyStreak }
+              : null
+          }
+          stars={
+            game.mode === "level" && game.solveStars != null
+              ? {
+                  earned: game.solveStars,
+                  par: parSeconds(game.puzzle.size, game.puzzle.tier),
+                }
+              : null
+          }
+          newCards={game.mode === "level" ? game.newCards : []}
+          nextCardIn={
+            game.mode === "level"
+              ? (() => {
+                  const upcoming = nextCard(game.totalStars);
+                  return upcoming ? upcoming.stars - game.totalStars : null;
+                })()
+              : null
+          }
+          onShare={() => {
+            if (game.mode !== "daily" || !game.dailyKey) return;
+            const streak = game.dailyStreak;
+            const message =
+              `🌻 Plantdoku Daily #${dailyNumber(game.dailyKey)} — ` +
+              `⏱ ${formatTime(game.seconds)}` +
+              (streak > 1 ? ` · 🔥 ${streak} day streak` : "");
+            // Rejects on web when navigator.share is unavailable — ignore.
+            Share.share({ message }).catch(() => {});
+          }}
+          endless={game.mode === "endless"}
+          onNext={() =>
+            game.mode === "endless" && game.endlessDifficulty
+              ? game.newEndless(game.endlessDifficulty)
+              : game.newGame(game.level + 1)
+          }
           onMenu={onMenu}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -326,9 +417,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.5,
   },
-  statsCard: {
+  statsRow: {
     flexDirection: "row",
     alignSelf: "center",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 6,
+  },
+  statsLeaf: {
+    fontSize: 18,
+    opacity: 0.7,
+  },
+  statsLeafFlip: {
+    transform: [{ scaleX: -1 }],
+  },
+  statsCard: {
+    flexDirection: "row",
     alignItems: "center",
     gap: 22,
     backgroundColor: theme.panel,
@@ -337,7 +441,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: 8,
     paddingHorizontal: 26,
-    marginTop: 6,
   },
   statDivider: {
     width: 1,
@@ -403,6 +506,25 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginTop: 14,
     marginBottom: 14,
+  },
+  hintCard: {
+    alignSelf: "center",
+    width: "96%",
+    maxWidth: 460,
+    backgroundColor: theme.panel,
+    borderColor: theme.gold,
+    borderWidth: 1.5,
+    borderRadius: radius.md,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  hintCardTxt: {
+    color: theme.text,
+    fontSize: 13.5,
+    lineHeight: 18,
+    textAlign: "center",
   },
   hintLine: {
     color: theme.textDim,

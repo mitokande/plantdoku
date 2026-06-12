@@ -18,6 +18,10 @@ export const theme = {
   gold: "#FFD66B",
   // bottom-edge colours for the chunky "3D" hybrid-casual buttons/cards
   panelEdge: "#16291E",
+  // wooden board frame
+  wood: "#6E4A2E",
+  woodDark: "#4A311F",
+  woodLight: "#8A6238",
 };
 
 export const radius = { sm: 8, md: 14, lg: 22 };

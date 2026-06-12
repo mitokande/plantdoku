@@ -7,12 +7,16 @@ import {
   View,
 } from "react-native";
 
-import type { CellState, Puzzle } from "../game/types";
+import type { CellState, Coord, Puzzle } from "../game/types";
 import { cellKey } from "../game/validator";
 import { radius, theme } from "../theme";
 import { Cell } from "./Cell";
 
-const FRAME = 6;
+// Wooden rim around the grid. FRAME is the full rim width the touch math
+// sees (dark border + padding); locationX/Y are border-box relative on both
+// RN and web, so cells start exactly FRAME px from the view's edge.
+const FRAME = 10;
+const FRAME_BORDER = 3;
 const DRAG_THRESHOLD = 10; // px of movement before a touch becomes a drag
 const DOUBLE_MS = 260; // max gap between taps to count as a double tap
 
@@ -24,7 +28,8 @@ interface Props {
   onErase: (r: number, c: number) => void; // swipe from an ✕ → unmark
   onPlace: (r: number, c: number) => void; // double tap → plant
   onTap: (r: number, c: number) => void; // single tap → toggle ✕ / clear
-  highlight?: [number, number] | null; // tutorial: pulse a ring over this cell
+  highlight?: [number, number] | null; // tutorial/hint: pulse a ring over this cell
+  hintCells?: Coord[] | null; // teaching hint: static outline over these cells
 }
 
 /** Pulsing attention ring drawn over one cell (tutorial coach mark). */
@@ -79,6 +84,7 @@ export function Board({
   onPlace,
   onTap,
   highlight,
+  hintCells,
 }: Props) {
   const { width } = useWindowDimensions();
   const { size, regions, plants, colors } = puzzle;
@@ -208,6 +214,7 @@ export function Board({
       pointerEvents="box-only"
       style={[styles.frame, { width: cellPx * size + FRAME * 2 }]}
     >
+      <View pointerEvents="none" style={styles.frameGloss} />
       {Array.from({ length: size }, (_, r) => (
         <View key={r} style={styles.row}>
           {Array.from({ length: size }, (_, c) => {
@@ -225,6 +232,21 @@ export function Board({
           })}
         </View>
       ))}
+      {hintCells?.map(([r, c]) => (
+        <View
+          key={`h${r}-${c}`}
+          pointerEvents="none"
+          style={[
+            styles.hintCell,
+            {
+              left: FRAME + c * cellPx,
+              top: FRAME + r * cellPx,
+              width: cellPx,
+              height: cellPx,
+            },
+          ]}
+        />
+      ))}
       {highlight && (
         <HighlightRing
           x={FRAME + highlight[1] * cellPx}
@@ -238,10 +260,25 @@ export function Board({
 
 const styles = StyleSheet.create({
   frame: {
-    padding: FRAME,
-    backgroundColor: theme.frame,
-    borderRadius: radius.md,
+    padding: FRAME - FRAME_BORDER,
+    backgroundColor: theme.wood,
+    borderWidth: FRAME_BORDER,
+    borderColor: theme.woodDark,
+    borderRadius: radius.lg,
     overflow: "hidden",
+  },
+  // 1px light ring just inside the dark border — the "carved wood" highlight.
+  // Absolute children sit relative to the padding edge, so 0/0/0/0 hugs the
+  // inside of the border.
+  frameGloss: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 1,
+    borderColor: theme.woodLight,
+    borderRadius: radius.lg - FRAME_BORDER,
   },
   row: {
     flexDirection: "row",
@@ -251,5 +288,12 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: theme.gold,
     borderRadius: radius.sm,
+  },
+  hintCell: {
+    position: "absolute",
+    borderWidth: 2.5,
+    borderColor: theme.gold,
+    borderRadius: radius.sm,
+    backgroundColor: "rgba(255, 214, 90, 0.14)",
   },
 });

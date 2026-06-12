@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
+import { RARITY_COLORS, type PlantCard } from "../game/cards";
+import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
 import { radius, theme } from "../theme";
 import { Button } from "./Button";
@@ -12,6 +14,17 @@ interface Props {
   bestSeconds?: number;
   isNewBest: boolean;
   hasNext: boolean;
+  /** Set when a daily puzzle was solved — switches title/stats/actions. */
+  daily?: { number: number; streak: number } | null;
+  /** Set in endless mode — "Next level" becomes "New board". */
+  endless?: boolean;
+  /** Level-mode star rating for this solve (1..3) + the 3-star par time. */
+  stars?: { earned: number; par: number } | null;
+  /** Plant cards unlocked by this solve (level mode only). */
+  newCards?: PlantCard[];
+  /** Stars still needed for the next card, or null when all are collected. */
+  nextCardIn?: number | null;
+  onShare?: () => void;
   onNext: () => void;
   onMenu: () => void;
 }
@@ -22,6 +35,12 @@ export function WinOverlay({
   bestSeconds,
   isNewBest,
   hasNext,
+  daily,
+  endless,
+  stars,
+  newCards = [],
+  nextCardIn,
+  onShare,
   onNext,
   onMenu,
 }: Props) {
@@ -58,6 +77,19 @@ export function WinOverlay({
     return () => loop.stop();
   }, [isNewBest, pulse]);
 
+  // New-card reveal pops in after the main card settles.
+  const cardPop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (newCards.length === 0) return;
+    Animated.spring(cardPop, {
+      toValue: 1,
+      delay: 450,
+      friction: 5,
+      tension: 80,
+      useNativeDriver: true,
+    }).start();
+  }, [newCards.length, cardPop]);
+
   const fade = enter.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
@@ -83,7 +115,76 @@ export function WinOverlay({
         ]}
       >
         <Text style={styles.emoji}>{isNewBest ? "🏆" : "🌱"}</Text>
-        <Text style={styles.title}>Level {level} solved!</Text>
+        <Text style={styles.title}>
+          {daily
+            ? `Daily #${daily.number} solved!`
+            : endless
+              ? "Board solved!"
+              : `Level ${level} solved!`}
+        </Text>
+
+        {stars && (
+          <>
+            <Text style={styles.stars}>
+              {[1, 2, 3].map((i) => (
+                <Text
+                  key={i}
+                  style={i <= stars.earned ? styles.starOn : styles.starOff}
+                >
+                  ★
+                </Text>
+              ))}
+            </Text>
+            {stars.earned < 3 && (
+              <Text style={styles.starHint}>
+                3★ = no hints &amp; under {formatTime(stars.par)}
+              </Text>
+            )}
+          </>
+        )}
+
+        {newCards.length > 0 ? (
+          <Animated.View
+            style={[
+              styles.newCard,
+              { borderColor: RARITY_COLORS[newCards[0].rarity] },
+              {
+                opacity: cardPop,
+                transform: [
+                  {
+                    scale: cardPop.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.3, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Image
+              source={PLANT_SOURCES[newCards[0].plantId]}
+              style={styles.newCardImg}
+            />
+            <View>
+              <Text
+                style={[
+                  styles.newCardTag,
+                  { color: RARITY_COLORS[newCards[0].rarity] },
+                ]}
+              >
+                NEW CARD{newCards.length > 1 ? ` +${newCards.length - 1}` : ""}
+              </Text>
+              <Text style={styles.newCardName}>{newCards[0].name}</Text>
+            </View>
+          </Animated.View>
+        ) : (
+          stars != null &&
+          nextCardIn != null && (
+            <Text style={styles.nextCard}>
+              🃏 {nextCardIn}★ more until your next plant card
+            </Text>
+          )
+        )}
 
         <View style={styles.stats}>
           <View style={styles.stat}>
@@ -91,8 +192,17 @@ export function WinOverlay({
             <Text style={styles.statVal}>{formatTime(seconds)}</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statLabel}>BEST</Text>
-            <Text style={styles.statVal}>{formatTime(bestSeconds)}</Text>
+            {daily ? (
+              <>
+                <Text style={styles.statLabel}>STREAK</Text>
+                <Text style={styles.statVal}>🔥 {daily.streak}</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.statLabel}>BEST</Text>
+                <Text style={styles.statVal}>{formatTime(bestSeconds)}</Text>
+              </>
+            )}
           </View>
         </View>
 
@@ -116,20 +226,38 @@ export function WinOverlay({
           </Animated.Text>
         )}
 
-        {!hasNext && (
+        {!daily && !endless && !hasNext && (
           <Text style={styles.comingSoon}>More levels coming soon 🌻</Text>
         )}
 
         <View style={styles.actions}>
           <Button label="Menu" icon="☰" onPress={onMenu} flex />
-          {hasNext && (
+          {daily ? (
             <Button
-              label="Next level"
+              label="Share"
+              icon="📤"
+              variant="solid"
+              onPress={onShare ?? (() => {})}
+              flex
+            />
+          ) : endless ? (
+            <Button
+              label="New board"
               icon="▶"
               variant="solid"
               onPress={onNext}
               flex
             />
+          ) : (
+            hasNext && (
+              <Button
+                label="Next level"
+                icon="▶"
+                variant="solid"
+                onPress={onNext}
+                flex
+              />
+            )
           )}
         </View>
       </Animated.View>
@@ -167,6 +295,53 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "900",
     marginTop: 4,
+  },
+  stars: {
+    fontSize: 34,
+    marginTop: 8,
+    letterSpacing: 6,
+  },
+  starOn: {
+    color: theme.gold,
+  },
+  starOff: {
+    color: theme.panelLine,
+  },
+  starHint: {
+    color: theme.textDim,
+    fontSize: 12.5,
+    marginTop: 2,
+  },
+  newCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    backgroundColor: theme.panel,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+  },
+  newCardImg: {
+    width: 40,
+    height: 40,
+    resizeMode: "contain",
+  },
+  newCardTag: {
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+  },
+  newCardName: {
+    color: theme.text,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  nextCard: {
+    color: theme.textDim,
+    fontSize: 12.5,
+    marginTop: 10,
   },
   stats: {
     flexDirection: "row",

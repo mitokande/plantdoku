@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, Image, StyleSheet, View } from "react-native";
 
 import { PLANT_SOURCES } from "../game/plants";
 import type { CellState } from "../game/types";
@@ -13,14 +13,27 @@ interface Props {
   conflict: boolean;
 }
 
+// Inset between tiles — the board frame's wood shows through the gaps.
+const GAP = 1.5;
+
+/** Darker shade of a #RRGGBB colour, for the embossed glyph tint. */
+function darken(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v: number) => Math.round(v * 0.45);
+  return (
+    "#" +
+    [n >> 16, (n >> 8) & 0xff, n & 0xff]
+      .map((v) => ch(v).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
 function CellView({ px, state, plantId, color, conflict }: Props) {
   // Pop-in scales for the plant and the ✕ mark (hybrid-casual "juice").
   const plantPop = useRef(
     new Animated.Value(state === "placed" ? 1 : 0),
   ).current;
-  const markPop = useRef(
-    new Animated.Value(state === "marked" ? 1 : 0),
-  ).current;
+  const markPop = useRef(new Animated.Value(state === "marked" ? 1 : 0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -79,23 +92,60 @@ function CellView({ px, state, plantId, color, conflict }: Props) {
       // "box-only" doesn't shield grandchildren: a drag starting on an ✕/plant
       // element would otherwise lose its move events under react-native-web.
       pointerEvents="none"
-      style={[styles.cell, { width: px, height: px, backgroundColor: color }]}
+      style={[styles.cell, { width: px, height: px }]}
     >
-      {conflict && (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            styles.conflict,
-            {
-              opacity: pulse.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.35, 0.65],
-              }),
-            },
-          ]}
-        />
-      )}
+      {/* The rounded "stone" tile, inset so the wooden frame shows in the
+          gaps. overflow:hidden keeps the overlays inside the rounding. */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.tile,
+          { borderRadius: px * 0.16, backgroundColor: color },
+        ]}
+      >
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bevel]} />
+        {state !== "placed" && (
+          // Embossed watermark of the cluster's plant — a darker-tinted
+          // silhouette, replaced by the full-colour sprite on placement.
+          <Image
+            source={PLANT_SOURCES[plantId]}
+            resizeMode="contain"
+            style={[styles.glyph, { tintColor: darken(color) }]}
+          />
+        )}
+        {conflict && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              styles.conflict,
+              {
+                opacity: pulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.35, 0.65],
+                }),
+              },
+            ]}
+          />
+        )}
+        {state === "marked" && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              styles.markScrim,
+              {
+                opacity: markPop.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.1],
+                }),
+              },
+            ]}
+          />
+        )}
+      </View>
+      {/* Plant + ✕ live outside the tile so the spring overshoot / scale
+          animations aren't clipped by its rounded overflow:hidden box. */}
       {state === "placed" && (
         <Animated.View
           style={[styles.plantWrap, { transform: [{ scale: plantPop }] }]}
@@ -105,7 +155,6 @@ function CellView({ px, state, plantId, color, conflict }: Props) {
             resizeMode="contain"
             style={styles.plant}
           />
-          <View pointerEvents="none" style={styles.ring} />
         </Animated.View>
       )}
       {state === "marked" && (
@@ -137,13 +186,36 @@ const styles = StyleSheet.create({
   cell: {
     alignItems: "center",
     justifyContent: "center",
-    // subtle hairline grid only — no bold cluster outlines
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: "rgba(12,23,17,0.12)",
+  },
+  tile: {
+    position: "absolute",
+    top: GAP,
+    left: GAP,
+    right: GAP,
+    bottom: GAP,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Faint top-light / bottom-shade so each tile reads softly "3D", matching
+  // the chunky panelEdge buttons — static, no animation.
+  bevel: {
+    borderTopWidth: 2,
+    borderTopColor: "rgba(255,255,255,0.16)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(12,23,17,0.10)",
+  },
+  glyph: {
+    width: "60%",
+    height: "60%",
+    opacity: 0.25,
   },
   conflict: {
     backgroundColor: theme.danger,
+  },
+  // Eliminated (✕) cells dim slightly so they recede from the live board.
+  markScrim: {
+    backgroundColor: theme.frame,
   },
   plantWrap: {
     position: "absolute",
@@ -157,17 +229,6 @@ const styles = StyleSheet.create({
   plant: {
     width: "82%",
     height: "82%",
-  },
-  ring: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    margin: 2,
-    borderRadius: 10,
-    borderWidth: 3,
-    borderColor: theme.gold,
   },
   mark: {
     position: "absolute",

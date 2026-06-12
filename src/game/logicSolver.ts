@@ -25,7 +25,27 @@
 // the known `truth` solution; if any elimination removes a truth cell it flags `unsound`, and the
 // generator rejects such boards outright — so a bug can only cost yield, never ship a bad board.
 
+import type { Coord } from "./types";
+
 export type SolveTier = 1 | 2 | 3;
+
+/**
+ * One deduction the ladder made, with enough structure to explain it to a
+ * human (the in-game teaching hints replay these). Recording is optional and
+ * must never change solver behaviour.
+ */
+export type DeductionStep =
+  | { kind: "single"; unit: "row" | "col" | "region"; index: number; cell: Coord }
+  | { kind: "confine"; region: number; line: "row" | "col"; index: number; eliminated: Coord[] }
+  | { kind: "claim"; line: "row" | "col"; index: number; region: number; eliminated: Coord[] }
+  | {
+      kind: "subset";
+      source: "row" | "col" | "region";
+      target: "row" | "col" | "region";
+      sources: number[];
+      targets: number[];
+      eliminated: Coord[];
+    };
 
 export interface Rating {
   /** Placed a marker in every row using only the deduction ladder (no guessing). */
@@ -74,6 +94,7 @@ export function rateBoard(
   regions: number[][],
   size: number,
   truth?: number[],
+  record?: (step: DeductionStep) => void,
 ): Rating {
   const cand: boolean[][] = Array.from({ length: size }, () =>
     new Array(size).fill(true),
@@ -127,6 +148,7 @@ export function rateBoard(
       let col = -1;
       for (let c = 0; c < size; c++) if (cand[r][c]) (cnt++, (col = c));
       if (cnt === 1) {
+        record?.({ kind: "single", unit: "row", index: r, cell: [r, col] });
         place(r, col);
         counts.single++;
         any = true;
@@ -138,6 +160,7 @@ export function rateBoard(
       let row = -1;
       for (let r = 0; r < size; r++) if (cand[r][c]) (cnt++, (row = r));
       if (cnt === 1) {
+        record?.({ kind: "single", unit: "col", index: c, cell: [row, c] });
         place(row, c);
         counts.single++;
         any = true;
@@ -152,6 +175,7 @@ export function rateBoard(
         for (let c = 0; c < size; c++)
           if (regions[r][c] === g && cand[r][c]) (cnt++, (cr = r), (cc = c));
       if (cnt === 1) {
+        record?.({ kind: "single", unit: "region", index: g, cell: [cr, cc] });
         place(cr, cc);
         counts.single++;
         any = true;
@@ -181,12 +205,20 @@ export function rateBoard(
           }
         }
       if (!some) continue;
-      if (oneRow)
+      if (oneRow) {
+        const got: Coord[] = [];
         for (let c = 0; c < size; c++)
-          if (regions[r0][c] !== g && elim(r0, c)) any = true;
-      if (oneCol)
+          if (regions[r0][c] !== g && elim(r0, c)) (any = true), got.push([r0, c]);
+        if (got.length)
+          record?.({ kind: "confine", region: g, line: "row", index: r0, eliminated: got });
+      }
+      if (oneCol) {
+        const got: Coord[] = [];
         for (let r = 0; r < size; r++)
-          if (regions[r][c0] !== g && elim(r, c0)) any = true;
+          if (regions[r][c0] !== g && elim(r, c0)) (any = true), got.push([r, c0]);
+        if (got.length)
+          record?.({ kind: "confine", region: g, line: "col", index: c0, eliminated: got });
+      }
     }
     // Row confined to a single region -> that region is the row's; clear off-row cells of it.
     for (let r = 0; r < size; r++) {
@@ -199,10 +231,15 @@ export function rateBoard(
         if (!some) ((g = regions[r][c]), (some = true));
         else if (regions[r][c] !== g) one = false;
       }
-      if (some && one)
+      if (some && one) {
+        const got: Coord[] = [];
         for (let rr = 0; rr < size; rr++)
           for (let cc = 0; cc < size; cc++)
-            if (rr !== r && regions[rr][cc] === g && elim(rr, cc)) any = true;
+            if (rr !== r && regions[rr][cc] === g && elim(rr, cc))
+              (any = true), got.push([rr, cc]);
+        if (got.length)
+          record?.({ kind: "claim", line: "row", index: r, region: g, eliminated: got });
+      }
     }
     // Column confined to a single region.
     for (let c = 0; c < size; c++) {
@@ -215,10 +252,15 @@ export function rateBoard(
         if (!some) ((g = regions[r][c]), (some = true));
         else if (regions[r][c] !== g) one = false;
       }
-      if (some && one)
+      if (some && one) {
+        const got: Coord[] = [];
         for (let rr = 0; rr < size; rr++)
           for (let cc = 0; cc < size; cc++)
-            if (cc !== c && regions[rr][cc] === g && elim(rr, cc)) any = true;
+            if (cc !== c && regions[rr][cc] === g && elim(rr, cc))
+              (any = true), got.push([rr, cc]);
+        if (got.length)
+          record?.({ kind: "claim", line: "col", index: c, region: g, eliminated: got });
+      }
     }
     return any;
   };
@@ -230,6 +272,8 @@ export function rateBoard(
     sourceId: (r: number, c: number) => number,
     targetId: (r: number, c: number) => number,
     sourceDone: boolean[],
+    sourceKind: "row" | "col" | "region",
+    targetKind: "row" | "col" | "region",
   ): boolean => {
     const targetsBySource = new Map<number, Set<number>>();
     for (let r = 0; r < size; r++)
@@ -252,12 +296,22 @@ export function rateBoard(
         for (const s of combo) for (const t of s.targets) union.add(t);
         if (union.size !== k) continue;
         const inSubset = new Set(combo.map((s) => s.id));
+        const got: Coord[] = [];
         for (let r = 0; r < size; r++)
           for (let c = 0; c < size; c++) {
             if (!cand[r][c]) continue;
             if (union.has(targetId(r, c)) && !inSubset.has(sourceId(r, c)))
-              if (elim(r, c)) any = true;
+              if (elim(r, c)) (any = true), got.push([r, c]);
           }
+        if (got.length)
+          record?.({
+            kind: "subset",
+            source: sourceKind,
+            target: targetKind,
+            sources: combo.map((s) => s.id),
+            targets: [...union],
+            eliminated: got,
+          });
       }
     }
     return any;
@@ -269,12 +323,12 @@ export function rateBoard(
     const row = (r: number, _c: number) => r;
     const col = (_r: number, c: number) => c;
     let any = false;
-    any = subsetFlavour(reg, row, regDone) || any; // k regions -> k rows
-    any = subsetFlavour(reg, col, regDone) || any; // k regions -> k cols
-    any = subsetFlavour(row, col, rowDone) || any; // k rows -> k cols
-    any = subsetFlavour(col, row, colDone) || any; // k cols -> k rows
-    any = subsetFlavour(row, reg, rowDone) || any; // k rows -> k regions
-    any = subsetFlavour(col, reg, colDone) || any; // k cols -> k regions
+    any = subsetFlavour(reg, row, regDone, "region", "row") || any; // k regions -> k rows
+    any = subsetFlavour(reg, col, regDone, "region", "col") || any; // k regions -> k cols
+    any = subsetFlavour(row, col, rowDone, "row", "col") || any; // k rows -> k cols
+    any = subsetFlavour(col, row, colDone, "col", "row") || any; // k cols -> k rows
+    any = subsetFlavour(row, reg, rowDone, "row", "region") || any; // k rows -> k regions
+    any = subsetFlavour(col, reg, colDone, "col", "region") || any; // k cols -> k regions
     return any;
   };
 

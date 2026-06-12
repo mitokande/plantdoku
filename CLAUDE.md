@@ -18,16 +18,70 @@ Every generated board has exactly **one** solution.
 Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9** — each also gated by deduction
 tier (see Generator), so every board is solvable by pure logic, no guessing.
 
-**Progression is level-based** (no difficulty picker): 30 curated levels in
+**Progression is level-based** (no difficulty picker): 60 curated levels in
 `src/game/levels.ts`, each `{difficulty, seed}` — generation is **seeded and
 deterministic**, so every player gets the identical board for level N. Curve:
 ramp with breathers (L1–8 easy, L9–19 medium with an easy breather at L12,
-L20+ hard with medium breathers at L21/L25). Completing the highest unlocked
-level unlocks the next; after L30 the menu shows "more levels coming soon".
-Seeds are minted offline by `scripts/pick_level_seeds.ts` (`npx tsx`), which
-verifies tier-band fit + reproducibility — rerun it for future level batches.
+L20+ hard with medium breathers at L21/L25, finale L26–30), then a veteran
+batch L31–60 (hard-leaning, medium breathers at L36/L40/L45/L50/L55).
+Completing the highest unlocked level unlocks the next; after L60 the menu
+shows "more levels coming soon". Seeds are minted offline by
+`scripts/pick_level_seeds.ts` (`npx tsx`) from its CURVE array, which verifies
+tier-band fit + reproducibility — levels are seed-scanned per index, so
+appending to CURVE never changes earlier levels (the script prints the whole
+LEVELS literal; diff L1–N against the shipped table before pasting).
+**Endless mode**: menu card with Easy/Medium/Hard chips → unseeded random
+board (`useGame.newEndless(difficulty)`, mode "endless"); win overlay offers
+"New board"; per-difficulty best times persist (`plantdoku:best:endless:*`).
+Locked until the player reaches level 15 (`ENDLESS_UNLOCK_LEVEL` in
+`HomeScreen.tsx` — the card renders dimmed with a 🔒 until then).
+
+**Teaching hints** (`src/game/hints.ts`): the Hint button explains the next
+deduction instead of revealing a cell. `rateBoard` takes an optional step
+recorder (must never change solver behaviour); `nextHint(puzzle, states)`
+replays the recorded chain and returns the first step whose conclusion is
+missing from the player's grid — `{action: "place"|"mark", cell, cells,
+message}`. First Hint press shows the message (gold card replaces the hint
+pill) + highlights cells (pulse ring for place, static outlines for mark);
+the button becomes "Apply" which commits the conclusion as one undoable step.
+Falls back to the legacy reveal-a-cell HINT when the chain has nothing new.
+Tested by walking hints from an empty grid to a full solve on all 60 levels.
+
+**Stars** (`src/game/stars.ts`): level mode only — ★ solved, +★ no hints,
++★ under par (par by size+tier). Best per level persists as JSON under
+`plantdoku:stars`; win overlay shows the rating (+ what 3★ needs), menu Play
+button shows the total. Any hint request (even just viewing) counts as a hint
+used (`hintsUsed` in reducer state; survives RESET, cleared on new boards).
 NOTE: changing the generator algorithm changes what every seed produces;
 re-pick seeds if generator behaviour changes.
+
+**Plant cards** (`src/game/cards.ts`, pure/headless-safe): collection meta on
+top of stars — all 17 plants are collectible cards (name, rarity, flavor)
+unlocked at total-star milestones (first at 1★, last legendary at 152★ of the
+180★ max; thresholds strictly increasing, covered by runTests). No new
+currency or storage: the collection is derived from `plantdoku:stars`, so
+flushData resets it for free. `useGame` exposes `newCards` (milestones crossed
+by the solve on screen — computed on the rising edge of solved when a level's
+best stars improve); win overlay pops a "NEW CARD" reveal (or shows "N★ more
+until your next card"). The meta is foregrounded hybrid-casual style: Home
+has a gold-bordered showcase panel under Play (latest unlocks + next card as
+a "?" silhouette + progress bar to its milestone) and the Cards tab
+(`CardsScreen.tsx`) shows the full grid (locked cards are tinted silhouettes
+with their ★ requirement; tapping any tile opens a trading-card inspect modal
+— big sprite, rarity, flavor text, or the ★-to-go for locked cards).
+
+**Daily puzzle** (`src/game/daily.ts`, pure/headless-safe): one shared medium
+8×8 board per calendar date — seed = FNV-1a of the salted local date key, so
+all players get the same board with no backend. Rolls over at local midnight.
+Completing a daily extends a streak (consecutive days; replays don't re-count
+but can improve the logged time); streak/last-date/time-log persist in
+AsyncStorage (`plantdoku:daily:*`, wiped by flushData). `useGame` exposes
+`mode` ("level" | "daily"), `newDaily()`, `dailyDoneToday`, `dailyStreak`,
+`dailyLog`; the Daily tab (`DailyScreen.tsx`) hosts today's puzzle, the
+streak and a solve-history list, win overlay swaps BEST→STREAK and Next→Share
+(native share sheet). The date→seed mapping is a public contract pinned by a golden
+test in runTests — do not change `dailySeed` (and see the generator NOTE
+above: generator changes also change daily boards across app versions).
 
 ## Tech stack
 
@@ -38,6 +92,7 @@ re-pick seeds if generator behaviour changes.
 - State: plain React `useReducer` hook (`src/state/useGame.ts`). No Redux.
 - Persistence: `@react-native-async-storage/async-storage` (best times).
 - Feedback: `expo-haptics` (loaded lazily, skipped on web).
+- Visuals: `expo-linear-gradient` (gameplay-screen background).
 - Web support is installed (`react-native-web`, `react-dom`, `@expo/metro-runtime`)
   so the app also runs in a browser and can be smoke-tested headlessly.
 
@@ -93,10 +148,23 @@ Undo/Hint/Reset are disabled until the last step. Completion persists
 
 ## Visual decisions
 
-- Cells show **only their cluster colour** by default — **no plant preview**.
-  The plant `Image` (+ gold ring) renders **only when `state === "placed"`**.
-- **No bold cluster borders.** Clusters read by colour + a faint 1px hairline
-  grid (`Cell` draws a subtle right/bottom border only).
+- Cells are **rounded "stone" tiles** with a small gap between them (the
+  board's wooden frame shows through), a faint static bevel (top highlight /
+  bottom shade) echoing the chunky 3D buttons, and a **faint embossed glyph**
+  of the cluster's plant (the sprite tinted to a darker shade of the cell
+  colour at low opacity). The full-colour sprite still renders **only when
+  `state === "placed"`** (no gold ring anymore); ✕-marked cells get a light
+  dim scrim so eliminated cells recede.
+- **No bold cluster borders.** Clusters read by colour + glyph; tile gaps are
+  uniform everywhere.
+- The board sits in a **wooden frame** (`theme.wood*` browns: dark border,
+  light inner "carved" ring — no texture assets), and `GameScreen` lays the
+  whole screen on a vertical `expo-linear-gradient` (lighter glade behind the
+  board, darker top/bottom). Undo/Hint buttons carry gold info badges
+  (undoable-move count / hints used).
+- Region tints (`palette.ts` `REGION_COLORS`) are **muted botanical** tones —
+  earthy, low-saturation garden colours, light enough for the dark ✕ mark and
+  sprites to stay readable.
 - Rule violations tint the offending cells red (`theme.dangerTile`).
 - Win: custom `Confetti` (Animated, dependency-free) + result card with time /
   best / "New best".
@@ -112,6 +180,13 @@ Game core is **pure TypeScript, framework-free**, so it runs under plain Node
 src/game/
   types.ts       Difficulty, CellState, Puzzle, DIFFICULTIES (6/8/9)
   levels.ts      LEVELS: 30 curated {difficulty, seed} + getLevel — pure data
+  daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
+                 date math — pure data, headless-safe
+  hints.ts       nextHint: first recorded solver deduction missing from the
+                 player's grid, with a human explanation — headless-safe
+  stars.ts       par times (size+tier) + starsFor — headless-safe
+  cards.ts       plant-card collection: 17 cards + star milestones, unlock
+                 helpers — headless-safe
   palette.ts     PLANT_IDS (17) + REGION_COLORS — pure data, headless-safe
   plants.ts      id -> require(png) sprite map — RN ONLY (do not import in core)
   generator.ts   generatePuzzle(difficulty, seed?) -> logic-solvable, tier-gated
@@ -127,14 +202,21 @@ src/components/
   Cell.tsx       display-only cell (colour, ✕, placed plant + ring)
   GameScreen.tsx header (Level N, Help ?), stats, board, controls, win overlay;
                  haptics; first-play tutorial state machine
-  MainMenu.tsx   title + single Play button (Level N / all-complete state) + ⚙
+  HomeScreen.tsx Home tab: pulsing PLAY, card-collection showcase panel,
+                 endless card (with the level-15 lock)
+  CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
+  DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
+  BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
   TutorialBubble.tsx  tutorial coach card · HelpOverlay.tsx  "How to play" card
   SettingsOverlay.tsx settings modal: flush game data (inline confirm; uses
                  useGame.flushData — wipes all AsyncStorage keys, back to L1)
   Button.tsx (solid/ghost/danger), WinOverlay.tsx (Next level / coming soon),
   Confetti.tsx
 src/theme.ts, src/format.ts
-App.tsx          menu <-> game screen switch
+App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) +
+                 Home/Cards/Daily pages + BottomNav; `playing` swaps in a
+                 full-screen GameScreen (no HUD/nav); Android back returns
+                 to the Home tab first
 scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
 scripts/pick_level_seeds.ts  offline seed picker for the level table
 ```

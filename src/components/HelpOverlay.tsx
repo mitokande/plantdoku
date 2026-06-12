@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
+import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Button } from "./Button";
 
@@ -19,6 +20,12 @@ function Row({ icon, text }: { icon: string; text: string }) {
 
 /** "How to play" card, openable anytime from the game header. */
 export function HelpOverlay({ onClose }: Props) {
+  // Android back closes the card instead of leaving the game.
+  useBackHandler(() => {
+    onClose();
+    return true;
+  });
+
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(enter, {
@@ -69,7 +76,7 @@ export function HelpOverlay({ onClose }: Props) {
         <Row icon="👉" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
 
         <View style={styles.btnRow}>
-          <Button label="Close" variant="solid" onPress={onClose} flex />
+          <Button label="Close" variant="solid" onPress={onClose} />
         </View>
       </Animated.View>
     </Animated.View>

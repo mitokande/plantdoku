@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
+import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Button } from "./Button";
 
@@ -15,6 +16,13 @@ interface Props {
  */
 export function SettingsOverlay({ onFlush, onClose }: Props) {
   const [stage, setStage] = useState<"idle" | "confirm" | "flushed">("idle");
+
+  // Android back steps out of the destructive confirm first, then closes.
+  useBackHandler(() => {
+    if (stage === "confirm") setStage("idle");
+    else onClose();
+    return true;
+  });
 
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -95,7 +103,7 @@ export function SettingsOverlay({ onFlush, onClose }: Props) {
         )}
 
         <View style={styles.closeRow}>
-          <Button label="Close" variant="solid" onPress={onClose} flex />
+          <Button label="Close" variant="solid" onPress={onClose} />
         </View>
       </Animated.View>
     </Animated.View>

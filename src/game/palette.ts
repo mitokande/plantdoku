@@ -24,21 +24,23 @@ export const PLANT_IDS: string[] = [
 
 /**
  * Region tints. At least as many as the largest board (9).
- * Hues are spaced evenly (~30° apart) at matched saturation/lightness so no
- * two read as near-twins; the generator additionally assigns them so that
- * touching clusters get maximally different colours.
+ * Muted botanical tones — earthy, low-saturation garden colours that sit
+ * calmly against the dark "dusk" board. Hues stay evenly spread at matched
+ * lightness (light enough for the dark ✕ mark and sprites to read) so no two
+ * are near-twins; the generator additionally assigns them so that touching
+ * clusters get maximally different colours.
  */
 export const REGION_COLORS: string[] = [
-  "#F5A9AD", // pink
-  "#F6BE8E", // orange
-  "#EEDC7C", // yellow
-  "#BFE283", // lime
-  "#92D993", // green
-  "#7EDFB4", // spring
-  "#79D9D9", // cyan
-  "#88C4F0", // sky
-  "#A8AFF4", // blue
-  "#C5A5F0", // purple
-  "#E2A1E6", // orchid
-  "#F4A3CC", // rose
+  "#D9A49E", // dusty rose
+  "#DBB28A", // terracotta clay
+  "#D6C98E", // sand
+  "#BCC98B", // pale olive
+  "#9DC795", // sage
+  "#86C9A8", // eucalyptus
+  "#84C4BE", // dusty teal
+  "#8FB6D6", // rain blue
+  "#A3A8D4", // lavender slate
+  "#BFA3D1", // wisteria
+  "#D2A0C6", // mauve
+  "#DBA8B4", // old rose
 ];

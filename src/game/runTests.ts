@@ -5,15 +5,21 @@
 // (c) that the logic solver is sound — it never eliminates a true-solution cell across thousands
 // of boards (the audit that must be green before trusting tier-gated generation).
 
+import { CARDS, newlyUnlocked, nextCard, unlockedCards } from "./cards";
+import { DAILY_DIFFICULTY, dailyNumber, dailySeed, isConsecutive } from "./daily";
 import { generatePuzzle, generateUniqueBoard } from "./generator";
+import { nextHint } from "./hints";
 import { LEVELS } from "./levels";
+import { PLANT_IDS } from "./palette";
 import { countSolutions, findSolution } from "./solver";
 import { rateBoard } from "./logicSolver";
+import { parSeconds, starsFor } from "./stars";
 import { findConflicts, isSolved } from "./validator";
 import {
   DIFFICULTIES,
   DIFFICULTY_BANDS,
   DIFFICULTY_ORDER,
+  type CellState,
   type Coord,
 } from "./types";
 
@@ -202,6 +208,124 @@ LEVELS.forEach(({ difficulty, seed }, i) => {
     );
   }
 });
+console.log("  ok");
+
+// ---------------------------------------------------------------------------
+// Part 2b — daily puzzle: the date->seed mapping is a public contract (it
+// decides which board the whole world sees on a date), so it is pinned with
+// golden values; the date arithmetic must survive month/year boundaries; and
+// a daily board must be reproducible like any other seeded board.
+// ---------------------------------------------------------------------------
+console.log("daily: checking seed contract + date math...");
+check(
+  dailySeed("2026-06-11") === 0x9cd63d86,
+  `dailySeed golden value changed: 0x${dailySeed("2026-06-11").toString(16)} — ` +
+    "this would silently change every player's daily board",
+);
+check(dailyNumber("2026-06-01") === 1, "dailyNumber epoch should be #1");
+check(
+  dailyNumber("2026-07-01") - dailyNumber("2026-06-30") === 1,
+  "dailyNumber must be continuous across month boundary",
+);
+check(
+  isConsecutive("2026-12-31", "2027-01-01") && !isConsecutive("2026-06-09", "2026-06-11"),
+  "isConsecutive year-boundary / gap handling wrong",
+);
+check(!isConsecutive(null, "2026-06-11"), "isConsecutive(null) must be false");
+{
+  const seed = dailySeed("2026-06-11");
+  const d1 = generatePuzzle(DAILY_DIFFICULTY, seed);
+  const d2 = generatePuzzle(DAILY_DIFFICULTY, seed);
+  check(
+    JSON.stringify(d1.regions) === JSON.stringify(d2.regions) &&
+      JSON.stringify(d1.solution) === JSON.stringify(d2.solution),
+    "daily board not reproducible for a fixed date",
+  );
+  check(countSolutions(d1.regions, d1.size, 2) === 1, "daily board not unique");
+}
+console.log("  ok");
+
+// ---------------------------------------------------------------------------
+// Part 2c — teaching hints: following nextHint from an empty grid must fully
+// solve every shipped level, every place-hint must be a true solution cell,
+// and no mark-hint may ever ✕ a solution cell. Also: stars math sanity.
+// ---------------------------------------------------------------------------
+console.log("hints: solving all levels by following hints...");
+LEVELS.forEach(({ difficulty, seed }, i) => {
+  const level = i + 1;
+  const p = generatePuzzle(difficulty, seed);
+  const states: CellState[][] = Array.from({ length: p.size }, () =>
+    new Array(p.size).fill("empty"),
+  );
+  let placed = 0;
+  let guard = p.size * p.size * 4;
+  while (placed < p.size && guard-- > 0) {
+    const hint = nextHint(p, states);
+    if (!hint) {
+      check(false, `level ${level}: hints stalled with ${placed}/${p.size} placed`);
+      break;
+    }
+    if (hint.action === "place") {
+      const [r, c] = hint.cell!;
+      check(p.solution[r] === c, `level ${level}: place-hint at non-solution cell`);
+      if (states[r][c] !== "placed") placed++;
+      states[r][c] = "placed";
+    } else {
+      check(hint.cells.length > 0, `level ${level}: empty mark-hint`);
+      for (const [r, c] of hint.cells) {
+        check(p.solution[r] !== c, `level ${level}: mark-hint ✕ on a solution cell`);
+        states[r][c] = "marked";
+      }
+    }
+  }
+  check(placed === p.size, `level ${level}: hint walk did not finish (${placed}/${p.size})`);
+  check(nextHint(p, states) === null, `level ${level}: hint offered on a solved grid`);
+});
+check(parSeconds(6, 1) < parSeconds(9, 3), "par must grow with size/tier");
+check(
+  starsFor(1, 0, 6, 1) === 3 && starsFor(9999, 1, 6, 1) === 1 && starsFor(1, 1, 6, 1) === 2,
+  "starsFor thresholds wrong",
+);
+console.log("  ok");
+
+// ---------------------------------------------------------------------------
+// Part 2d — plant cards: the collection must cover every plant id exactly
+// once, milestones must be strictly increasing and reachable (first card from
+// the very first solve, last card within the level table's max stars), and
+// the unlock helpers must agree with the table.
+// ---------------------------------------------------------------------------
+console.log("cards: checking collection milestones...");
+check(
+  CARDS.length === PLANT_IDS.length &&
+    new Set(CARDS.map((c) => c.plantId)).size === PLANT_IDS.length &&
+    CARDS.every((c) => PLANT_IDS.includes(c.plantId)),
+  "cards must cover every PLANT_ID exactly once",
+);
+for (let i = 1; i < CARDS.length; i++) {
+  check(
+    CARDS[i].stars > CARDS[i - 1].stars,
+    `card thresholds not strictly increasing at #${i}`,
+  );
+}
+check(CARDS[0].stars <= 3, "first card must be unlockable by solving level 1");
+check(
+  CARDS[CARDS.length - 1].stars <= LEVELS.length * 3,
+  "last card requires more stars than the level table can award",
+);
+check(
+  unlockedCards(0).length === 0 && nextCard(0) === CARDS[0],
+  "fresh save: nothing unlocked, first card up next",
+);
+const maxStars = CARDS[CARDS.length - 1].stars;
+check(
+  unlockedCards(maxStars).length === CARDS.length && nextCard(maxStars) === null,
+  "full collection at the last threshold",
+);
+check(
+  newlyUnlocked(0, CARDS[0].stars).length === 1 &&
+    newlyUnlocked(CARDS[0].stars, CARDS[0].stars).length === 0,
+  "newlyUnlocked must report exactly the crossed thresholds",
+);
 console.log("  ok");
 
 // ---------------------------------------------------------------------------

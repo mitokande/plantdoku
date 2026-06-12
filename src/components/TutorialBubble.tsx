@@ -58,7 +58,7 @@ export function TutorialBubble({ step, total, text, buttonLabel, onButton }: Pro
       <Text style={styles.text}>{text}</Text>
       {buttonLabel && onButton && (
         <View style={styles.btnRow}>
-          <Button label={buttonLabel} variant="solid" onPress={onButton} flex />
+          <Button label={buttonLabel} variant="solid" onPress={onButton} />
         </View>
       )}
     </Animated.View>
