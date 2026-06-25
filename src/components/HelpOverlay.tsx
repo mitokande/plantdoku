@@ -75,6 +75,9 @@ export function HelpOverlay({ onClose }: Props) {
         <Row icon="👆👆" text="Double-tap a cell to place a plant." />
         <Row icon="👉" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
 
+        <Text style={styles.section}>HEARTS</Text>
+        <Row icon="❤️" text="You have 3 hearts. Planting on the wrong cell loses one — run out and the board resets." />
+
         <View style={styles.btnRow}>
           <Button label="Close" variant="solid" onPress={onClose} />
         </View>

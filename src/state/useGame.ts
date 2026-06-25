@@ -15,8 +15,12 @@ import { generatePuzzle } from "../game/generator";
 import { nextHint, type Hint } from "../game/hints";
 import { getLevel, LEVEL_COUNT } from "../game/levels";
 import { starsFor } from "../game/stars";
-import { findConflicts, isSolved } from "../game/validator";
+import { cellKey, isSolved } from "../game/validator";
 import type { CellState, Coord, Difficulty, Puzzle } from "../game/types";
+
+// Hearts (lives): placing a plant on a cell that isn't its solution cell costs
+// one; losing all of them fails the board (locks it until the player retries).
+const MAX_HEARTS = 3;
 
 interface GameState {
   mode: "level" | "daily" | "endless";
@@ -26,11 +30,13 @@ interface GameState {
   puzzle: Puzzle;
   states: CellState[][];
   history: CellState[][][];
-  conflicts: Set<string>;
+  mistakes: Set<string>; // placed cells that aren't on the solution cell
   placedCount: number;
   seconds: number;
   started: boolean;
   solved: boolean;
+  hearts: number; // lives left; 0 -> failed
+  failed: boolean; // ran out of hearts on this board
   hintsUsed: number; // hint requests this board (any kind); gates the 2nd star
 }
 
@@ -47,6 +53,7 @@ type Action =
   | { type: "HINT" } // legacy reveal-a-cell (fallback when no teaching hint)
   | { type: "COUNT_HINT" } // a hint was requested (stars bookkeeping only)
   | { type: "APPLY_HINT"; hint: Hint } // apply a teaching hint's conclusion
+  | { type: "RETRY" } // after a fail: rebuild the same board, hearts/timer reset
   | { type: "TICK" };
 
 const UNLOCKED_KEY = "plantdoku:unlocked";
@@ -74,16 +81,28 @@ function placedCoords(states: CellState[][]): Coord[] {
   return out;
 }
 
-/** Recompute conflicts / solved / placed count for a grid. */
+/** Placed cells that aren't on their row's solution cell (i.e. wrong guesses). */
+function wrongCells(grid: CellState[][], solution: number[]): Set<string> {
+  const bad = new Set<string>();
+  grid.forEach((row, r) =>
+    row.forEach((s, c) => {
+      if (s === "placed" && solution[r] !== c) bad.add(cellKey(r, c));
+    }),
+  );
+  return bad;
+}
+
+/** Recompute mistakes / solved / placed count for a grid. */
 function settle(state: GameState, grid: CellState[][], started: boolean): GameState {
   const placed = placedCoords(grid);
-  const conflicts = findConflicts(placed, state.puzzle.regions);
-  const solved = isSolved(placed.length, state.puzzle.size, conflicts.size);
+  const mistakes = wrongCells(grid, state.puzzle.solution);
+  // A full board with no wrong cells is necessarily the unique solution.
+  const solved = isSolved(placed.length, state.puzzle.size, mistakes.size);
   return {
     ...state,
     states: grid,
     history: [...state.history, state.states],
-    conflicts,
+    mistakes,
     placedCount: placed.length,
     solved,
     started,
@@ -105,11 +124,13 @@ function blankState(
     puzzle,
     states: emptyGrid(puzzle.size),
     history: [],
-    conflicts: new Set(),
+    mistakes: new Set(),
     placedCount: 0,
     seconds: 0,
     started: false,
     solved: false,
+    hearts: MAX_HEARTS,
+    failed: false,
     hintsUsed: 0,
   };
 }
@@ -164,13 +185,13 @@ function reducer(state: GameState, action: Action): GameState {
       return freshEndlessState(action.difficulty);
 
     case "TICK":
-      return state.started && !state.solved
+      return state.started && !state.solved && !state.failed
         ? { ...state, seconds: state.seconds + 1 }
         : state;
 
     // Swipe/drag: paint an ✕ on an empty cell (never overwrites a plant).
     case "PAINT": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { r, c } = action;
       if (state.states[r][c] !== "empty") return state;
       const grid = cloneGrid(state.states);
@@ -180,7 +201,7 @@ function reducer(state: GameState, action: Action): GameState {
 
     // Swipe/drag starting on an ✕: unmark ✕ cells (never touches plants).
     case "ERASE": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { r, c } = action;
       if (state.states[r][c] !== "marked") return state;
       const grid = cloneGrid(state.states);
@@ -189,18 +210,23 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     // Double tap: place a plant (replaces an ✕; idempotent if already placed).
+    // A plant on the wrong cell stays put but flags red and costs a heart;
+    // losing the last heart fails the board.
     case "PLACE": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { r, c } = action;
       if (state.states[r][c] === "placed") return state;
       const grid = cloneGrid(state.states);
       grid[r][c] = "placed";
-      return settle(state, grid, true);
+      const next = settle(state, grid, true);
+      if (state.puzzle.solution[r] === c) return next; // correct cell
+      const hearts = state.hearts - 1;
+      return { ...next, hearts, failed: hearts <= 0 };
     }
 
     // Single tap: toggle ✕ on an empty cell, otherwise clear the cell.
     case "TAP": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { r, c } = action;
       const cur = state.states[r][c];
       const grid = cloneGrid(state.states);
@@ -209,25 +235,36 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     case "UNDO": {
-      if (state.history.length === 0) return state;
+      // Undo never refunds a spent heart (so it can't be used to probe cells).
+      if (state.failed || state.history.length === 0) return state;
       const prev = state.history[state.history.length - 1];
       const placed = placedCoords(prev);
-      const conflicts = findConflicts(placed, state.puzzle.regions);
+      const mistakes = wrongCells(prev, state.puzzle.solution);
       return {
         ...state,
         states: prev,
         history: state.history.slice(0, -1),
-        conflicts,
+        mistakes,
         placedCount: placed.length,
-        solved: isSolved(placed.length, state.puzzle.size, conflicts.size),
+        solved: isSolved(placed.length, state.puzzle.size, mistakes.size),
       };
     }
 
     case "RESET":
       return settle(state, emptyGrid(state.puzzle.size), state.started);
 
+    // After a fail: same puzzle, blank board, hearts + timer reset.
+    case "RETRY":
+      return blankState(
+        state.mode,
+        state.level,
+        state.dailyKey,
+        state.endlessDifficulty,
+        state.puzzle,
+      );
+
     case "HINT": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { solution, size } = state.puzzle;
       let target = -1;
       for (let r = 0; r < size; r++) {
@@ -250,7 +287,7 @@ function reducer(state: GameState, action: Action): GameState {
     // Apply a teaching hint's conclusion in one undoable step: place the
     // forced cell, or ✕ every cell the deduction eliminated.
     case "APPLY_HINT": {
-      if (state.solved) return state;
+      if (state.solved || state.failed) return state;
       const { hint } = action;
       if (hint.action === "place" && hint.cell) {
         return settle(
@@ -357,7 +394,7 @@ export function useGame(initialLevel = 1) {
   }, []);
 
   // Tick the timer once per second while a solve is in progress.
-  const running = state.started && !state.solved;
+  const running = state.started && !state.solved && !state.failed;
   useEffect(() => {
     if (!running) return;
     const id = setInterval(() => dispatch({ type: "TICK" }), 1000);
@@ -462,6 +499,7 @@ export function useGame(initialLevel = 1) {
   return {
     ...state,
     running,
+    maxHearts: MAX_HEARTS,
     newBest,
     unlockedLevel,
     allComplete: unlockedLevel > LEVEL_COUNT,
@@ -524,10 +562,11 @@ export function useGame(initialLevel = 1) {
     tap: (r: number, c: number) => dispatch({ type: "TAP", r, c }),
     undo: () => dispatch({ type: "UNDO" }),
     reset: () => dispatch({ type: "RESET" }),
+    retry: () => dispatch({ type: "RETRY" }),
     // First press: explain the next deduction (falls back to revealing a
     // solution cell if the chain has nothing new). Second press applies it.
     requestHint: () => {
-      if (state.solved) return;
+      if (state.solved || state.failed) return;
       dispatch({ type: "COUNT_HINT" });
       const hint = nextHint(state.puzzle, state.states);
       if (hint) setActiveHint(hint);

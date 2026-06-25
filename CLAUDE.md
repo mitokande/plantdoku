@@ -15,6 +15,19 @@ plant type / colour. The player places one plant marker so there is:
 
 Every generated board has exactly **one** solution.
 
+**Hearts / fail**: the player gets **3 hearts** per board (all modes). Placing a
+plant on a cell that isn't its `solution[r]` cell costs a heart — the plant stays
+put but flags red (the board's `mistakes` set, which replaced the old rule-based
+`conflicts` highlight so a *correct* cell next to a wrong one is never reddened)
+and the board shakes. Losing the last heart sets `failed`: the board locks, the
+timer stops, and `FailOverlay` offers **Try again** (`useGame.retry()` rebuilds
+the same board with hearts/timer reset) or Menu. Undo never refunds a spent heart
+(so it can't be used to probe cells). A board can only be solved by filling it
+with zero wrong cells, so `isSolved` now keys off `mistakes.size` (a full,
+mistake-free board is necessarily the unique solution). Hearts render in
+`Hearts.tsx` (header row, pops when one breaks); `MAX_HEARTS` lives in
+`useGame.ts`.
+
 Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9** — each also gated by deduction
 tier (see Generator), so every board is solvable by pure logic, no guessing.
 
@@ -211,7 +224,8 @@ src/components/
   SettingsOverlay.tsx settings modal: flush game data (inline confirm; uses
                  useGame.flushData — wipes all AsyncStorage keys, back to L1)
   Button.tsx (solid/ghost/danger), WinOverlay.tsx (Next level / coming soon),
-  Confetti.tsx
+  FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
+  Hearts.tsx (lives row), Confetti.tsx
 src/theme.ts, src/format.ts
 App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) +
                  Home/Cards/Daily pages + BottomNav; `playing` swaps in a

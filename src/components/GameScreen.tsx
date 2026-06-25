@@ -20,6 +20,8 @@ import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Board } from "./Board";
 import { Button } from "./Button";
+import { FailOverlay } from "./FailOverlay";
+import { Hearts } from "./Hearts";
 import { HelpOverlay } from "./HelpOverlay";
 import { TutorialBubble } from "./TutorialBubble";
 import { WinOverlay } from "./WinOverlay";
@@ -61,14 +63,12 @@ const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 // canopy at the top and bottom edges.
 const BG_GRADIENT = ["#0E1F14", "#1D3826", "#0B1710"] as const;
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statVal}>{value}</Text>
-    </View>
-  );
-}
+// The three core rules — the prominent card above the board, one per column.
+const RULES = [
+  { icon: "🌱", text: "One per\nrow & column" },
+  { icon: "🎨", text: "One per\ncolour" },
+  { icon: "🚫", text: "No two\ntouching" },
+] as const;
 
 export function GameScreen({ game, onMenu }: Props) {
   const { size } = game.puzzle;
@@ -152,11 +152,11 @@ export function GameScreen({ game, onMenu }: Props) {
     }
   }, [game.solved]);
 
-  // Juice: shake the board (+ error haptic) when a move creates a conflict.
+  // Juice: shake the board (+ error haptic) when a plant lands on a wrong cell.
   const shake = useRef(new Animated.Value(0)).current;
-  const prevConflicts = useRef(0);
+  const prevMistakes = useRef(0);
   useEffect(() => {
-    if (game.conflicts.size > prevConflicts.current) {
+    if (game.mistakes.size > prevMistakes.current) {
       Haptics?.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
         () => {},
       );
@@ -171,8 +171,8 @@ export function GameScreen({ game, onMenu }: Props) {
         ),
       ).start();
     }
-    prevConflicts.current = game.conflicts.size;
-  }, [game.conflicts, shake]);
+    prevMistakes.current = game.mistakes.size;
+  }, [game.mistakes, shake]);
 
   // Progress bar fill (plants placed / board size), springy.
   const progress = useRef(new Animated.Value(0)).current;
@@ -213,14 +213,28 @@ export function GameScreen({ game, onMenu }: Props) {
         </Pressable>
       </View>
 
-      <View style={styles.statsRow}>
-        <Text style={styles.statsLeaf}>🌿</Text>
-        <View style={styles.statsCard}>
-          <Stat label="TIME" value={formatTime(game.seconds)} />
-          <View style={styles.statDivider} />
-          <Stat label="BEST" value={formatTime(game.bestSeconds)} />
+      <View style={styles.rulesCard}>
+        {RULES.map((rule, i) => (
+          <React.Fragment key={rule.text}>
+            {i > 0 && <View style={styles.ruleDivider} />}
+            <View style={styles.ruleCol}>
+              <Text style={styles.ruleIcon}>{rule.icon}</Text>
+              <Text style={styles.ruleTxt}>{rule.text}</Text>
+            </View>
+          </React.Fragment>
+        ))}
+      </View>
+
+      <View style={styles.statusRow}>
+        <View style={styles.statusItem}>
+          <Text style={styles.statusLabel}>TIME</Text>
+          <Text style={styles.statusVal}>{formatTime(game.seconds)}</Text>
         </View>
-        <Text style={[styles.statsLeaf, styles.statsLeafFlip]}>🌿</Text>
+        <Hearts hearts={game.hearts} max={game.maxHearts} />
+        <View style={styles.statusItem}>
+          <Text style={styles.statusLabel}>BEST</Text>
+          <Text style={styles.statusVal}>{formatTime(game.bestSeconds)}</Text>
+        </View>
       </View>
 
       <View style={styles.progressRow}>
@@ -233,7 +247,7 @@ export function GameScreen({ game, onMenu }: Props) {
           />
         </View>
         <Text style={styles.progressTxt}>
-          🌱 {game.placedCount}/{size}
+          🌿 {game.placedCount}/{size}
         </Text>
       </View>
 
@@ -255,7 +269,7 @@ export function GameScreen({ game, onMenu }: Props) {
         <Board
           puzzle={game.puzzle}
           states={game.states}
-          conflicts={game.conflicts}
+          mistakes={game.mistakes}
           onPaint={paint}
           onErase={erase}
           onPlace={place}
@@ -375,6 +389,20 @@ export function GameScreen({ game, onMenu }: Props) {
           onMenu={onMenu}
         />
       )}
+
+      {game.failed && (
+        <FailOverlay
+          title={
+            game.mode === "daily" && game.dailyKey
+              ? `Daily #${dailyNumber(game.dailyKey)}`
+              : game.mode === "endless" && game.endlessDifficulty
+                ? `${DIFF_LABEL[game.endlessDifficulty]} board`
+                : `Level ${game.level}`
+          }
+          onRetry={game.retry}
+          onMenu={onMenu}
+        />
+      )}
     </LinearGradient>
   );
 }
@@ -417,51 +445,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.5,
   },
-  statsRow: {
+  rulesCard: {
     flexDirection: "row",
+    alignItems: "stretch",
     alignSelf: "center",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 6,
-  },
-  statsLeaf: {
-    fontSize: 18,
-    opacity: 0.7,
-  },
-  statsLeafFlip: {
-    transform: [{ scaleX: -1 }],
-  },
-  statsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 22,
+    width: "92%",
+    maxWidth: 440,
     backgroundColor: theme.panel,
     borderColor: theme.panelLine,
     borderWidth: 1,
+    borderBottomWidth: 3,
+    borderBottomColor: theme.panelEdge,
     borderRadius: radius.md,
-    paddingVertical: 8,
-    paddingHorizontal: 26,
+    paddingVertical: 12,
+    marginTop: 10,
   },
-  statDivider: {
+  ruleCol: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    gap: 6,
+    paddingHorizontal: 6,
+  },
+  ruleDivider: {
     width: 1,
     alignSelf: "stretch",
+    marginVertical: 2,
     backgroundColor: theme.panelLine,
   },
-  stat: {
-    alignItems: "center",
-    minWidth: 64,
+  ruleIcon: {
+    fontSize: 24,
   },
-  statLabel: {
+  ruleTxt: {
+    color: theme.text,
+    fontSize: 12.5,
+    fontWeight: "700",
+    lineHeight: 16,
+    textAlign: "center",
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    gap: 24,
+    marginTop: 12,
+  },
+  statusItem: {
+    alignItems: "center",
+    gap: 2,
+  },
+  statusLabel: {
     color: theme.textDim,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1,
   },
-  statVal: {
+  statusVal: {
     color: theme.text,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "800",
-    marginTop: 2,
     fontVariant: ["tabular-nums"],
   },
   progressRow: {
@@ -469,16 +512,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     alignSelf: "center",
-    width: "86%",
-    maxWidth: 420,
+    width: "92%",
+    maxWidth: 440,
     marginTop: 12,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   progressTrack: {
     flex: 1,
-    height: 10,
+    height: 9,
     borderRadius: 999,
-    backgroundColor: theme.panel,
+    backgroundColor: theme.bg,
     borderWidth: 1,
     borderColor: theme.panelLine,
     overflow: "hidden",
@@ -491,7 +534,7 @@ const styles = StyleSheet.create({
   },
   progressTxt: {
     color: theme.textDim,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
   },

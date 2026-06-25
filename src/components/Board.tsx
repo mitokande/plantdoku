@@ -23,7 +23,7 @@ const DOUBLE_MS = 260; // max gap between taps to count as a double tap
 interface Props {
   puzzle: Puzzle;
   states: CellState[][];
-  conflicts: Set<string>;
+  mistakes: Set<string>; // wrong placements, drawn red
   onPaint: (r: number, c: number) => void; // swipe → mark ✕
   onErase: (r: number, c: number) => void; // swipe from an ✕ → unmark
   onPlace: (r: number, c: number) => void; // double tap → plant
@@ -78,7 +78,7 @@ function HighlightRing({ x, y, px }: { x: number; y: number; px: number }) {
 export function Board({
   puzzle,
   states,
-  conflicts,
+  mistakes,
   onPaint,
   onErase,
   onPlace,
@@ -226,7 +226,7 @@ export function Board({
                 state={states[r][c]}
                 plantId={plants[region]}
                 color={colors[region]}
-                conflict={conflicts.has(cellKey(r, c))}
+                mistake={mistakes.has(cellKey(r, c))}
               />
             );
           })}

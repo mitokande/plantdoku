@@ -10,7 +10,7 @@ interface Props {
   state: CellState;
   plantId: string;
   color: string;
-  conflict: boolean;
+  mistake: boolean;
 }
 
 // Inset between tiles — the board frame's wood shows through the gaps.
@@ -28,7 +28,7 @@ function darken(hex: string): string {
   );
 }
 
-function CellView({ px, state, plantId, color, conflict }: Props) {
+function CellView({ px, state, plantId, color, mistake }: Props) {
   // Pop-in scales for the plant and the ✕ mark (hybrid-casual "juice").
   const plantPop = useRef(
     new Animated.Value(state === "placed" ? 1 : 0),
@@ -61,9 +61,9 @@ function CellView({ px, state, plantId, color, conflict }: Props) {
     }
   }, [state, plantPop, markPop]);
 
-  // Conflicting cells breathe red until the violation is fixed.
+  // Wrong placements breathe red until the player clears them.
   useEffect(() => {
-    if (!conflict) {
+    if (!mistake) {
       pulse.stopAnimation();
       pulse.setValue(0);
       return;
@@ -84,7 +84,7 @@ function CellView({ px, state, plantId, color, conflict }: Props) {
     );
     loop.start();
     return () => loop.stop();
-  }, [conflict, pulse]);
+  }, [mistake, pulse]);
 
   return (
     <View
@@ -113,12 +113,12 @@ function CellView({ px, state, plantId, color, conflict }: Props) {
             style={[styles.glyph, { tintColor: darken(color) }]}
           />
         )}
-        {conflict && (
+        {mistake && (
           <Animated.View
             pointerEvents="none"
             style={[
               StyleSheet.absoluteFill,
-              styles.conflict,
+              styles.mistake,
               {
                 opacity: pulse.interpolate({
                   inputRange: [0, 1],
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     height: "60%",
     opacity: 0.25,
   },
-  conflict: {
+  mistake: {
     backgroundColor: theme.danger,
   },
   // Eliminated (✕) cells dim slightly so they recede from the live board.
