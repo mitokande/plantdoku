@@ -9,7 +9,10 @@
     "backgroundColor": "#13251A",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mithat-ck.plantdoku"
+      "bundleIdentifier": "com.mithatcanturan.plantdoku",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +22,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.mithat_ck.plantdoku"
+      "package": "com.mithatcanturan.plantdoku"
     },
     "web": {
       "favicon": "./assets/favicon.png"
