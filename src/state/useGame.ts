@@ -251,7 +251,7 @@ function reducer(state: GameState, action: Action): GameState {
     }
 
     case "RESET":
-      return settle(state, emptyGrid(state.puzzle.size), state.started);
+      return { ...settle(state, emptyGrid(state.puzzle.size), state.started), history: [] };
 
     // After a fail: same puzzle, blank board, hearts + timer reset.
     case "RETRY":
