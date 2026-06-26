@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -52,7 +53,7 @@ const TUTORIAL_STEPS: { text: string; button?: string }[] = [
     text: "Plants can't touch! Tap or drag across cells to mark ✕ where no plant can go — try the cells around your plant.",
   },
   {
-    text: "You've got it — fill the whole board! 💡 Hint is there if you get stuck.",
+    text: "You've got it — fill the whole board! The Hint button is there if you get stuck.",
     button: "Let's go!",
   },
 ];
@@ -65,10 +66,10 @@ const BG_GRADIENT = ["#0E1F14", "#1D3826", "#0B1710"] as const;
 
 // The three core rules — the prominent card above the board, one per column.
 const RULES = [
-  { icon: "🌱", text: "One per\nrow & column" },
-  { icon: "🎨", text: "One per\ncolour" },
-  { icon: "🚫", text: "No two\ntouching" },
-] as const;
+  { icon: "leaf", text: "One per\nrow & column" },
+  { icon: "color-palette", text: "One per\ncolour" },
+  { icon: "close-circle", text: "No two\ntouching" },
+] as const satisfies { icon: React.ComponentProps<typeof Ionicons>["name"]; text: string }[];
 
 export function GameScreen({ game, onMenu }: Props) {
   const { size } = game.puzzle;
@@ -197,11 +198,19 @@ export function GameScreen({ game, onMenu }: Props) {
         </Pressable>
         <View style={styles.pill}>
           <Text style={styles.pillTxt}>
-            {game.mode === "daily" && game.dailyKey
-              ? `🌞 Daily #${dailyNumber(game.dailyKey)}`
-              : game.mode === "endless" && game.endlessDifficulty
-                ? `🌿 ${DIFF_LABEL[game.endlessDifficulty]}`
-                : `Level ${game.level}`}
+            {game.mode === "daily" && game.dailyKey ? (
+              <>
+                <Ionicons name="sunny" size={14} color={theme.text} />
+                {` Daily #${dailyNumber(game.dailyKey)}`}
+              </>
+            ) : game.mode === "endless" && game.endlessDifficulty ? (
+              <>
+                <Ionicons name="leaf" size={14} color={theme.text} />
+                {` ${DIFF_LABEL[game.endlessDifficulty]}`}
+              </>
+            ) : (
+              `Level ${game.level}`
+            )}
           </Text>
         </View>
         <Pressable
@@ -218,7 +227,7 @@ export function GameScreen({ game, onMenu }: Props) {
           <React.Fragment key={rule.text}>
             {i > 0 && <View style={styles.ruleDivider} />}
             <View style={styles.ruleCol}>
-              <Text style={styles.ruleIcon}>{rule.icon}</Text>
+              <Ionicons name={rule.icon} size={22} color={theme.accent} />
               <Text style={styles.ruleTxt}>{rule.text}</Text>
             </View>
           </React.Fragment>
@@ -247,7 +256,8 @@ export function GameScreen({ game, onMenu }: Props) {
           />
         </View>
         <Text style={styles.progressTxt}>
-          🌿 {game.placedCount}/{size}
+          <Ionicons name="leaf" size={13} color={theme.accent} />
+          {` ${game.placedCount}/${size}`}
         </Text>
       </View>
 
@@ -315,7 +325,7 @@ export function GameScreen({ game, onMenu }: Props) {
       <View style={styles.controls}>
         <Button
           label="Undo"
-          icon="↶"
+          icon="arrow-undo"
           onPress={game.undo}
           disabled={!game.canUndo || (tutorial && tutStep < 3)}
           badge={game.undoDepth}
@@ -323,7 +333,7 @@ export function GameScreen({ game, onMenu }: Props) {
         />
         <Button
           label={game.activeHint ? "Apply" : "Hint"}
-          icon={game.activeHint ? "✓" : "💡"}
+          icon={game.activeHint ? "checkmark" : "bulb"}
           variant={game.activeHint ? "solid" : "ghost"}
           onPress={game.activeHint ? game.applyHint : game.requestHint}
           disabled={tutorial && tutStep < 3}
@@ -332,7 +342,7 @@ export function GameScreen({ game, onMenu }: Props) {
         />
         <Button
           label="Reset"
-          icon="⟳"
+          icon="refresh"
           onPress={game.reset}
           disabled={tutorial && tutStep < 3}
           flex
@@ -472,9 +482,6 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginVertical: 2,
     backgroundColor: theme.panelLine,
-  },
-  ruleIcon: {
-    fontSize: 24,
   },
   ruleTxt: {
     color: theme.text,

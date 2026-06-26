@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
@@ -46,7 +47,7 @@ export function FailOverlay({ title, onRetry, onMenu }: Props) {
           },
         ]}
       >
-        <Text style={styles.emoji}>💔</Text>
+        <Ionicons name="heart-dislike" size={48} color={theme.danger} />
         <Text style={styles.title}>Out of hearts</Text>
         <Text style={styles.sub}>{title}</Text>
         <Text style={styles.body}>
@@ -54,10 +55,10 @@ export function FailOverlay({ title, onRetry, onMenu }: Props) {
         </Text>
 
         <View style={styles.actions}>
-          <Button label="Menu" icon="☰" onPress={onMenu} flex />
+          <Button label="Menu" icon="menu" onPress={onMenu} flex />
           <Button
             label="Try again"
-            icon="↻"
+            icon="refresh"
             variant="solid"
             onPress={onRetry}
             flex
@@ -90,14 +91,11 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
   },
-  emoji: {
-    fontSize: 44,
-  },
   title: {
     color: theme.text,
     fontSize: 30,
     fontWeight: "900",
-    marginTop: 4,
+    marginTop: 8,
   },
   sub: {
     color: theme.accent,

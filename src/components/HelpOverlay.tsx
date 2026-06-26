@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
@@ -9,10 +10,14 @@ interface Props {
   onClose: () => void;
 }
 
-function Row({ icon, text }: { icon: string; text: string }) {
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+function Row({ icon, text }: { icon: IoniconName; text: string }) {
   return (
     <View style={styles.row}>
-      <Text style={styles.rowIcon}>{icon}</Text>
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon} size={20} color={theme.accent} />
+      </View>
       <Text style={styles.rowText}>{text}</Text>
     </View>
   );
@@ -67,16 +72,16 @@ export function HelpOverlay({ onClose }: Props) {
         <Text style={styles.title}>How to play</Text>
 
         <Text style={styles.section}>GOAL</Text>
-        <Row icon="🌱" text="Grow exactly one plant in every row, column and color cluster." />
-        <Row icon="🚫" text="No two plants may touch — not even diagonally." />
+        <Row icon="leaf" text="Grow exactly one plant in every row, column and color cluster." />
+        <Row icon="close-circle" text="No two plants may touch — not even diagonally." />
 
         <Text style={styles.section}>CONTROLS</Text>
-        <Row icon="👆" text="Tap a cell to mark ✕ where no plant can go (tap again to clear)." />
-        <Row icon="👆👆" text="Double-tap a cell to place a plant." />
-        <Row icon="👉" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
+        <Row icon="close" text="Tap a cell to mark ✕ where no plant can go (tap again to clear)." />
+        <Row icon="leaf" text="Double-tap a cell to place a plant." />
+        <Row icon="move" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
 
         <Text style={styles.section}>HEARTS</Text>
-        <Row icon="❤️" text="You have 3 hearts. Planting on the wrong cell loses one — run out and the board resets." />
+        <Row icon="heart" text="You have 3 hearts. Planting on the wrong cell loses one — run out and the board resets." />
 
         <View style={styles.btnRow}>
           <Button label="Close" variant="solid" onPress={onClose} />
@@ -129,9 +134,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   rowIcon: {
-    fontSize: 16,
     width: 34,
-    textAlign: "center",
+    alignItems: "center",
     marginTop: 1,
   },
   rowText: {

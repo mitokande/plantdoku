@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
@@ -114,7 +115,11 @@ export function WinOverlay({
           },
         ]}
       >
-        <Text style={styles.emoji}>{isNewBest ? "🏆" : "🌱"}</Text>
+        <Ionicons
+          name={isNewBest ? "trophy" : "leaf"}
+          size={46}
+          color={isNewBest ? theme.gold : theme.accent}
+        />
         <Text style={styles.title}>
           {daily
             ? `Daily #${daily.number} solved!`
@@ -125,19 +130,21 @@ export function WinOverlay({
 
         {stars && (
           <>
-            <Text style={styles.stars}>
+            <View style={styles.stars}>
               {[1, 2, 3].map((i) => (
-                <Text
+                <Ionicons
                   key={i}
-                  style={i <= stars.earned ? styles.starOn : styles.starOff}
-                >
-                  ★
-                </Text>
+                  name={i <= stars.earned ? "star" : "star-outline"}
+                  size={34}
+                  color={i <= stars.earned ? theme.gold : theme.panelLine}
+                />
               ))}
-            </Text>
+            </View>
             {stars.earned < 3 && (
               <Text style={styles.starHint}>
-                3★ = no hints &amp; under {formatTime(stars.par)}
+                3
+                <Ionicons name="star" size={11} color={theme.gold} />
+                {` = no hints & under ${formatTime(stars.par)}`}
               </Text>
             )}
           </>
@@ -181,7 +188,10 @@ export function WinOverlay({
           stars != null &&
           nextCardIn != null && (
             <Text style={styles.nextCard}>
-              🃏 {nextCardIn}★ more until your next plant card
+              <Ionicons name="albums" size={13} color={theme.textDim} />
+              {`  ${nextCardIn} `}
+              <Ionicons name="star" size={12} color={theme.textDim} />
+              {" more until your next plant card"}
             </Text>
           )
         )}
@@ -195,7 +205,10 @@ export function WinOverlay({
             {daily ? (
               <>
                 <Text style={styles.statLabel}>STREAK</Text>
-                <Text style={styles.statVal}>🔥 {daily.streak}</Text>
+                <Text style={styles.statVal}>
+                  <Ionicons name="flame" size={22} color={theme.danger} />
+                  {` ${daily.streak}`}
+                </Text>
               </>
             ) : (
               <>
@@ -222,20 +235,21 @@ export function WinOverlay({
               },
             ]}
           >
-            ★ New best time!
+            <Ionicons name="star" size={15} color={theme.gold} />
+            {"  New best time!"}
           </Animated.Text>
         )}
 
         {!daily && !endless && !hasNext && (
-          <Text style={styles.comingSoon}>More levels coming soon 🌻</Text>
+          <Text style={styles.comingSoon}>More levels coming soon</Text>
         )}
 
         <View style={styles.actions}>
-          <Button label="Menu" icon="☰" onPress={onMenu} flex />
+          <Button label="Menu" icon="menu" onPress={onMenu} flex />
           {daily ? (
             <Button
               label="Share"
-              icon="📤"
+              icon="share-outline"
               variant="solid"
               onPress={onShare ?? (() => {})}
               flex
@@ -243,7 +257,7 @@ export function WinOverlay({
           ) : endless ? (
             <Button
               label="New board"
-              icon="▶"
+              icon="play"
               variant="solid"
               onPress={onNext}
               flex
@@ -252,7 +266,7 @@ export function WinOverlay({
             hasNext && (
               <Button
                 label="Next level"
-                icon="▶"
+                icon="play"
                 variant="solid"
                 onPress={onNext}
                 flex
@@ -287,25 +301,16 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
   },
-  emoji: {
-    fontSize: 44,
-  },
   title: {
     color: theme.text,
     fontSize: 32,
     fontWeight: "900",
-    marginTop: 4,
+    marginTop: 6,
   },
   stars: {
-    fontSize: 34,
+    flexDirection: "row",
+    gap: 6,
     marginTop: 8,
-    letterSpacing: 6,
-  },
-  starOn: {
-    color: theme.gold,
-  },
-  starOff: {
-    color: theme.panelLine,
   },
   starHint: {
     color: theme.textDim,

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -5,10 +6,12 @@ import { radius, theme } from "../theme";
 
 export type Tab = "home" | "cards" | "daily";
 
-const TABS: { key: Tab; icon: string; label: string }[] = [
-  { key: "home", icon: "🏠", label: "Home" },
-  { key: "cards", icon: "🃏", label: "Cards" },
-  { key: "daily", icon: "🌞", label: "Daily" },
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+const TABS: { key: Tab; icon: IoniconName; iconOff: IoniconName; label: string }[] = [
+  { key: "home", icon: "home", iconOff: "home-outline", label: "Home" },
+  { key: "cards", icon: "albums", iconOff: "albums-outline", label: "Cards" },
+  { key: "daily", icon: "sunny", iconOff: "sunny-outline", label: "Daily" },
 ];
 
 interface Props {
@@ -22,7 +25,7 @@ interface Props {
 export function BottomNav({ tab, onTab, dailyDot }: Props) {
   return (
     <View style={styles.bar}>
-      {TABS.map(({ key, icon, label }) => {
+      {TABS.map(({ key, icon, iconOff, label }) => {
         const active = key === tab;
         return (
           <Pressable
@@ -31,9 +34,11 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
             style={[styles.tab, active && styles.tabActive]}
           >
             <View>
-              <Text style={[styles.icon, !active && styles.iconInactive]}>
-                {icon}
-              </Text>
+              <Ionicons
+                name={active ? icon : iconOff}
+                size={23}
+                color={active ? theme.accent : theme.textDim}
+              />
               {key === "daily" && dailyDot && <View style={styles.dot} />}
             </View>
             <Text style={[styles.label, active && styles.labelActive]}>
@@ -65,12 +70,6 @@ const styles = StyleSheet.create({
   },
   tabActive: {
     backgroundColor: theme.bgAlt,
-  },
-  icon: {
-    fontSize: 22,
-  },
-  iconInactive: {
-    opacity: 0.45,
   },
   dot: {
     position: "absolute",

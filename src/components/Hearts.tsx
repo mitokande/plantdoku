@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 
@@ -27,16 +28,13 @@ function Heart({ filled }: { filled: boolean }) {
   }, [filled, scale]);
 
   return (
-    <Animated.Text
-      selectable={false}
-      style={[
-        styles.heart,
-        filled ? styles.full : styles.lost,
-        { transform: [{ scale }] },
-      ]}
-    >
-      {filled ? "♥" : "♡"}
-    </Animated.Text>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Ionicons
+        name={filled ? "heart" : "heart-outline"}
+        size={22}
+        color={filled ? theme.danger : theme.panelLine}
+      />
+    </Animated.View>
   );
 }
 
@@ -56,15 +54,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-  },
-  heart: {
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  full: {
-    color: theme.danger,
-  },
-  lost: {
-    color: theme.panelLine,
   },
 });

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -27,17 +28,22 @@ export function DailyScreen({ dailyDone, dailyStreak, dailyLog, onPlay }: Props)
   return (
     <View style={styles.wrap}>
       <View style={styles.hero}>
-        <Text style={styles.heroEmoji}>🌞</Text>
+        <Ionicons name="sunny" size={40} color={theme.gold} />
         <Text style={styles.heroTitle}>Daily puzzle #{dailyNumber(tk)}</Text>
         <Text style={styles.heroSub}>
-          {dailyDone
-            ? `✓ Solved today — ${formatTime(dailyLog[tk])}`
-            : "One shared board for everyone. New at midnight."}
+          {dailyDone ? (
+            <>
+              <Ionicons name="checkmark-circle" size={14} color={theme.accent} />
+              {` Solved today — ${formatTime(dailyLog[tk])}`}
+            </>
+          ) : (
+            "One shared board for everyone. New at midnight."
+          )}
         </Text>
         <View style={styles.heroBtn}>
           <Button
             label={dailyDone ? "Replay for a better time" : "Play today's puzzle"}
-            icon="▶"
+            icon="play"
             variant="solid"
             onPress={onPlay}
           />
@@ -45,7 +51,7 @@ export function DailyScreen({ dailyDone, dailyStreak, dailyLog, onPlay }: Props)
       </View>
 
       <View style={styles.streak}>
-        <Text style={styles.streakFlame}>🔥</Text>
+        <Ionicons name="flame" size={26} color={theme.danger} />
         <View>
           <Text style={styles.streakVal}>
             {dailyStreak > 0
@@ -103,9 +109,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 16,
   },
-  heroEmoji: {
-    fontSize: 38,
-  },
   heroTitle: {
     color: theme.text,
     fontSize: 22,
@@ -136,9 +139,6 @@ const styles = StyleSheet.create({
     borderColor: theme.panelLine,
     borderWidth: 1,
     borderRadius: radius.lg,
-  },
-  streakFlame: {
-    fontSize: 26,
   },
   streakVal: {
     color: theme.text,

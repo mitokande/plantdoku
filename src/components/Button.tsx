@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -5,7 +6,7 @@ import { radius, theme } from "../theme";
 
 interface Props {
   label: string;
-  icon?: string;
+  icon?: React.ComponentProps<typeof Ionicons>["name"];
   onPress: () => void;
   disabled?: boolean;
   variant?: "solid" | "ghost" | "danger";
@@ -47,7 +48,13 @@ export function Button({
               pressed && !disabled && styles.facePressed,
             ]}
           >
-            {icon ? <Text style={styles.icon}>{icon}</Text> : null}
+            {icon ? (
+              <Ionicons
+                name={icon}
+                size={18}
+                color={solid ? "#0E2110" : danger ? "#33100B" : theme.text}
+              />
+            ) : null}
             <Text
               style={[
                 styles.label,
@@ -128,9 +135,6 @@ const styles = StyleSheet.create({
     color: "#3D2E08",
     fontSize: 11,
     fontWeight: "900",
-  },
-  icon: {
-    fontSize: 16,
   },
   label: {
     color: theme.text,

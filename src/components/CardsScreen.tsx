@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -54,7 +55,10 @@ function CardTile({
       ) : (
         <>
           <Text style={styles.tileName}>???</Text>
-          <Text style={styles.tileStars}>★ {card.stars}</Text>
+          <Text style={styles.tileStars}>
+            <Ionicons name="star" size={10} color={theme.gold} />
+            {` ${card.stars}`}
+          </Text>
         </>
       )}
     </Pressable>
@@ -137,7 +141,15 @@ function CardModal({
             { color: unlocked ? RARITY_COLORS[card.rarity] : theme.textDim },
           ]}
         >
-          {unlocked ? card.rarity.toUpperCase() : `LOCKED · ★ ${card.stars}`}
+          {unlocked ? (
+            card.rarity.toUpperCase()
+          ) : (
+            <>
+              {"LOCKED · "}
+              <Ionicons name="star" size={11} color={theme.textDim} />
+              {` ${card.stars}`}
+            </>
+          )}
         </Text>
 
         <View style={styles.bigImgFrame}>
@@ -151,10 +163,17 @@ function CardModal({
         <Text style={styles.bigName}>{unlocked ? card.name : "???"}</Text>
 
         <Text style={styles.bigFlavor}>
-          {unlocked
-            ? card.flavor
-            : `Reach ★ ${card.stars} to add this plant to your collection — ` +
-              `${card.stars - totalStars} ★ to go.`}
+          {unlocked ? (
+            card.flavor
+          ) : (
+            <>
+              {"Reach "}
+              <Ionicons name="star" size={13} color={theme.gold} />
+              {` ${card.stars} to add this plant to your collection — ${card.stars - totalStars} `}
+              <Ionicons name="star" size={13} color={theme.gold} />
+              {" to go."}
+            </>
+          )}
         </Text>
 
         <View style={styles.bigBtn}>
@@ -176,7 +195,9 @@ export function CardsScreen({ totalStars }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.title}>Plant cards</Text>
       <Text style={styles.subtitle}>
-        {collected}/{CARDS.length} collected · ★ {totalStars}
+        {collected}/{CARDS.length} collected ·{" "}
+        <Ionicons name="star" size={13} color={theme.gold} />
+        {` ${totalStars}`}
       </Text>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.grid}>
@@ -191,9 +212,15 @@ export function CardsScreen({ totalStars }: Props) {
       </ScrollView>
 
       <Text style={styles.footer}>
-        {upcoming
-          ? `Earn stars in levels to collect cards — next card at ★ ${upcoming.stars}.`
-          : "Every plant collected. The garden is complete! 🌻"}
+        {upcoming ? (
+          <>
+            {"Earn stars in levels to collect cards — next card at "}
+            <Ionicons name="star" size={12} color={theme.gold} />
+            {` ${upcoming.stars}.`}
+          </>
+        ) : (
+          "Every plant collected. The garden is complete!"
+        )}
       </Text>
 
       {inspected && (

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -114,7 +115,7 @@ export function HomeScreen({
         <Rise delay={120}>
           {allComplete ? (
             <View style={styles.doneCard}>
-              <Text style={styles.doneEmoji}>🌻</Text>
+              <Ionicons name="trophy" size={36} color={theme.gold} />
               <Text style={styles.doneTitle}>All levels complete!</Text>
               <Text style={styles.doneSub}>More levels coming soon.</Text>
             </View>
@@ -149,7 +150,10 @@ export function HomeScreen({
         <Rise delay={220}>
           <Pressable onPress={onCards} style={styles.cardsPanel}>
             <View style={styles.cardsHeader}>
-              <Text style={styles.cardsTitle}>🃏 PLANT CARDS</Text>
+              <View style={styles.cardsTitleRow}>
+                <Ionicons name="albums" size={15} color={theme.text} />
+                <Text style={styles.cardsTitle}>PLANT CARDS</Text>
+              </View>
               <View style={styles.cardsBadge}>
                 <Text style={styles.cardsBadgeTxt}>
                   {collected.length}/{CARDS.length}
@@ -179,7 +183,7 @@ export function HomeScreen({
                 </View>
               )}
               <View style={styles.topSpacer} />
-              <Text style={styles.chevron}>›</Text>
+              <Ionicons name="chevron-forward" size={22} color={theme.textDim} />
             </View>
 
             {upcoming ? (
@@ -190,7 +194,8 @@ export function HomeScreen({
                   />
                 </View>
                 <Text style={styles.barLabel}>
-                  ★ {totalStars}/{upcoming.stars}
+                  <Ionicons name="star" size={12} color={theme.gold} />
+                  {` ${totalStars}/${upcoming.stars}`}
                   {collected.length === 0
                     ? " — solve levels to collect your first card!"
                     : " to your next card"}
@@ -198,7 +203,7 @@ export function HomeScreen({
               </>
             ) : (
               <Text style={styles.barLabel}>
-                All {CARDS.length} cards collected! 🌻
+                All {CARDS.length} cards collected!
               </Text>
             )}
           </Pressable>
@@ -207,7 +212,10 @@ export function HomeScreen({
         <Rise delay={320}>
           {unlockedLevel >= ENDLESS_UNLOCK_LEVEL ? (
             <View style={styles.endless}>
-              <Text style={styles.endlessTitle}>🌿 Endless garden</Text>
+              <View style={styles.endlessTitleRow}>
+                <Ionicons name="leaf" size={16} color={theme.accent} />
+                <Text style={styles.endlessTitle}>Endless garden</Text>
+              </View>
               <View style={styles.endlessChips}>
                 {ENDLESS_CHIPS.map(({ difficulty, label }) => (
                   <Pressable
@@ -226,7 +234,7 @@ export function HomeScreen({
           ) : (
             <View style={[styles.endless, styles.endlessLocked]}>
               <View style={styles.endlessLockedRow}>
-                <Text style={styles.endlessLockIcon}>🔒</Text>
+                <Ionicons name="lock-closed" size={22} color={theme.textDim} />
                 <View>
                   <Text style={styles.endlessLockedTitle}>Endless garden</Text>
                   <Text style={styles.endlessLockedSub}>
@@ -313,9 +321,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingVertical: 22,
   },
-  doneEmoji: {
-    fontSize: 36,
-  },
   doneTitle: {
     color: theme.text,
     fontSize: 20,
@@ -342,6 +347,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 10,
+  },
+  cardsTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
   },
   cardsTitle: {
     color: theme.text,
@@ -411,11 +421,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 6,
   },
-  chevron: {
-    color: theme.textDim,
-    fontSize: 24,
-    fontWeight: "700",
-  },
   endless: {
     ...CARD_W,
     marginTop: 12,
@@ -426,11 +431,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.lg,
   },
+  endlessTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginBottom: 9,
+  },
   endlessTitle: {
     color: theme.text,
     fontSize: 15.5,
     fontWeight: "800",
-    marginBottom: 9,
   },
   endlessChips: {
     flexDirection: "row",
@@ -444,9 +454,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-  },
-  endlessLockIcon: {
-    fontSize: 22,
   },
   endlessLockedTitle: {
     color: theme.textDim,

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
@@ -53,17 +54,18 @@ export default function App() {
           {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}
           <View style={styles.hud}>
             <Pressable onPress={() => setTab("cards")} style={styles.pill}>
-              <Text style={styles.pillStar}>★</Text>
+              <Ionicons name="star" size={15} color={theme.gold} />
               <Text style={styles.pillTxt}>{game.totalStars}</Text>
             </Pressable>
             {game.dailyStreak > 0 && (
               <View style={styles.pill}>
-                <Text style={styles.pillTxt}>🔥 {game.dailyStreak}</Text>
+                <Ionicons name="flame" size={15} color={theme.danger} />
+                <Text style={styles.pillTxt}>{game.dailyStreak}</Text>
               </View>
             )}
             <View style={styles.hudSpacer} />
             <Pressable hitSlop={10} onPress={() => setShowSettings(true)}>
-              <Text style={styles.gear}>⚙</Text>
+              <Ionicons name="settings-sharp" size={24} color={theme.textDim} />
             </Pressable>
           </View>
 
@@ -135,19 +137,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 13,
   },
-  pillStar: {
-    color: theme.gold,
-    fontSize: 15,
-    fontWeight: "900",
-  },
   pillTxt: {
     color: theme.text,
     fontSize: 15,
     fontWeight: "900",
-  },
-  gear: {
-    color: theme.textDim,
-    fontSize: 26,
   },
   page: {
     flex: 1,

@@ -73,7 +73,7 @@ export function SettingsOverlay({ onFlush, onClose }: Props) {
             </Text>
             <Button
               label="Flush game data"
-              icon="🗑"
+              icon="trash-outline"
               variant="danger"
               onPress={() => setStage("confirm")}
             />
@@ -99,7 +99,7 @@ export function SettingsOverlay({ onFlush, onClose }: Props) {
           </>
         )}
         {stage === "flushed" && (
-          <Text style={styles.note}>All data wiped — fresh start! 🌱</Text>
+          <Text style={styles.note}>All data wiped — fresh start!</Text>
         )}
 
         <View style={styles.closeRow}>
