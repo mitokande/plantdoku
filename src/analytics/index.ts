@@ -53,6 +53,9 @@ export type EventName =
   | "daily_completed"
   | "endless_completed"
   | "onboarding_completed"
+  | "notifications_enabled"
+  | "notifications_disabled"
+  | "notification_permission"
   | "data_flushed";
 
 type Props = Record<string, string | number | boolean | null | undefined>;

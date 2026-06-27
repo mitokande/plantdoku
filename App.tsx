@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  AppState,
   Platform,
   Pressable,
   SafeAreaView,
@@ -39,6 +40,19 @@ export default function App() {
     }
     return false;
   });
+
+  // Reschedule local reminders each time the app returns to the foreground, so
+  // the "we miss you" timers reset on every real visit (they only fire during a
+  // genuine multi-day absence). The ref keeps the listener stable while always
+  // calling the latest closure (game is rebuilt every render).
+  const syncReminders = useRef(game.syncReminders);
+  syncReminders.current = game.syncReminders;
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") syncReminders.current();
+    });
+    return () => sub.remove();
+  }, []);
 
   // Record the active screen (game board, or the current tab when in the shell).
   useEffect(() => {
@@ -118,6 +132,8 @@ export default function App() {
         <SettingsOverlay
           soundOn={game.soundOn}
           onToggleSound={game.setSoundOn}
+          notifsOn={game.notifsOn}
+          onToggleNotifs={game.setNotifsOn}
           onFlush={game.flushData}
           onClose={() => setShowSettings(false)}
         />

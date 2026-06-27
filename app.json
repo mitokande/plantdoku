@@ -38,7 +38,13 @@
         }
       ],
       "expo-localization",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "color": "#7FB069"
+        }
+      ]
     ],
     "extra": {
       "eas": {

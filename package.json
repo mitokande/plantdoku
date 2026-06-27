@@ -14,6 +14,7 @@
     "expo-haptics": "~15.0.8",
     "expo-linear-gradient": "~15.0.8",
     "expo-localization": "~17.0.9",
+    "expo-notifications": "~0.32.17",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "posthog-react-native": "^4.44.0",

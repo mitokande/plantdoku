@@ -6,7 +6,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { analytics } from "../analytics";
 import { audio } from "../audio";
-import { newlyUnlocked, type PlantCard } from "../game/cards";
+import { notifications } from "../notifications";
+import { nextCard, newlyUnlocked, type PlantCard } from "../game/cards";
 import {
   DAILY_DIFFICULTY,
   dailySeed,
@@ -68,6 +69,7 @@ const ENDLESS_DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 const endlessBestKey = (d: Difficulty) => `plantdoku:best:endless:${d}`;
 const STARS_KEY = "plantdoku:stars"; // JSON {level: bestStars 1..3}
 const SOUND_KEY = "plantdoku:sound"; // "0" when SFX are muted (default: on)
+const NOTIF_KEY = "plantdoku:notifications"; // "0" when reminders off (default: on)
 
 const emptyGrid = (size: number): CellState[][] =>
   Array.from({ length: size }, () => new Array<CellState>(size).fill("empty"));
@@ -324,6 +326,9 @@ export function useGame(initialLevel = 1) {
   const [onboarded, setOnboarded] = useState(false);
   // Sound-effects toggle (defaults on; persisted as "0" when muted).
   const [soundOn, setSoundOnState] = useState(true);
+  // Local-reminder toggle (defaults on as a preference; actual delivery is
+  // still gated by the OS permission, requested when the player enables it).
+  const [notifsOn, setNotifsOnState] = useState(true);
   // Daily-puzzle progress: current streak, last completed date, time log.
   const [daily, setDaily] = useState<{
     streak: number;
@@ -355,6 +360,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LOG_KEY,
         STARS_KEY,
         SOUND_KEY,
+        NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
@@ -390,6 +396,8 @@ export function useGame(initialLevel = 1) {
           const on = v !== "0";
           setSoundOnState(on);
           audio.setMuted(!on);
+        } else if (key === NOTIF_KEY) {
+          setNotifsOnState(v !== "0");
         } else {
           bt[parseInt(key.slice(key.lastIndexOf(":") + 1), 10)] = parseInt(v, 10);
         }
@@ -589,6 +597,30 @@ export function useGame(initialLevel = 1) {
       ? daily.streak
       : 0;
 
+  const totalStars = Object.values(starsByLevel).reduce((a, b) => a + b, 0);
+
+  // The snapshot the local reminders are scheduled from. Rebuilt each render so
+  // both the sync effect and the exposed `syncReminders` use current progress.
+  const reminderPlan = () => {
+    const nc = nextCard(totalStars);
+    return {
+      enabled: notifsOn,
+      dailyDoneToday,
+      streak: dailyStreak,
+      starsToNextCard: nc ? nc.stars - totalStars : undefined,
+    };
+  };
+
+  // Reschedule the reminder set whenever an input to it changes: the toggle,
+  // solving today's daily, the streak length, or crossing a star total (which
+  // moves the "next card" hook). `sync` cancels + reschedules and no-ops without
+  // OS permission, so this is always safe. (App.tsx also re-syncs on every
+  // foreground so the re-engage timers only fire during real absences.)
+  useEffect(() => {
+    void notifications.sync(reminderPlan());
+    if (notifsOn) void notifications.registerForPush();
+  }, [notifsOn, dailyDoneToday, dailyStreak, totalStars]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return {
     ...state,
     running,
@@ -611,7 +643,7 @@ export function useGame(initialLevel = 1) {
     dailyStreak,
     dailyLog: daily.log,
     starsByLevel,
-    totalStars: Object.values(starsByLevel).reduce((a, b) => a + b, 0),
+    totalStars,
     solveStars,
     newCards,
     activeHint,
@@ -625,6 +657,31 @@ export function useGame(initialLevel = 1) {
       audio.setMuted(!on);
       AsyncStorage.setItem(SOUND_KEY, on ? "1" : "0").catch(() => {});
     },
+    notifsOn,
+    // Flip the reminder preference. Turning on requests OS permission first;
+    // if the player denies it, the toggle falls back off (reminders can't be
+    // delivered). The sync effect handles (re)scheduling on the state change.
+    setNotifsOn: async (on: boolean) => {
+      if (on) {
+        const status = await notifications.getPermissionStatus();
+        let granted = status === "granted";
+        if (status === "undetermined") {
+          granted = await notifications.requestPermission();
+          analytics.track("notification_permission", { granted });
+        }
+        if (!granted) {
+          setNotifsOnState(false);
+          AsyncStorage.setItem(NOTIF_KEY, "0").catch(() => {});
+          return;
+        }
+      }
+      setNotifsOnState(on);
+      AsyncStorage.setItem(NOTIF_KEY, on ? "1" : "0").catch(() => {});
+      analytics.track(on ? "notifications_enabled" : "notifications_disabled");
+    },
+    // Re-derive + reschedule reminders from current progress. App.tsx calls
+    // this when the app returns to the foreground so the re-engage timers reset.
+    syncReminders: () => void notifications.sync(reminderPlan()),
     completeOnboarding: () => {
       analytics.track("onboarding_completed");
       setOnboarded(true);
@@ -641,6 +698,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LOG_KEY,
         STARS_KEY,
         SOUND_KEY,
+        NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
@@ -655,6 +713,8 @@ export function useGame(initialLevel = 1) {
       setOnboarded(false);
       setSoundOnState(true);
       audio.setMuted(false);
+      setNotifsOnState(true);
+      notifications.cancelAll();
       setDaily({ streak: 0, last: null, log: {} });
       dispatch({ type: "NEW_GAME", level: 1 });
     },

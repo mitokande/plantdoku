@@ -8,6 +8,8 @@ import { Button } from "./Button";
 interface Props {
   soundOn: boolean;
   onToggleSound: (on: boolean) => void;
+  notifsOn: boolean;
+  onToggleNotifs: (on: boolean) => void;
   onFlush: () => void; // wipes all persisted game data
   onClose: () => void;
 }
@@ -19,6 +21,8 @@ interface Props {
 export function SettingsOverlay({
   soundOn,
   onToggleSound,
+  notifsOn,
+  onToggleNotifs,
   onFlush,
   onClose,
 }: Props) {
@@ -77,6 +81,17 @@ export function SettingsOverlay({
           <Switch
             value={soundOn}
             onValueChange={onToggleSound}
+            trackColor={{ false: theme.panelEdge, true: theme.accent }}
+            thumbColor={theme.text}
+          />
+        </View>
+
+        <Text style={styles.section}>NOTIFICATIONS</Text>
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Daily &amp; streak reminders</Text>
+          <Switch
+            value={notifsOn}
+            onValueChange={onToggleNotifs}
             trackColor={{ false: theme.panelEdge, true: theme.accent }}
             thumbColor={theme.text}
           />
