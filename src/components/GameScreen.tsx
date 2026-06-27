@@ -118,26 +118,18 @@ export function GameScreen({ game, onMenu }: Props) {
     game.completeOnboarding();
   };
 
-  // Drag-paint fires the mark cue per cell, but a fast swipe would retrigger it
-  // dozens of times a second — throttle to a steady brush tick instead.
-  const lastMarkAt = useRef(0);
-  const brushTick = () => {
-    const now = Date.now();
-    if (now - lastMarkAt.current < 55) return;
-    lastMarkAt.current = now;
-    audio.play("mark");
-  };
-
+  // Drag-paint fires the mark cue once per cell — even on a fast swipe every
+  // cell ticks (the audio facade pools voices so they overlap, see src/audio).
   const paint = (r: number, c: number) => {
     if (tutorial && tutStep < 2) return;
     Haptics?.selectionAsync().catch(() => {});
-    brushTick();
+    audio.play("mark");
     game.paint(r, c);
   };
   const erase = (r: number, c: number) => {
     if (tutorial && tutStep < 2) return;
     Haptics?.selectionAsync().catch(() => {});
-    brushTick();
+    audio.play("mark");
     game.erase(r, c);
   };
   const place = (r: number, c: number) => {

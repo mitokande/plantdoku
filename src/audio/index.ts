@@ -42,9 +42,24 @@ if (enabled) {
   }
 }
 
-// One reusable player per clip, created on first use (cheap to keep resident —
-// the clips are tiny). `seekTo(0)` before `play()` lets a cue retrigger rapidly.
-const players = new Map<SoundName, AudioPlayer>();
+// Some cues retrigger faster than the clip's own length — drag-painting ✕ marks
+// fires `mark` once per cell, many times a second. A single player would just
+// `seekTo(0)` and cut the previous tick off (you'd hear one smear, not each
+// cell), so those cues get a small round-robin pool of players that overlap.
+const VOICES: Record<SoundName, number> = {
+  place: 1,
+  mark: 8,
+  mistake: 1,
+  win: 1,
+  fail: 1,
+  button: 2,
+};
+
+// One pool of players per clip, each voice created lazily on first use (cheap to
+// keep resident — the clips are tiny). `seekTo(0)` before `play()` lets a single
+// voice retrigger; the pool lets consecutive plays overlap.
+const pools = new Map<SoundName, AudioPlayer[]>();
+const cursors = new Map<SoundName, number>();
 let muted = false;
 let configured = false;
 
@@ -62,12 +77,20 @@ function configure(): void {
   } catch {}
 }
 
-function get(name: SoundName): AudioPlayer | null {
+// Next voice in the clip's pool (round-robin), created on demand.
+function nextVoice(name: SoundName): AudioPlayer | null {
   if (!mod) return null;
-  let p = players.get(name);
+  let pool = pools.get(name);
+  if (!pool) {
+    pool = [];
+    pools.set(name, pool);
+  }
+  const i = (cursors.get(name) ?? 0) % VOICES[name];
+  cursors.set(name, i + 1);
+  let p = pool[i];
   if (!p) {
     p = mod.createAudioPlayer(SOURCES[name]);
-    players.set(name, p);
+    pool[i] = p;
   }
   return p;
 }
@@ -90,9 +113,9 @@ export const audio = {
     if (!mod || muted) return;
     try {
       configure();
-      const p = get(name);
+      const p = nextVoice(name);
       if (!p) return;
-      // Restart from the top so the cue fires even mid-playback.
+      // Restart this voice from the top so the cue fires even mid-playback.
       void p.seekTo(0);
       p.play();
     } catch {}
