@@ -106,8 +106,31 @@ above: generator changes also change daily boards across app versions).
 - Persistence: `@react-native-async-storage/async-storage` (best times).
 - Feedback: `expo-haptics` (loaded lazily, skipped on web).
 - Visuals: `expo-linear-gradient` (gameplay-screen background).
+- Analytics: **PostHog** (`posthog-react-native`) behind a thin facade in
+  `src/analytics/` — see below.
 - Web support is installed (`react-native-web`, `react-dom`, `@expo/metro-runtime`)
   so the app also runs in a browser and can be smoke-tested headlessly.
+
+## Analytics (`src/analytics/`)
+
+All product analytics go through `analytics` (the only export of
+`src/analytics/index.ts`) — a typed facade over a single PostHog client.
+Call `analytics.track(name, props)` / `analytics.screen(name)`; never import
+`posthog-react-native` elsewhere. The client is built once at module load from
+`EXPO_PUBLIC_POSTHOG_KEY` / `EXPO_PUBLIC_POSTHOG_HOST` (copy `.env.example` →
+`.env`); **with no key, or on web, every call is a safe no-op** (so dev builds
+and the headless web smoke-test run without a project). `EventName` is a closed
+union — add new events there to keep the taxonomy in one place. App lifecycle
+(Installed/Opened/Backgrounded) is auto-captured by the SDK.
+
+Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
+`level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
+`mistake_made`, `hint_requested`/`hint_applied`, `card_unlocked`,
+`undo_used`/`board_reset`/`board_retried`, `onboarding_completed`,
+`data_flushed` — which also calls `analytics.reset()`) and `App.tsx`
+(`screen_viewed` per tab/game). Keep analytics **out of `src/game/*`** so the
+headless Node tests stay framework-free (the facade imports RN; `useGame`
+already does).
 
 ## Commands
 

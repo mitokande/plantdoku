@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { analytics } from "./src/analytics";
 import { BottomNav, type Tab } from "./src/components/BottomNav";
 import { CardsScreen } from "./src/components/CardsScreen";
 import { DailyScreen } from "./src/components/DailyScreen";
@@ -38,6 +39,19 @@ export default function App() {
     }
     return false;
   });
+
+  // Record the active screen (game board, or the current tab when in the shell).
+  useEffect(() => {
+    analytics.screen(
+      playing
+        ? "Game"
+        : tab === "home"
+          ? "Home"
+          : tab === "cards"
+            ? "Cards"
+            : "Daily",
+    );
+  }, [tab, playing]);
 
   const startLevel = () => {
     game.newGame(Math.min(game.unlockedLevel, LEVEL_COUNT));

@@ -4,6 +4,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { analytics } from "../analytics";
 import { newlyUnlocked, type PlantCard } from "../game/cards";
 import {
   DAILY_DIFFICULTY,
@@ -421,6 +422,16 @@ export function useGame(initialLevel = 1) {
             String(seconds),
           ).catch(() => {});
         }
+        analytics.track("endless_completed", {
+          mode: "endless",
+          difficulty: endlessDifficulty,
+          size: state.puzzle.size,
+          tier: state.puzzle.tier,
+          seconds,
+          hints: state.hintsUsed,
+          hearts_left: state.hearts,
+          new_best: improved,
+        });
       } else if (mode === "daily" && dailyKey) {
         const prev = daily.log[dailyKey];
         const improved = prev == null || seconds < prev;
@@ -440,6 +451,17 @@ export function useGame(initialLevel = 1) {
           [DAILY_LAST_KEY, dailyKey],
           [DAILY_LOG_KEY, JSON.stringify(log)],
         ]).catch(() => {});
+        analytics.track("daily_completed", {
+          mode: "daily",
+          size: state.puzzle.size,
+          tier: state.puzzle.tier,
+          seconds,
+          streak,
+          hints: state.hintsUsed,
+          hearts_left: state.hearts,
+          new_best: improved,
+          replay: !firstToday,
+        });
       } else {
         const prev = bestTimes[level];
         const improved = prev == null || seconds < prev;
@@ -456,6 +478,18 @@ export function useGame(initialLevel = 1) {
         );
         setSolveStars(stars);
         const prevBest = starsByLevel[level] ?? 0;
+        analytics.track("level_completed", {
+          mode: "level",
+          level,
+          difficulty: getLevel(level).difficulty,
+          size: state.puzzle.size,
+          tier: state.puzzle.tier,
+          seconds,
+          hints: state.hintsUsed,
+          hearts_left: state.hearts,
+          stars,
+          new_best: improved,
+        });
         if (stars > prevBest) {
           const next = { ...starsByLevel, [level]: stars };
           setStarsByLevel(next);
@@ -466,7 +500,16 @@ export function useGame(initialLevel = 1) {
             (a, b) => a + b,
             0,
           );
-          setNewCards(newlyUnlocked(prevTotal, prevTotal + stars - prevBest));
+          const newTotal = prevTotal + stars - prevBest;
+          const unlocked = newlyUnlocked(prevTotal, newTotal);
+          setNewCards(unlocked);
+          for (const card of unlocked) {
+            analytics.track("card_unlocked", {
+              card_id: card.plantId,
+              rarity: card.rarity,
+              total_stars: newTotal,
+            });
+          }
         }
         if (level === unlockedLevel) {
           const next = level + 1; // may be LEVEL_COUNT + 1 = "all complete"
@@ -481,6 +524,47 @@ export function useGame(initialLevel = 1) {
     }
     wasSolved.current = state.solved;
   }, [state.solved]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Difficulty of the board currently on screen, for analytics context.
+  const boardDifficulty = (): Difficulty =>
+    state.mode === "level"
+      ? getLevel(state.level).difficulty
+      : state.mode === "endless" && state.endlessDifficulty
+        ? state.endlessDifficulty
+        : DAILY_DIFFICULTY;
+
+  // On the rising edge of "failed": the board ran out of hearts (game over).
+  const wasFailed = useRef(false);
+  useEffect(() => {
+    if (state.failed && !wasFailed.current) {
+      analytics.track("board_failed", {
+        mode: state.mode,
+        level: state.level || undefined,
+        difficulty: boardDifficulty(),
+        size: state.puzzle.size,
+        tier: state.puzzle.tier,
+        placed: state.placedCount,
+        seconds: state.seconds,
+        hints: state.hintsUsed,
+      });
+    }
+    wasFailed.current = state.failed;
+  }, [state.failed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // A drop in hearts means a plant was placed on a wrong cell. (New boards
+  // reset hearts up to MAX, which never triggers this.)
+  const prevHearts = useRef(state.hearts);
+  useEffect(() => {
+    if (state.hearts < prevHearts.current) {
+      analytics.track("mistake_made", {
+        mode: state.mode,
+        level: state.level || undefined,
+        difficulty: boardDifficulty(),
+        hearts_left: state.hearts,
+      });
+    }
+    prevHearts.current = state.hearts;
+  }, [state.hearts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Any change to the grid invalidates the hint shown on it (applying the
   // hint changes the grid too, so this also cleans up after applyHint).
@@ -527,6 +611,7 @@ export function useGame(initialLevel = 1) {
     hintsUsed: state.hintsUsed,
     onboarded,
     completeOnboarding: () => {
+      analytics.track("onboarding_completed");
       setOnboarded(true);
       AsyncStorage.setItem(ONBOARDED_KEY, "1").catch(() => {});
     },
@@ -543,6 +628,9 @@ export function useGame(initialLevel = 1) {
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
+      analytics.track("data_flushed");
+      // Sever the analytics person so the fresh-start player is a new identity.
+      analytics.reset();
       AsyncStorage.multiRemove(keys).catch(() => {});
       setUnlockedLevel(1);
       setBestTimes({});
@@ -552,28 +640,76 @@ export function useGame(initialLevel = 1) {
       setDaily({ streak: 0, last: null, log: {} });
       dispatch({ type: "NEW_GAME", level: 1 });
     },
-    newGame: (level: number) => dispatch({ type: "NEW_GAME", level }),
-    newDaily: () => dispatch({ type: "NEW_DAILY" }),
-    newEndless: (difficulty: Difficulty) =>
-      dispatch({ type: "NEW_ENDLESS", difficulty }),
+    newGame: (level: number) => {
+      analytics.track("game_started", {
+        mode: "level",
+        level,
+        difficulty: getLevel(level).difficulty,
+      });
+      dispatch({ type: "NEW_GAME", level });
+    },
+    newDaily: () => {
+      analytics.track("game_started", {
+        mode: "daily",
+        difficulty: DAILY_DIFFICULTY,
+      });
+      dispatch({ type: "NEW_DAILY" });
+    },
+    newEndless: (difficulty: Difficulty) => {
+      analytics.track("game_started", { mode: "endless", difficulty });
+      dispatch({ type: "NEW_ENDLESS", difficulty });
+    },
     paint: (r: number, c: number) => dispatch({ type: "PAINT", r, c }),
     erase: (r: number, c: number) => dispatch({ type: "ERASE", r, c }),
     place: (r: number, c: number) => dispatch({ type: "PLACE", r, c }),
     tap: (r: number, c: number) => dispatch({ type: "TAP", r, c }),
-    undo: () => dispatch({ type: "UNDO" }),
-    reset: () => dispatch({ type: "RESET" }),
-    retry: () => dispatch({ type: "RETRY" }),
+    undo: () => {
+      if (state.history.length > 0 && !state.failed) {
+        analytics.track("undo_used", {
+          mode: state.mode,
+          level: state.level || undefined,
+        });
+      }
+      dispatch({ type: "UNDO" });
+    },
+    reset: () => {
+      analytics.track("board_reset", {
+        mode: state.mode,
+        level: state.level || undefined,
+      });
+      dispatch({ type: "RESET" });
+    },
+    retry: () => {
+      analytics.track("board_retried", {
+        mode: state.mode,
+        level: state.level || undefined,
+        difficulty: boardDifficulty(),
+      });
+      dispatch({ type: "RETRY" });
+    },
     // First press: explain the next deduction (falls back to revealing a
     // solution cell if the chain has nothing new). Second press applies it.
     requestHint: () => {
       if (state.solved || state.failed) return;
       dispatch({ type: "COUNT_HINT" });
       const hint = nextHint(state.puzzle, state.states);
+      analytics.track("hint_requested", {
+        mode: state.mode,
+        level: state.level || undefined,
+        teaching: !!hint,
+      });
       if (hint) setActiveHint(hint);
       else dispatch({ type: "HINT" });
     },
     applyHint: () => {
-      if (activeHint) dispatch({ type: "APPLY_HINT", hint: activeHint });
+      if (activeHint) {
+        analytics.track("hint_applied", {
+          mode: state.mode,
+          level: state.level || undefined,
+          action: activeHint.action,
+        });
+        dispatch({ type: "APPLY_HINT", hint: activeHint });
+      }
     },
     dismissHint: () => setActiveHint(null),
   };
