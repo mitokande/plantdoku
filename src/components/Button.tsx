@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { audio } from "../audio";
 import { radius, theme } from "../theme";
 
 interface Props {
@@ -30,7 +31,10 @@ export function Button({
   const danger = variant === "danger";
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        audio.play("button");
+        onPress();
+      }}
       disabled={disabled}
       style={[
         styles.edge,

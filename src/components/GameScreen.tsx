@@ -12,6 +12,7 @@ import {
 
 import { LinearGradient } from "expo-linear-gradient";
 
+import { audio } from "../audio";
 import type { Game } from "../state/useGame";
 import { nextCard } from "../game/cards";
 import { dailyNumber } from "../game/daily";
@@ -117,14 +118,26 @@ export function GameScreen({ game, onMenu }: Props) {
     game.completeOnboarding();
   };
 
+  // Drag-paint fires the mark cue per cell, but a fast swipe would retrigger it
+  // dozens of times a second — throttle to a steady brush tick instead.
+  const lastMarkAt = useRef(0);
+  const brushTick = () => {
+    const now = Date.now();
+    if (now - lastMarkAt.current < 55) return;
+    lastMarkAt.current = now;
+    audio.play("mark");
+  };
+
   const paint = (r: number, c: number) => {
     if (tutorial && tutStep < 2) return;
     Haptics?.selectionAsync().catch(() => {});
+    brushTick();
     game.paint(r, c);
   };
   const erase = (r: number, c: number) => {
     if (tutorial && tutStep < 2) return;
     Haptics?.selectionAsync().catch(() => {});
+    brushTick();
     game.erase(r, c);
   };
   const place = (r: number, c: number) => {
@@ -137,11 +150,15 @@ export function GameScreen({ game, onMenu }: Props) {
     )
       return;
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // A wrong cell costs a heart — cue accordingly (the win sound is fired by
+    // the solved effect when the final correct plant completes the board).
+    audio.play(game.puzzle.solution[r] === c ? "place" : "mistake");
     game.place(r, c);
   };
   const tapCell = (r: number, c: number) => {
     if (tutorial && tutStep < 2) return;
     Haptics?.selectionAsync().catch(() => {});
+    audio.play("mark");
     game.tap(r, c);
   };
 
@@ -150,8 +167,14 @@ export function GameScreen({ game, onMenu }: Props) {
       Haptics?.notificationAsync(
         Haptics.NotificationFeedbackType.Success,
       ).catch(() => {});
+      audio.play("win");
     }
   }, [game.solved]);
+
+  // Out of hearts: sound the game-over cue (the FailOverlay takes the screen).
+  React.useEffect(() => {
+    if (game.failed) audio.play("fail");
+  }, [game.failed]);
 
   // Juice: shake the board (+ error haptic) when a plant lands on a wrong cell.
   const shake = useRef(new Animated.Value(0)).current;

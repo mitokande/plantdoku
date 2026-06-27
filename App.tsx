@@ -116,6 +116,8 @@ export default function App() {
       )}
       {showSettings && (
         <SettingsOverlay
+          soundOn={game.soundOn}
+          onToggleSound={game.setSoundOn}
           onFlush={game.flushData}
           onClose={() => setShowSettings(false)}
         />

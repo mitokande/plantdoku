@@ -37,7 +37,8 @@
           "backgroundColor": "#13251A"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-audio"
     ],
     "extra": {
       "eas": {

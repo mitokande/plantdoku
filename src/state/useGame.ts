@@ -5,6 +5,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { analytics } from "../analytics";
+import { audio } from "../audio";
 import { newlyUnlocked, type PlantCard } from "../game/cards";
 import {
   DAILY_DIFFICULTY,
@@ -66,6 +67,7 @@ const DAILY_LOG_KEY = "plantdoku:daily:log"; // JSON {dateKey: bestSeconds}
 const ENDLESS_DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 const endlessBestKey = (d: Difficulty) => `plantdoku:best:endless:${d}`;
 const STARS_KEY = "plantdoku:stars"; // JSON {level: bestStars 1..3}
+const SOUND_KEY = "plantdoku:sound"; // "0" when SFX are muted (default: on)
 
 const emptyGrid = (size: number): CellState[][] =>
   Array.from({ length: size }, () => new Array<CellState>(size).fill("empty"));
@@ -320,6 +322,8 @@ export function useGame(initialLevel = 1) {
   const [bestTimes, setBestTimes] = useState<Record<number, number>>({});
   // Whether the first-play tutorial has been completed (or dismissed).
   const [onboarded, setOnboarded] = useState(false);
+  // Sound-effects toggle (defaults on; persisted as "0" when muted).
+  const [soundOn, setSoundOnState] = useState(true);
   // Daily-puzzle progress: current streak, last completed date, time log.
   const [daily, setDaily] = useState<{
     streak: number;
@@ -350,6 +354,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LAST_KEY,
         DAILY_LOG_KEY,
         STARS_KEY,
+        SOUND_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
@@ -381,6 +386,10 @@ export function useGame(initialLevel = 1) {
           try {
             setStarsByLevel(JSON.parse(v));
           } catch {}
+        } else if (key === SOUND_KEY) {
+          const on = v !== "0";
+          setSoundOnState(on);
+          audio.setMuted(!on);
         } else {
           bt[parseInt(key.slice(key.lastIndexOf(":") + 1), 10)] = parseInt(v, 10);
         }
@@ -610,6 +619,12 @@ export function useGame(initialLevel = 1) {
     undoDepth: state.history.length,
     hintsUsed: state.hintsUsed,
     onboarded,
+    soundOn,
+    setSoundOn: (on: boolean) => {
+      setSoundOnState(on);
+      audio.setMuted(!on);
+      AsyncStorage.setItem(SOUND_KEY, on ? "1" : "0").catch(() => {});
+    },
     completeOnboarding: () => {
       analytics.track("onboarding_completed");
       setOnboarded(true);
@@ -625,6 +640,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LAST_KEY,
         DAILY_LOG_KEY,
         STARS_KEY,
+        SOUND_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
@@ -637,6 +653,8 @@ export function useGame(initialLevel = 1) {
       setEndlessBests({});
       setStarsByLevel({});
       setOnboarded(false);
+      setSoundOnState(true);
+      audio.setMuted(false);
       setDaily({ streak: 0, last: null, log: {} });
       dispatch({ type: "NEW_GAME", level: 1 });
     },

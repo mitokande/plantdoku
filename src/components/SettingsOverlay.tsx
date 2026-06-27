@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, Switch, Text, View } from "react-native";
 
 import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Button } from "./Button";
 
 interface Props {
+  soundOn: boolean;
+  onToggleSound: (on: boolean) => void;
   onFlush: () => void; // wipes all persisted game data
   onClose: () => void;
 }
@@ -14,7 +16,12 @@ interface Props {
  * Settings card. The destructive "flush game data" action is guarded by an
  * inline confirm step (no native Alert — it must also work on web).
  */
-export function SettingsOverlay({ onFlush, onClose }: Props) {
+export function SettingsOverlay({
+  soundOn,
+  onToggleSound,
+  onFlush,
+  onClose,
+}: Props) {
   const [stage, setStage] = useState<"idle" | "confirm" | "flushed">("idle");
 
   // Android back steps out of the destructive confirm first, then closes.
@@ -63,6 +70,17 @@ export function SettingsOverlay({ onFlush, onClose }: Props) {
         ]}
       >
         <Text style={styles.title}>Settings</Text>
+
+        <Text style={styles.section}>SOUND</Text>
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Sound effects</Text>
+          <Switch
+            value={soundOn}
+            onValueChange={onToggleSound}
+            trackColor={{ false: theme.panelEdge, true: theme.accent }}
+            thumbColor={theme.text}
+          />
+        </View>
 
         <Text style={styles.section}>GAME DATA</Text>
         {stage === "idle" && (
@@ -155,6 +173,16 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: 10,
+  },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  toggleLabel: {
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: "700",
   },
   closeRow: {
     marginTop: 18,

@@ -132,6 +132,29 @@ Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 headless Node tests stay framework-free (the facade imports RN; `useGame`
 already does).
 
+## Audio (`src/audio/`)
+
+All sound effects go through `audio` (the only export of `src/audio/index.ts`)
+— a typed facade over **expo-audio**, mirroring the analytics facade and the
+haptics pattern. Call `audio.play(name)`; never import `expo-audio` elsewhere.
+`SoundName` is a closed union (`place` · `mark` · `mistake` · `win` · `fail` ·
+`button`). One reusable `AudioPlayer` per clip is created lazily and cached;
+`play` does `seekTo(0)` then `play()` so a cue can retrigger rapidly. **On web,
+before init, or when muted, every call is a safe no-op** (so the headless web
+smoke-test runs without audio), and all failures are swallowed — audio can
+never break gameplay. Clips are bundled from `assets/audio/*.wav` via static
+`require`s; regenerate them with `python3 scripts/make_sfx.py` (stdlib-only
+synthesis — swap in designed clips anytime, just keep the filenames).
+
+Mute is owned by `useGame` (single source of truth, like the other prefs): it
+persists `plantdoku:sound` ("0" = muted, default on), pushes the flag to
+`audio.setMuted`, and exposes `soundOn` / `setSoundOn`. `flushData` wipes the
+key (back to on). The toggle lives in `SettingsOverlay`. Cues fire from
+`GameScreen` (place/mistake on a placement by solution-cell check, `mark` on
+tap-✕, `win`/`fail` on the solved/failed edges) and the shared `Button`
+(`button` click). Keep audio **out of `src/game/*`** so the Node tests stay
+framework-free (same rule as analytics).
+
 ## Commands
 
 ```bash
@@ -142,6 +165,7 @@ npm test             # headless game-core tests (tsx src/game/runTests.ts)
 npm run typecheck    # tsc --noEmit
 # Regenerate sprites from the source sheet:
 SHEET=/path/to/sheet.png python3 scripts/slice_sprites.py
+python3 scripts/make_sfx.py    # regenerate the placeholder SFX (assets/audio/)
 ```
 
 ## Interaction model (current)
@@ -232,7 +256,10 @@ src/game/
   validator.ts   findConflicts (row/col/cluster/adjacency) + isSolved
   runTests.ts    headless correctness tests (npm test)
 src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
-                 timer, unlocked level + per-level best + onboarded (AsyncStorage)
+                 timer, unlocked level + per-level best + onboarded + soundOn
+                 (AsyncStorage)
+src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —
+                 RN ONLY, no-op on web (do not import in core)
 src/components/
   Board.tsx      n×n grid + PanResponder gestures (the gesture brain) + highlight ring
   Cell.tsx       display-only cell (colour, ✕, placed plant + ring)
@@ -244,8 +271,9 @@ src/components/
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
   TutorialBubble.tsx  tutorial coach card · HelpOverlay.tsx  "How to play" card
-  SettingsOverlay.tsx settings modal: flush game data (inline confirm; uses
-                 useGame.flushData — wipes all AsyncStorage keys, back to L1)
+  SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
+                 flush game data (inline confirm; uses useGame.flushData —
+                 wipes all AsyncStorage keys, back to L1)
   Button.tsx (solid/ghost/danger), WinOverlay.tsx (Next level / coming soon),
   FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
@@ -256,6 +284,7 @@ App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) 
                  to the Home tab first
 scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
 scripts/pick_level_seeds.ts  offline seed picker for the level table
+scripts/make_sfx.py          stdlib-only SFX synth -> assets/audio/*.wav
 ```
 
 ### Generator (the crux — guarantees a *logic-solvable* board)
