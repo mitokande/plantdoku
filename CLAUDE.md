@@ -179,9 +179,20 @@ Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
 - **Double-tap** a cell → place a **plant** (the cluster's plant, revealed on placement).
 
 Discrimination logic: movement past `DRAG_THRESHOLD` (10px) becomes a drag
-(paint). Otherwise a `DOUBLE_MS` (260ms) window separates single-tap (toggle ✕,
-fired on a timer) from double-tap (place) — so a double-tap never leaves a stray
-✕ behind.
+(paint). Otherwise two **independent** timers separate single-tap (toggle ✕)
+from double-tap (place). The double-tap is decided at the second **touch-down**
+(in `onPanResponderGrant`): same cell as the last tap, within `DOUBLE_MS` (260ms)
+of its lift. Measuring lift→touch-down — not lift→second-lift — excludes the
+second tap's press duration, so the window stays forgiving without bleeding into
+the ✕ delay (this is what fixed double-taps feeling "hard"). `SINGLE_MS` (90ms)
+is how long a *lone* tap waits before its ✕ (and its haptic/audio) commits —
+the dead-air on an isolated mark, kept low for snappy marking. Keep `SINGLE_MS ≤
+DOUBLE_MS` — a double-tap whose second touch-down lands after `SINGLE_MS` briefly
+flashes a ✕ before the plant (quicker ones stay clean, leaving no stray ✕). To
+keep the deferred ✕ from feeling laggy, a still-pending single tap is also
+**committed immediately when the next touch lands on a different cell** (it can
+no longer become a double tap), so rapid marking responds instantly; only an
+isolated tap waits out `SINGLE_MS`.
 
 **Cell → touch mapping**: the **grant** uses `nativeEvent.locationX/locationY`
 (relative to the board frame, which is the touch target via

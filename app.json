@@ -44,7 +44,9 @@
         {
           "color": "#7FB069"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "eas": {

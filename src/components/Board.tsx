@@ -18,7 +18,18 @@ import { Cell } from "./Cell";
 const FRAME = 10;
 const FRAME_BORDER = 3;
 const DRAG_THRESHOLD = 10; // px of movement before a touch becomes a drag
-const DOUBLE_MS = 260; // max gap between taps to count as a double tap
+// Two independent timers. DOUBLE_MS is the max gap from a tap's lift to the next
+// tap's *touch-down* to count as a double-tap. Measuring to touch-down (not the
+// second lift) excludes the second tap's press duration — the thing that made
+// double-taps feel hard — so the window can stay forgiving. SINGLE_MS is how
+// long a *lone* tap waits before its ✕ (and its haptic/audio) commits — the
+// dead-air on an isolated mark, so it's tuned low for snappy marking. Keep
+// SINGLE_MS ≤ DOUBLE_MS: a double-tap whose second touch-down lands after
+// SINGLE_MS briefly flashes a ✕ before the plant (the plant's pop masks it) —
+// quicker double-taps stay clean. Rapid marking never waits this out anyway: a
+// pending ✕ commits the instant the next touch lands on a different cell.
+const DOUBLE_MS = 260; // max lift→next-touch-down gap to count as a double tap
+const SINGLE_MS = 90; // a lone tap's ✕ commit delay (low = snappier marking)
 
 interface Props {
   puzzle: Puzzle;
@@ -107,6 +118,7 @@ export function Board({
   const didDrag = useRef(false);
   const dragErases = useRef(false); // drag started on an ✕ → drag unmarks
   const lastTap = useRef({ cell: -1, time: 0 });
+  const armedPlace = useRef(false); // touch-down detected a double-tap; release places
   const pendingErase = useRef<{
     cell: number;
     timer: ReturnType<typeof setTimeout>;
@@ -147,8 +159,26 @@ export function Board({
       onPanResponderGrant: (e) => {
         const { locationX, locationY } = e.nativeEvent;
         grantLoc.current = { x: locationX, y: locationY };
-        grantCell.current = cellFromLocation(locationX, locationY);
-        lastPanCell.current = grantCell.current;
+        const cell = cellFromLocation(locationX, locationY);
+        grantCell.current = cell;
+        // Decide the double-tap here, at the second touch-down: same cell as the
+        // last tap, within DOUBLE_MS of its lift. Deciding at touch-down (not at
+        // release) is what makes it forgiving, and lets us cancel the pending ✕
+        // before it can flash.
+        const lt = lastTap.current;
+        armedPlace.current =
+          cell >= 0 && lt.cell === cell && Date.now() - lt.time < DOUBLE_MS;
+        // Resolve a still-pending ✕ from the previous tap: drop it if this is its
+        // second tap (we'll place instead); otherwise commit it now — a touch
+        // landing elsewhere means it can no longer become a double tap, so don't
+        // make it wait out the timer (rapid marking stays instant).
+        if (pendingErase.current) {
+          clearTimeout(pendingErase.current.timer);
+          const pc = pendingErase.current.cell;
+          pendingErase.current = null;
+          if (!armedPlace.current) cb.current.onTap(...rc(pc));
+        }
+        lastPanCell.current = cell;
         didDrag.current = false;
         dragErases.current = false;
       },
@@ -156,6 +186,7 @@ export function Board({
       onPanResponderMove: (e, g) => {
         if (!didDrag.current && Math.hypot(g.dx, g.dy) > DRAG_THRESHOLD) {
           didDrag.current = true;
+          armedPlace.current = false; // a drag is never a place
           clearPending(); // this is a drag, not a tap
           if (grantCell.current >= 0) {
             // The start cell decides the drag's mode: ✕ → erase, else paint.
@@ -186,23 +217,21 @@ export function Board({
         if (didDrag.current) return; // drag already handled
         const cell = grantCell.current;
         if (cell < 0) return;
-        const now = Date.now();
-        const lt = lastTap.current;
-        if (lt.cell === cell && now - lt.time < DOUBLE_MS) {
-          // Second tap on the same cell → place a plant.
-          clearPending();
+        if (armedPlace.current) {
+          // Second tap of a double-tap (decided at touch-down) → place a plant.
+          armedPlace.current = false;
           lastTap.current = { cell: -1, time: 0 };
           cb.current.onPlace(...rc(cell));
-        } else {
-          // First tap → toggle ✕, but wait briefly in case a double tap follows.
-          lastTap.current = { cell, time: now };
-          clearPending();
-          const timer = setTimeout(() => {
-            cb.current.onTap(...rc(cell));
-            pendingErase.current = null;
-          }, DOUBLE_MS);
-          pendingErase.current = { cell, timer };
+          return;
         }
+        // First tap → toggle ✕, but wait briefly in case a double tap follows.
+        lastTap.current = { cell, time: Date.now() };
+        clearPending();
+        const timer = setTimeout(() => {
+          cb.current.onTap(...rc(cell));
+          pendingErase.current = null;
+        }, SINGLE_MS);
+        pendingErase.current = { cell, timer };
       },
     });
   }
