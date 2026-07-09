@@ -68,9 +68,10 @@ same `hintRow` — the pill text is kept short ("Mark ✕ · double-tap to
 plant") so both fit on one line; hidden while a teaching hint card is showing
 to avoid crowding. Tapping it runs a **staged sweep** (`startAutoComplete` /
 `autoAnim` state in `GameScreen`), not an instant jump: every still-empty
-cell gets ✕-marked one by one in reading order (mark pop + tick per cell via
-`game.paint`, pace scaled so the sweep stays ~1s however many cells remain;
-no highlight ring on the plant cell) → dispatch `AUTO_COMPLETE`
+cell gets ✕-marked one by one in reading order (mark pop + tick + a
+selection haptic per cell via `game.paint`, pace scaled so the sweep stays
+~1s however many cells remain; no highlight ring on the plant cell) →
+dispatch `AUTO_COMPLETE`
 (plant pops in with the place cue) → hold a beat (~550ms) → win overlay +
 fanfare (the solved sound effect and `WinOverlay` render both wait for
 `autoAnim` to clear). Board input and Undo/Hint/Reset are locked while the

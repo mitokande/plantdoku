@@ -237,6 +237,7 @@ export function GameScreen({ game, onMenu }: Props) {
     const tick = () => {
       if (i < toMark.length) {
         const [r, c] = toMark[i++];
+        Haptics?.selectionAsync().catch(() => {});
         audio.play("mark");
         game.paint(r, c);
         autoTimers.current.push(setTimeout(tick, stepMs));
