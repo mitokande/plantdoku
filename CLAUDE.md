@@ -60,6 +60,24 @@ the button becomes "Apply" which commits the conclusion as one undoable step.
 Falls back to the legacy reveal-a-cell HINT when the chain has nothing new.
 Tested by walking hints from an empty grid to a full solve on all 60 levels.
 
+**Auto-complete**: when exactly **one plant is left** on a mistake-free board
+(`useGame.canAutoComplete` = `placedCount === size - 1 && mistakes.size === 0`
+and not solved/failed), a small floating "Finish" button pops in over the
+board's bottom-right corner (`FinishFab` in `GameScreen.tsx`, positioned via
+`boardMetrics`). Tapping it runs a **staged sweep** (`startAutoComplete` /
+`autoAnim` state in `GameScreen`), not an instant jump: every still-empty
+cell gets ✕-marked one by one in reading order (mark pop + tick per cell via
+`game.paint`, pace scaled so the sweep stays ~1s however many cells remain;
+no highlight ring on the plant cell) → dispatch `AUTO_COMPLETE`
+(plant pops in with the place cue) → hold a beat (~550ms) → win overlay +
+fanfare (the solved sound effect and `WinOverlay` render both wait for
+`autoAnim` to clear). Board input and Undo/Hint/Reset are locked while the
+sequence runs; timers are cleared on unmount. The `AUTO_COMPLETE` reducer action places `solution[r]`
+in the one plantless row (overwriting an ✕ there, like a manual double-tap)
+via a single `settle`, so solved flips through the standard path
+(stars/best/cards all normal) and `hintsUsed` is untouched — finishing costs
+no star. Analytics: `auto_completed`.
+
 **Stars** (`src/game/stars.ts`): level mode only — ★ solved, +★ no hints,
 +★ under par (par by size+tier). Best per level persists as JSON under
 `plantdoku:stars`; win overlay shows the rating (+ what 3★ needs), menu Play
@@ -206,14 +224,27 @@ coordinate systems.
 
 ### Onboarding
 
-First-ever play of Level 1 runs a 4-step interactive tutorial on the real board
-(state machine in `GameScreen.tsx`, `TUTORIAL_STEPS`): goal text → forced
-placement on the easy board's guaranteed **singleton cluster** (pulsing gold
-ring via `Board`'s `highlight` prop; input locked to that one double-tap) →
-mark-✕ teach (place blocked, advances at 3 ✕s) → free-play dismiss. The coach
-card is `TutorialBubble.tsx` (replaces the hint pill while active);
-Undo/Hint/Reset are disabled until the last step. Completion persists
-`plantdoku:onboarded` (exposed by `useGame` as `onboarded` /
+First-ever play of Level 1 runs a 6-step **spotlight tutorial** on the real
+board (state machine in `GameScreen.tsx`, `TUTORIAL_STEPS`).
+`TutorialOverlay.tsx` blacks out the whole screen except a rectangular
+spotlight "hole": four touch-swallowing scrim rects around it (the hole is an
+absence of views, so touches there fall through to the Board) — header,
+controls and Help are covered and unreachable while it's up. Steps: goal card
+(full blackout) → forced double-tap on the easy board's guaranteed
+**singleton cluster** (hole = that cell; pulsing ring via `Board`'s
+`highlight` + bouncing 👆) → mark-✕ the cells touching the plant (hole = the
+3×3 block, clamped) → mark the rest of its **row** (hole = row strip) → the
+rest of its **column** → "Let's go" card. Each mark step advances when its
+whole target set is ✕'d (targets outlined via `Board`'s `hintCells`); the
+scrim only blocks touch-*downs* — a drag granted inside the hole keeps
+delivering moves outside it — so the `GameScreen` handlers gate too
+(`canMarkAt`: paint/erase/tap only on the step's target set, never the plant
+itself since tapping a placed cell uproots it; place only on the target
+during its step). Hole geometry = `boardMetrics`/`BOARD_FRAME` (exported by
+`Board.tsx`) + `onLayout` on the board wrapper. The solve clock is frozen
+during the tutorial (`useGame.setTimerPaused`, a ref-gate on the TICK
+interval) so the walkthrough can't cost the L1 under-par star. Completion
+persists `plantdoku:onboarded` (exposed by `useGame` as `onboarded` /
 `completeOnboarding()`). A **"Help ?"** header button opens `HelpOverlay.tsx`
 (rules + gestures) anytime.
 
@@ -281,7 +312,8 @@ src/components/
   CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
-  TutorialBubble.tsx  tutorial coach card · HelpOverlay.tsx  "How to play" card
+  TutorialOverlay.tsx  spotlight blackout + coach card (first-play tutorial)
+  HelpOverlay.tsx  "How to play" card
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)

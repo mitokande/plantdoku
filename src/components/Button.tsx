@@ -13,6 +13,7 @@ interface Props {
   variant?: "solid" | "ghost" | "danger";
   flex?: boolean;
   badge?: number; // info count in a gold corner bubble; hidden when 0/undefined
+  small?: boolean; // compact pill (e.g. the floating auto-complete button)
 }
 
 // Height of the darker bottom edge that gives buttons their "pressable" depth.
@@ -26,6 +27,7 @@ export function Button({
   variant = "ghost",
   flex,
   badge,
+  small,
 }: Props) {
   const solid = variant === "solid";
   const danger = variant === "danger";
@@ -49,19 +51,21 @@ export function Button({
             style={[
               styles.face,
               solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
+              small && styles.faceSmall,
               pressed && !disabled && styles.facePressed,
             ]}
           >
             {icon ? (
               <Ionicons
                 name={icon}
-                size={18}
+                size={small ? 15 : 18}
                 color={solid ? "#0E2110" : danger ? "#33100B" : theme.text}
               />
             ) : null}
             <Text
               style={[
                 styles.label,
+                small && styles.labelSmall,
                 solid && styles.labelSolid,
                 danger && styles.labelDanger,
               ]}
@@ -105,6 +109,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     marginBottom: EDGE,
   },
+  faceSmall: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    gap: 4,
+  },
   facePressed: {
     marginTop: EDGE,
     marginBottom: 0,
@@ -144,6 +153,9 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontWeight: "800",
     fontSize: 15,
+  },
+  labelSmall: {
+    fontSize: 13,
   },
   labelSolid: {
     color: "#0E2110",

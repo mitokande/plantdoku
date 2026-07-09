@@ -17,6 +17,16 @@ import { Cell } from "./Cell";
 // RN and web, so cells start exactly FRAME px from the view's edge.
 const FRAME = 10;
 const FRAME_BORDER = 3;
+
+// Shared with GameScreen so the tutorial spotlight can compute cell rects
+// that exactly match the rendered grid.
+export const BOARD_FRAME = FRAME;
+export function boardMetrics(windowWidth: number, size: number) {
+  const boardW = Math.min(windowWidth - 24, 460);
+  const cellPx = Math.floor((boardW - FRAME * 2) / size);
+  return { cellPx, frameW: cellPx * size + FRAME * 2 };
+}
+
 const DRAG_THRESHOLD = 10; // px of movement before a touch becomes a drag
 // Two independent timers. DOUBLE_MS is the max gap from a tap's lift to the next
 // tap's *touch-down* to count as a double-tap. Measuring to touch-down (not the
@@ -100,8 +110,7 @@ export function Board({
   const { width } = useWindowDimensions();
   const { size, regions, plants, colors } = puzzle;
 
-  const boardW = Math.min(width - 24, 460);
-  const cellPx = Math.floor((boardW - FRAME * 2) / size);
+  const { cellPx, frameW } = boardMetrics(width, size);
 
   // Refs so the once-created PanResponder always sees current geometry/handlers.
   const geom = useRef({ cellPx, size });
@@ -241,7 +250,7 @@ export function Board({
     <View
       {...responder.panHandlers}
       pointerEvents="box-only"
-      style={[styles.frame, { width: cellPx * size + FRAME * 2 }]}
+      style={[styles.frame, { width: frameW }]}
     >
       <View pointerEvents="none" style={styles.frameGloss} />
       {Array.from({ length: size }, (_, r) => (

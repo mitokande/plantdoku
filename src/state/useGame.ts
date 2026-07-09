@@ -56,6 +56,7 @@ type Action =
   | { type: "HINT" } // legacy reveal-a-cell (fallback when no teaching hint)
   | { type: "COUNT_HINT" } // a hint was requested (stars bookkeeping only)
   | { type: "APPLY_HINT"; hint: Hint } // apply a teaching hint's conclusion
+  | { type: "AUTO_COMPLETE" } // place the rest when it's all trivially forced
   | { type: "RETRY" } // after a fail: rebuild the same board, hearts/timer reset
   | { type: "TICK" };
 
@@ -312,6 +313,19 @@ function reducer(state: GameState, action: Action): GameState {
       return changed ? settle(state, grid, true) : state;
     }
 
+    // Place the last remaining plant. Only offered with one plant left and a
+    // mistake-free board, so the unfilled row's solution cell completes it —
+    // solved flips through the standard path (stars/best/cards all normal).
+    case "AUTO_COMPLETE": {
+      if (state.solved || state.failed || state.mistakes.size > 0) return state;
+      const { size, solution } = state.puzzle;
+      if (state.placedCount !== size - 1) return state;
+      const grid = cloneGrid(state.states);
+      for (let r = 0; r < size; r++)
+        if (!grid[r].includes("placed")) grid[r][solution[r]] = "placed";
+      return settle(state, grid, true);
+    }
+
     default:
       return state;
   }
@@ -411,11 +425,25 @@ export function useGame(initialLevel = 1) {
     };
   }, []);
 
-  // Tick the timer once per second while a solve is in progress.
+  // One plant left on a mistake-free board — gates the floating auto-complete
+  // button (the last placement is fully determined, so it's pure mop-up).
+  const canAutoComplete =
+    !state.solved &&
+    !state.failed &&
+    state.mistakes.size === 0 &&
+    state.placedCount === state.puzzle.size - 1;
+
+  // Tick the timer once per second while a solve is in progress. The pause
+  // flag (a ref so the interval never restarts) freezes the clock while the
+  // first-play tutorial holds the board, so the forced walkthrough doesn't
+  // eat into Level 1's par time.
+  const timerPaused = useRef(false);
   const running = state.started && !state.solved && !state.failed;
   useEffect(() => {
     if (!running) return;
-    const id = setInterval(() => dispatch({ type: "TICK" }), 1000);
+    const id = setInterval(() => {
+      if (!timerPaused.current) dispatch({ type: "TICK" });
+    }, 1000);
     return () => clearInterval(id);
   }, [running]);
 
@@ -687,6 +715,10 @@ export function useGame(initialLevel = 1) {
       setOnboarded(true);
       AsyncStorage.setItem(ONBOARDED_KEY, "1").catch(() => {});
     },
+    // Freeze/unfreeze the solve clock (tutorial only — see the TICK interval).
+    setTimerPaused: (paused: boolean) => {
+      timerPaused.current = paused;
+    },
     // Wipe all persisted data (progress, best times, tutorial flag) and
     // restart from level 1 as a brand-new player.
     flushData: () => {
@@ -790,6 +822,16 @@ export function useGame(initialLevel = 1) {
       }
     },
     dismissHint: () => setActiveHint(null),
+    // One plant left: place it in one tap.
+    canAutoComplete,
+    autoComplete: () => {
+      if (!canAutoComplete) return;
+      analytics.track("auto_completed", {
+        mode: state.mode,
+        level: state.level || undefined,
+      });
+      dispatch({ type: "AUTO_COMPLETE" });
+    },
   };
 }
 
