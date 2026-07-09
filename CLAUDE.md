@@ -62,9 +62,11 @@ Tested by walking hints from an empty grid to a full solve on all 60 levels.
 
 **Auto-complete**: when exactly **one plant is left** on a mistake-free board
 (`useGame.canAutoComplete` = `placedCount === size - 1 && mistakes.size === 0`
-and not solved/failed), a small floating "Finish" button pops in over the
-board's bottom-right corner (`FinishFab` in `GameScreen.tsx`, positioned via
-`boardMetrics`). Tapping it runs a **staged sweep** (`startAutoComplete` /
+and not solved/failed), a small "Finish" button (`FinishFab` in
+`GameScreen.tsx`) pops in beside the hint pill/card below the board, in the
+same `hintRow` — the pill text is kept short ("Mark ✕ · double-tap to
+plant") so both fit on one line; hidden while a teaching hint card is showing
+to avoid crowding. Tapping it runs a **staged sweep** (`startAutoComplete` /
 `autoAnim` state in `GameScreen`), not an instant jump: every still-empty
 cell gets ✕-marked one by one in reading order (mark pop + tick per cell via
 `game.paint`, pace scaled so the sweep stays ~1s however many cells remain;

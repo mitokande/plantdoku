@@ -70,9 +70,9 @@ const TUTORIAL_STEPS: { text: string; button?: string }[] = [
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
-/** Small floating "Finish" button over the board's bottom-right corner —
- * appears (with a pop) when the rest of the board is trivially forced. */
-function FinishFab({ right, onPress }: { right: number; onPress: () => void }) {
+/** Small "Finish" button that joins the hint-pill row — appears (with a pop)
+ * when the rest of the board is trivially forced. */
+function FinishFab({ onPress }: { onPress: () => void }) {
   const pop = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(pop, {
@@ -83,12 +83,7 @@ function FinishFab({ right, onPress }: { right: number; onPress: () => void }) {
     }).start();
   }, [pop]);
   return (
-    <Animated.View
-      style={[
-        styles.finishFab,
-        { right, opacity: pop, transform: [{ scale: pop }] },
-      ]}
-    >
+    <Animated.View style={{ opacity: pop, transform: [{ scale: pop }] }}>
       <Button
         small
         label="Finish"
@@ -513,25 +508,22 @@ export function GameScreen({ game, onMenu }: Props) {
                 : null
           }
         />
-        {game.canAutoComplete && !tutorial && !autoAnim && boardBox && (
-          <FinishFab
-            right={(boardBox.w - boardMetrics(winW, size).frameW) / 2 + 8}
-            onPress={startAutoComplete}
-          />
-        )}
       </Animated.View>
 
-      {game.activeHint ? (
-        <View style={styles.hintCard}>
-          <Text style={styles.hintCardTxt}>{game.activeHint.message}</Text>
-        </View>
-      ) : (
-        <View style={styles.hintPill}>
-          <Text style={styles.hintLine}>
-            Tap or swipe to mark ✕ · double-tap to place
-          </Text>
-        </View>
-      )}
+      <View style={styles.hintRow}>
+        {game.activeHint ? (
+          <View style={[styles.hintCard, styles.hintFlex]}>
+            <Text style={styles.hintCardTxt}>{game.activeHint.message}</Text>
+          </View>
+        ) : (
+          <View style={[styles.hintPill, styles.hintFlex]}>
+            <Text style={styles.hintLine}>Mark ✕ · double-tap to plant</Text>
+          </View>
+        )}
+        {game.canAutoComplete && !tutorial && !autoAnim && !game.activeHint && (
+          <FinishFab onPress={startAutoComplete} />
+        )}
+      </View>
 
       <View style={styles.controls}>
         <Button
@@ -771,30 +763,35 @@ const styles = StyleSheet.create({
   boardWrap: {
     alignItems: "center",
   },
-  finishFab: {
-    position: "absolute",
-    bottom: 8,
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "center",
+    width: "94%",
+    maxWidth: 460,
+    gap: 8,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  hintFlex: {
+    flexShrink: 1,
+    flexGrow: 1,
   },
   hintPill: {
-    alignSelf: "center",
     backgroundColor: theme.bgAlt,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 7,
-    marginTop: 14,
-    marginBottom: 14,
+    alignItems: "center",
   },
   hintCard: {
-    alignSelf: "center",
-    width: "96%",
-    maxWidth: 460,
     backgroundColor: theme.panel,
     borderColor: theme.gold,
     borderWidth: 1.5,
     borderRadius: radius.md,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    marginTop: 10,
     marginBottom: 10,
   },
   hintCardTxt: {
