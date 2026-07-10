@@ -17,6 +17,11 @@ import { Cell } from "./Cell";
 // RN and web, so cells start exactly FRAME px from the view's edge.
 const FRAME = 10;
 const FRAME_BORDER = 3;
+// position:absolute children are placed relative to the *padding* edge (i.e.
+// already inset by the border), unlike locationX/Y above which is border-box
+// relative — so absolute overlays over the grid (ring, hintCell) must offset
+// by padding alone, or they'd double-count the border and drift off-cell.
+const OVERLAY_INSET = FRAME - FRAME_BORDER;
 
 // Shared with GameScreen so the tutorial spotlight can compute cell rects
 // that exactly match the rendered grid.
@@ -277,8 +282,8 @@ export function Board({
           style={[
             styles.hintCell,
             {
-              left: FRAME + c * cellPx,
-              top: FRAME + r * cellPx,
+              left: OVERLAY_INSET + c * cellPx,
+              top: OVERLAY_INSET + r * cellPx,
               width: cellPx,
               height: cellPx,
             },
@@ -287,8 +292,8 @@ export function Board({
       ))}
       {highlight && (
         <HighlightRing
-          x={FRAME + highlight[1] * cellPx}
-          y={FRAME + highlight[0] * cellPx}
+          x={OVERLAY_INSET + highlight[1] * cellPx}
+          y={OVERLAY_INSET + highlight[0] * cellPx}
           px={cellPx}
         />
       )}
