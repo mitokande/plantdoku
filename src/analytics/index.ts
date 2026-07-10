@@ -46,7 +46,6 @@ export type EventName =
   | "board_retried"
   | "board_reset"
   | "hint_requested"
-  | "hint_applied"
   | "auto_completed"
   | "mistake_made"
   | "undo_used"

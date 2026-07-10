@@ -31,8 +31,8 @@ export type SolveTier = 1 | 2 | 3;
 
 /**
  * One deduction the ladder made, with enough structure to explain it to a
- * human (the in-game teaching hints replay these). Recording is optional and
- * must never change solver behaviour.
+ * human. Recording is optional (pass a callback to `rateBoard`) and must
+ * never change solver behaviour; no current caller uses it.
  */
 export type DeductionStep =
   | { kind: "single"; unit: "row" | "col" | "region"; index: number; cell: Coord }

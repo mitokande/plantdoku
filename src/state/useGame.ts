@@ -15,7 +15,6 @@ import {
   todayKey,
 } from "../game/daily";
 import { generatePuzzle } from "../game/generator";
-import { nextHint, type Hint } from "../game/hints";
 import { getLevel, LEVEL_COUNT } from "../game/levels";
 import { starsFor } from "../game/stars";
 import { cellKey, isSolved } from "../game/validator";
@@ -53,9 +52,7 @@ type Action =
   | { type: "TAP"; r: number; c: number } // single tap → toggle ✕ / clear
   | { type: "UNDO" }
   | { type: "RESET" }
-  | { type: "HINT" } // legacy reveal-a-cell (fallback when no teaching hint)
-  | { type: "COUNT_HINT" } // a hint was requested (stars bookkeeping only)
-  | { type: "APPLY_HINT"; hint: Hint } // apply a teaching hint's conclusion
+  | { type: "HINT" } // place the next row's solution cell, clearing conflicts
   | { type: "AUTO_COMPLETE" } // place the rest when it's all trivially forced
   | { type: "RETRY" } // after a fail: rebuild the same board, hearts/timer reset
   | { type: "TICK" };
@@ -269,6 +266,8 @@ function reducer(state: GameState, action: Action): GameState {
         state.puzzle,
       );
 
+    // Places the first still-open row's true solution cell, clearing any
+    // placed cells it conflicts with (including a wrong guess in that row).
     case "HINT": {
       if (state.solved || state.failed) return state;
       const { solution, size } = state.puzzle;
@@ -280,37 +279,12 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
       if (target === -1) return state;
-      return settle(
+      const next = settle(
         state,
         placeClearingConflicts(state, target, solution[target]),
         true,
       );
-    }
-
-    case "COUNT_HINT":
-      return { ...state, hintsUsed: state.hintsUsed + 1 };
-
-    // Apply a teaching hint's conclusion in one undoable step: place the
-    // forced cell, or ✕ every cell the deduction eliminated.
-    case "APPLY_HINT": {
-      if (state.solved || state.failed) return state;
-      const { hint } = action;
-      if (hint.action === "place" && hint.cell) {
-        return settle(
-          state,
-          placeClearingConflicts(state, hint.cell[0], hint.cell[1]),
-          true,
-        );
-      }
-      const grid = cloneGrid(state.states);
-      let changed = false;
-      for (const [r, c] of hint.cells) {
-        if (grid[r][c] === "empty") {
-          grid[r][c] = "marked";
-          changed = true;
-        }
-      }
-      return changed ? settle(state, grid, true) : state;
+      return { ...next, hintsUsed: state.hintsUsed + 1 };
     }
 
     // Place the last remaining plant. Only offered with one plant left and a
@@ -355,8 +329,6 @@ export function useGame(initialLevel = 1) {
   >({});
   // Best star rating per level (1..3).
   const [starsByLevel, setStarsByLevel] = useState<Record<number, number>>({});
-  // The teaching hint currently shown on the board, if any.
-  const [activeHint, setActiveHint] = useState<Hint | null>(null);
   // Stars earned by the solve currently on screen (level mode only).
   const [solveStars, setSolveStars] = useState<number | null>(null);
   // Plant cards whose star milestone was crossed by the solve on screen.
@@ -611,12 +583,6 @@ export function useGame(initialLevel = 1) {
     prevHearts.current = state.hearts;
   }, [state.hearts]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Any change to the grid invalidates the hint shown on it (applying the
-  // hint changes the grid too, so this also cleans up after applyHint).
-  useEffect(() => {
-    setActiveHint(null);
-  }, [state.states]);
-
   // A streak only counts while it is alive: last completion today or yesterday.
   const tk = todayKey();
   const dailyDoneToday = daily.last === tk;
@@ -674,7 +640,6 @@ export function useGame(initialLevel = 1) {
     totalStars,
     solveStars,
     newCards,
-    activeHint,
     canUndo: state.history.length > 0,
     undoDepth: state.history.length,
     hintsUsed: state.hintsUsed,
@@ -797,31 +762,15 @@ export function useGame(initialLevel = 1) {
       });
       dispatch({ type: "RETRY" });
     },
-    // First press: explain the next deduction (falls back to revealing a
-    // solution cell if the chain has nothing new). Second press applies it.
+    // Places the next row's plant directly (one undoable step).
     requestHint: () => {
       if (state.solved || state.failed) return;
-      dispatch({ type: "COUNT_HINT" });
-      const hint = nextHint(state.puzzle, state.states);
       analytics.track("hint_requested", {
         mode: state.mode,
         level: state.level || undefined,
-        teaching: !!hint,
       });
-      if (hint) setActiveHint(hint);
-      else dispatch({ type: "HINT" });
+      dispatch({ type: "HINT" });
     },
-    applyHint: () => {
-      if (activeHint) {
-        analytics.track("hint_applied", {
-          mode: state.mode,
-          level: state.level || undefined,
-          action: activeHint.action,
-        });
-        dispatch({ type: "APPLY_HINT", hint: activeHint });
-      }
-    },
-    dismissHint: () => setActiveHint(null),
     // One plant left: place it in one tap.
     canAutoComplete,
     autoComplete: () => {

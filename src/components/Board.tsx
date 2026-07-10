@@ -54,8 +54,8 @@ interface Props {
   onErase: (r: number, c: number) => void; // swipe from an ✕ → unmark
   onPlace: (r: number, c: number) => void; // double tap → plant
   onTap: (r: number, c: number) => void; // single tap → toggle ✕ / clear
-  highlight?: [number, number] | null; // tutorial/hint: pulse a ring over this cell
-  hintCells?: Coord[] | null; // teaching hint: static outline over these cells
+  highlight?: [number, number] | null; // tutorial: pulse a ring over this cell
+  hintCells?: Coord[] | null; // tutorial: static outline over these cells
 }
 
 /** Pulsing attention ring drawn over one cell (tutorial coach mark). */

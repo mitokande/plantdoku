@@ -8,7 +8,6 @@
 import { CARDS, newlyUnlocked, nextCard, unlockedCards } from "./cards";
 import { DAILY_DIFFICULTY, dailyNumber, dailySeed, isConsecutive } from "./daily";
 import { generatePuzzle, generateUniqueBoard } from "./generator";
-import { nextHint } from "./hints";
 import { LEVELS } from "./levels";
 import { PLANT_IDS } from "./palette";
 import { countSolutions, findSolution } from "./solver";
@@ -19,7 +18,6 @@ import {
   DIFFICULTIES,
   DIFFICULTY_BANDS,
   DIFFICULTY_ORDER,
-  type CellState,
   type Coord,
 } from "./types";
 
@@ -246,41 +244,9 @@ check(!isConsecutive(null, "2026-06-11"), "isConsecutive(null) must be false");
 console.log("  ok");
 
 // ---------------------------------------------------------------------------
-// Part 2c — teaching hints: following nextHint from an empty grid must fully
-// solve every shipped level, every place-hint must be a true solution cell,
-// and no mark-hint may ever ✕ a solution cell. Also: stars math sanity.
+// Part 2c — stars math sanity (par time must grow with size/tier; hint use
+// and time thresholds must rate a solve 1..3 stars as expected).
 // ---------------------------------------------------------------------------
-console.log("hints: solving all levels by following hints...");
-LEVELS.forEach(({ difficulty, seed }, i) => {
-  const level = i + 1;
-  const p = generatePuzzle(difficulty, seed);
-  const states: CellState[][] = Array.from({ length: p.size }, () =>
-    new Array(p.size).fill("empty"),
-  );
-  let placed = 0;
-  let guard = p.size * p.size * 4;
-  while (placed < p.size && guard-- > 0) {
-    const hint = nextHint(p, states);
-    if (!hint) {
-      check(false, `level ${level}: hints stalled with ${placed}/${p.size} placed`);
-      break;
-    }
-    if (hint.action === "place") {
-      const [r, c] = hint.cell!;
-      check(p.solution[r] === c, `level ${level}: place-hint at non-solution cell`);
-      if (states[r][c] !== "placed") placed++;
-      states[r][c] = "placed";
-    } else {
-      check(hint.cells.length > 0, `level ${level}: empty mark-hint`);
-      for (const [r, c] of hint.cells) {
-        check(p.solution[r] !== c, `level ${level}: mark-hint ✕ on a solution cell`);
-        states[r][c] = "marked";
-      }
-    }
-  }
-  check(placed === p.size, `level ${level}: hint walk did not finish (${placed}/${p.size})`);
-  check(nextHint(p, states) === null, `level ${level}: hint offered on a solved grid`);
-});
 check(parSeconds(6, 1) < parSeconds(9, 3), "par must grow with size/tier");
 check(
   starsFor(1, 0, 6, 1) === 3 && starsFor(9999, 1, 6, 1) === 1 && starsFor(1, 1, 6, 1) === 2,

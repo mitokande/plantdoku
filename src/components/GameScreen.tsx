@@ -490,38 +490,18 @@ export function GameScreen({ game, onMenu }: Props) {
           onErase={erase}
           onPlace={place}
           onTap={tapCell}
-          highlight={
-            tutorial
-              ? tutStep === 1
-                ? tutTarget
-                : null
-              : game.activeHint?.action === "place"
-                ? game.activeHint.cell
-                : null
-          }
+          highlight={tutorial && tutStep === 1 ? tutTarget : null}
           hintCells={
-            tutorial
-              ? tutMarkTargets.length > 0
-                ? tutMarkTargets
-                : null
-              : game.activeHint?.action === "mark"
-                ? game.activeHint.cells
-                : null
+            tutorial && tutMarkTargets.length > 0 ? tutMarkTargets : null
           }
         />
       </Animated.View>
 
       <View style={styles.hintRow}>
-        {game.activeHint ? (
-          <View style={[styles.hintCard, styles.hintFlex]}>
-            <Text style={styles.hintCardTxt}>{game.activeHint.message}</Text>
-          </View>
-        ) : (
-          <View style={[styles.hintPill, styles.hintFlex]}>
-            <Text style={styles.hintLine}>Mark ✕ · double-tap to plant</Text>
-          </View>
-        )}
-        {game.canAutoComplete && !tutorial && !autoAnim && !game.activeHint && (
+        <View style={[styles.hintPill, styles.hintFlex]}>
+          <Text style={styles.hintLine}>Mark ✕ · double-tap to plant</Text>
+        </View>
+        {game.canAutoComplete && !tutorial && !autoAnim && (
           <FinishFab onPress={startAutoComplete} />
         )}
       </View>
@@ -536,10 +516,10 @@ export function GameScreen({ game, onMenu }: Props) {
           flex
         />
         <Button
-          label={game.activeHint ? "Apply" : "Hint"}
-          icon={game.activeHint ? "checkmark" : "bulb"}
-          variant={game.activeHint ? "solid" : "ghost"}
-          onPress={game.activeHint ? game.applyHint : game.requestHint}
+          label="Hint"
+          icon="bulb"
+          variant="ghost"
+          onPress={game.requestHint}
           disabled={tutorial || autoAnim != null}
           badge={game.hintsUsed}
           flex
@@ -785,21 +765,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 7,
     alignItems: "center",
-  },
-  hintCard: {
-    backgroundColor: theme.panel,
-    borderColor: theme.gold,
-    borderWidth: 1.5,
-    borderRadius: radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 10,
-  },
-  hintCardTxt: {
-    color: theme.text,
-    fontSize: 13.5,
-    lineHeight: 18,
-    textAlign: "center",
   },
   hintLine: {
     color: theme.textDim,

@@ -49,24 +49,20 @@ board (`useGame.newEndless(difficulty)`, mode "endless"); win overlay offers
 Locked until the player reaches level 15 (`ENDLESS_UNLOCK_LEVEL` in
 `HomeScreen.tsx` — the card renders dimmed with a 🔒 until then).
 
-**Teaching hints** (`src/game/hints.ts`): the Hint button explains the next
-deduction instead of revealing a cell. `rateBoard` takes an optional step
-recorder (must never change solver behaviour); `nextHint(puzzle, states)`
-replays the recorded chain and returns the first step whose conclusion is
-missing from the player's grid — `{action: "place"|"mark", cell, cells,
-message}`. First Hint press shows the message (gold card replaces the hint
-pill) + highlights cells (pulse ring for place, static outlines for mark);
-the button becomes "Apply" which commits the conclusion as one undoable step.
-Falls back to the legacy reveal-a-cell HINT when the chain has nothing new.
-Tested by walking hints from an empty grid to a full solve on all 60 levels.
+**Hint**: one tap places the next plant — the reducer's `HINT` action
+(`useGame.ts`) scans rows for the first one whose `solution[r]` cell isn't
+already `"placed"` and places it via `placeClearingConflicts` (the same
+conflict-clearing a manual double-tap gets, so it also silently corrects a
+wrong guess sitting in that row/column/cluster/adjacency). One undoable step,
+never a mistake, no message or highlight — just the plant appearing. Counts
+toward `hintsUsed` (gates the "no hints" star, see Stars below).
 
 **Auto-complete**: when exactly **one plant is left** on a mistake-free board
 (`useGame.canAutoComplete` = `placedCount === size - 1 && mistakes.size === 0`
 and not solved/failed), a small "Finish" button (`FinishFab` in
-`GameScreen.tsx`) pops in beside the hint pill/card below the board, in the
+`GameScreen.tsx`) pops in beside the hint pill below the board, in the
 same `hintRow` — the pill text is kept short ("Mark ✕ · double-tap to
-plant") so both fit on one line; hidden while a teaching hint card is showing
-to avoid crowding. Tapping it runs a **staged sweep** (`startAutoComplete` /
+plant") so both fit on one line. Tapping it runs a **staged sweep** (`startAutoComplete` /
 `autoAnim` state in `GameScreen`), not an instant jump: every still-empty
 cell gets ✕-marked one by one in reading order (mark pop + tick + a
 selection haptic per cell via `game.paint`, pace scaled so the sweep stays
@@ -84,8 +80,8 @@ no star. Analytics: `auto_completed`.
 **Stars** (`src/game/stars.ts`): level mode only — ★ solved, +★ no hints,
 +★ under par (par by size+tier). Best per level persists as JSON under
 `plantdoku:stars`; win overlay shows the rating (+ what 3★ needs), menu Play
-button shows the total. Any hint request (even just viewing) counts as a hint
-used (`hintsUsed` in reducer state; survives RESET, cleared on new boards).
+button shows the total. Every Hint press counts as a hint used (`hintsUsed`
+in reducer state; survives RESET, cleared on new boards).
 NOTE: changing the generator algorithm changes what every seed produces;
 re-pick seeds if generator behaviour changes.
 
@@ -146,7 +142,7 @@ union — add new events there to keep the taxonomy in one place. App lifecycle
 
 Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 `level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
-`mistake_made`, `hint_requested`/`hint_applied`, `card_unlocked`,
+`mistake_made`, `hint_requested`, `card_unlocked`,
 `undo_used`/`board_reset`/`board_retried`, `onboarding_completed`,
 `data_flushed` — which also calls `analytics.reset()`) and `App.tsx`
 (`screen_viewed` per tab/game). Keep analytics **out of `src/game/*`** so the
@@ -287,8 +283,6 @@ src/game/
   levels.ts      LEVELS: 30 curated {difficulty, seed} + getLevel — pure data
   daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
                  date math — pure data, headless-safe
-  hints.ts       nextHint: first recorded solver deduction missing from the
-                 player's grid, with a human explanation — headless-safe
   stars.ts       par times (size+tier) + starsFor — headless-safe
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
