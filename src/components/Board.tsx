@@ -45,6 +45,13 @@ const DRAG_THRESHOLD = 10; // px of movement before a touch becomes a drag
 // pending ✕ commits the instant the next touch lands on a different cell.
 const DOUBLE_MS = 260; // max lift→next-touch-down gap to count as a double tap
 const SINGLE_MS = 90; // a lone tap's ✕ commit delay (low = snappier marking)
+// A third, independent way to place: hold a cell still for HOLD_MS. It races
+// the tap/double-tap logic above rather than replacing it — a finger that
+// moves past DRAG_THRESHOLD before HOLD_MS elapses becomes a drag instead
+// (long-press requires staying put), and once it fires, further move events
+// on that touch are ignored until release so the same gesture can't also
+// paint a trail of ✕ marks.
+const HOLD_MS = 450;
 
 interface Props {
   puzzle: Puzzle;
@@ -52,7 +59,7 @@ interface Props {
   mistakes: Set<string>; // wrong placements, drawn red
   onPaint: (r: number, c: number) => void; // swipe → mark ✕
   onErase: (r: number, c: number) => void; // swipe from an ✕ → unmark
-  onPlace: (r: number, c: number) => void; // double tap → plant
+  onPlace: (r: number, c: number) => void; // double tap or hold → plant
   onTap: (r: number, c: number) => void; // single tap → toggle ✕ / clear
   highlight?: [number, number] | null; // tutorial: pulse a ring over this cell
   hintCells?: Coord[] | null; // tutorial: static outline over these cells
@@ -137,6 +144,15 @@ export function Board({
     cell: number;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdFired = useRef(false); // this touch already placed via long-press
+
+  useEffect(
+    () => () => {
+      if (holdTimer.current) clearTimeout(holdTimer.current);
+    },
+    [],
+  );
 
   const responderRef = useRef<ReturnType<typeof PanResponder.create> | null>(
     null,
@@ -195,13 +211,32 @@ export function Board({
         lastPanCell.current = cell;
         didDrag.current = false;
         dragErases.current = false;
+        // Long-press: if this touch stays put on the cell for HOLD_MS, place a
+        // plant there — independent of however the tap/double-tap above gets
+        // resolved (release clears this timer first).
+        holdFired.current = false;
+        if (holdTimer.current) clearTimeout(holdTimer.current);
+        holdTimer.current =
+          cell >= 0
+            ? setTimeout(() => {
+                holdTimer.current = null;
+                holdFired.current = true;
+                armedPlace.current = false;
+                cb.current.onPlace(...rc(cell));
+              }, HOLD_MS)
+            : null;
       },
 
       onPanResponderMove: (e, g) => {
+        if (holdFired.current) return; // already placed; ignore the rest of this touch
         if (!didDrag.current && Math.hypot(g.dx, g.dy) > DRAG_THRESHOLD) {
           didDrag.current = true;
           armedPlace.current = false; // a drag is never a place
           clearPending(); // this is a drag, not a tap
+          if (holdTimer.current) {
+            clearTimeout(holdTimer.current);
+            holdTimer.current = null;
+          }
           if (grantCell.current >= 0) {
             // The start cell decides the drag's mode: ✕ → erase, else paint.
             const [r, c] = rc(grantCell.current);
@@ -228,6 +263,14 @@ export function Board({
       },
 
       onPanResponderRelease: () => {
+        if (holdTimer.current) {
+          clearTimeout(holdTimer.current);
+          holdTimer.current = null;
+        }
+        if (holdFired.current) {
+          holdFired.current = false;
+          return; // the long-press already placed the plant
+        }
         if (didDrag.current) return; // drag already handled
         const cell = grantCell.current;
         if (cell < 0) return;

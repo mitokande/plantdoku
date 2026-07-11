@@ -77,7 +77,7 @@ export function HelpOverlay({ onClose }: Props) {
 
         <Text style={styles.section}>CONTROLS</Text>
         <Row icon="close" text="Tap a cell to mark ✕ where no plant can go (tap again to clear)." />
-        <Row icon="leaf" text="Double-tap a cell to place a plant." />
+        <Row icon="leaf" text="Double-tap — or press and hold — a cell to place a plant." />
         <Row icon="move" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
 
         <Text style={styles.section}>HEARTS</Text>

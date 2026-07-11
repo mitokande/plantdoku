@@ -194,6 +194,9 @@ Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
   **starts on an ✕-marked cell**, the whole drag **erases** ✕ marks instead
   (mode is fixed at drag start; plants are never affected either way).
 - **Double-tap** a cell → place a **plant** (the cluster's plant, revealed on placement).
+- **Hold** a cell still (no drag) for `HOLD_MS` (450ms) → place a plant there too,
+  a third, independent way in — it races the tap/double-tap logic rather than
+  replacing it.
 
 Discrimination logic: movement past `DRAG_THRESHOLD` (10px) becomes a drag
 (paint). Otherwise two **independent** timers separate single-tap (toggle ✕)
@@ -209,7 +212,11 @@ flashes a ✕ before the plant (quicker ones stay clean, leaving no stray ✕). 
 keep the deferred ✕ from feeling laggy, a still-pending single tap is also
 **committed immediately when the next touch lands on a different cell** (it can
 no longer become a double tap), so rapid marking responds instantly; only an
-isolated tap waits out `SINGLE_MS`.
+isolated tap waits out `SINGLE_MS`. The hold timer is a third, independent
+gesture: armed on every touch-down, cleared on release or once the touch
+crosses `DRAG_THRESHOLD` (long-press requires staying put). Once it fires
+(`holdFired`), further move events on that touch are ignored — so it can't
+also paint a trail of ✕ marks — and release becomes a no-op.
 
 **Cell → touch mapping**: the **grant** uses `nativeEvent.locationX/locationY`
 (relative to the board frame, which is the touch target via
@@ -223,27 +230,45 @@ coordinate systems.
 
 ### Onboarding
 
-First-ever play of Level 1 runs a 6-step **spotlight tutorial** on the real
-board (state machine in `GameScreen.tsx`, `TUTORIAL_STEPS`).
+First-ever play of Level 1 runs a 6-stage **spotlight tutorial** on the real
+board (state machine in `GameScreen.tsx`, `TUTORIAL_STEPS`) built on
+learn-by-doing: **every stage asks for one simple player action** — there are
+no read-only "Next" screens (the only button is the final "Let's go!").
 `TutorialOverlay.tsx` blacks out the whole screen except a rectangular
 spotlight "hole": four touch-swallowing scrim rects around it (the hole is an
-absence of views, so touches there fall through to the Board) — header,
-controls and Help are covered and unreachable while it's up. Steps: goal card
-(full blackout) → forced double-tap on the easy board's guaranteed
-**singleton cluster** (hole = that cell; pulsing ring via `Board`'s
-`highlight` + bouncing 👆) → mark-✕ the cells touching the plant (hole = the
-3×3 block, clamped) → mark the rest of its **row** (hole = row strip) → the
-rest of its **column** → "Let's go" card. Each mark step advances when its
-whole target set is ✕'d (targets outlined via `Board`'s `hintCells`); the
-scrim only blocks touch-*downs* — a drag granted inside the hole keeps
+absence of views, so touches there fall through to the Board) — header, rules
+card, controls and Help are covered and unreachable while it's up. Stages:
+forced double-tap on the easy board's guaranteed **singleton cluster** (hole
+= that cell; pulsing ring via `Board`'s `highlight` + bouncing 👆 — the only
+stage with a visible `holeRing`, suppressed on the multi-cell stages where
+the per-cell `hintCells` outlines / highlight ring already show what
+matters) → mark-✕ the cells touching the plant (hole = 3×3 block, clamped) →
+the rest of its **row** (hole = row strip) → its **column** → the
+**colour-rule payoff** (`tutColor`): those very marks can leave another
+cluster with exactly ONE open cell, so the colour rule *forces* a plant
+there — a sound deduction the player can see (the cluster's other cells sit
+visibly ✕'d inside the spotlight; hole = the cluster's `bbox()`, pulsing
+ring on the open cell, second double-tap placement). `tutColor` picks the
+biggest multi-cell cluster reduced to one open cell and verifies that cell
+against the true solution, so a logic slip can only skip the stage — never
+teach a lie; if no such cluster exists the stage self-skips (stage 3
+completion jumps straight to the finish card). The current L1 seed (1000)
+does offer one — a 4-cell cluster narrowed to one spot — re-check if L1's
+seed or the generator changes. Mark stages advance the moment their whole
+target set is ✕'d, the colour stage on its placement, each with a success
+haptic as the reward beat; a small **checklist** of chips (No
+touch/Row/Column/Color) in the coach card ticks off as stages complete.
+Step copy is 1-2 short directive lines (hybrid-casual: act, don't read).
+The scrim only blocks touch-*downs* — a drag granted inside the hole keeps
 delivering moves outside it — so the `GameScreen` handlers gate too
-(`canMarkAt`: paint/erase/tap only on the step's target set, never the plant
-itself since tapping a placed cell uproots it; place only on the target
-during its step). Hole geometry = `boardMetrics`/`BOARD_FRAME` (exported by
-`Board.tsx`) + `onLayout` on the board wrapper. The solve clock is frozen
-during the tutorial (`useGame.setTimerPaused`, a ref-gate on the TICK
-interval) so the walkthrough can't cost the L1 under-par star. Completion
-persists `plantdoku:onboarded` (exposed by `useGame` as `onboarded` /
+(`canMarkAt`: paint/erase/tap only on the stage's target set, never a plant
+since tapping a placed cell uproots it; place only stage 0's forced cell or
+stage 4's deduced cell). Hole geometry = `boardMetrics`/`BOARD_FRAME`
+(exported by `Board.tsx`) + `onLayout` on the board wrapper. The solve
+clock is frozen during the
+tutorial (`useGame.setTimerPaused`, a ref-gate on the TICK interval) so the
+walkthrough can't cost the L1 under-par star. Completion persists
+`plantdoku:onboarded` (exposed by `useGame` as `onboarded` /
 `completeOnboarding()`). A **"Help ?"** header button opens `HelpOverlay.tsx`
 (rules + gestures) anytime.
 

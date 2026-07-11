@@ -41,32 +41,38 @@ interface Props {
   onMenu: () => void;
 }
 
-// First-play tutorial: steps 0..5 run on the real Level 1 board; TUT_DONE = off.
-// The TutorialOverlay blacks out everything except the spotlit target, and the
-// input handlers lock the board to exactly the prompted action.
+// First-play tutorial: stages 0..5 run on the real Level 1 board; TUT_DONE =
+// off. Every stage asks for one simple player action — no read-only "Next"
+// screens: plant the forced cell, ✕ each rule's cells yourself (adjacency →
+// row → column), then the colour-rule payoff — those marks have left one
+// cluster with a single open cell, so the player DEDUCES a second plant
+// (stage 4 self-skips if the board doesn't offer that setup). Each stage
+// advances itself the moment its action is done; stage 5 hands off to real
+// solving. The TutorialOverlay blacks out everything except the spotlit
+// target, and the input handlers lock the board to exactly the prompted
+// action.
 const TUT_DONE = 6;
 const TUTORIAL_STEPS: { text: string; button?: string }[] = [
-  {
-    text: "Grow one plant in every row, column and color.\nPlants can never touch — not even diagonally.",
-    button: "Got it",
-  },
-  {
-    text: "This color has just one cell, so its plant must live here. Double-tap to plant it!",
-  },
-  {
-    text: "Plants never touch. Mark ✕ on every cell around your plant — tap or swipe.",
-  },
-  {
-    text: "Only one plant per row — mark ✕ on the rest of its row. Swipe across it!",
-  },
-  {
-    text: "And one per column — mark the rest of its column too.",
-  },
-  {
-    text: "You're ready — fill the whole board!",
-    button: "Let's go!",
-  },
+  { text: "Double-tap to plant 🌱" },
+  { text: "Plants can't touch ✋\n✕ the cells around it." },
+  { text: "One plant per row.\n✕ the rest of this row." },
+  { text: "One plant per column.\n✕ this column too." },
+  { text: "One plant per color 🎨\nOnly one spot left — plant it!" },
+  { text: "Your turn! 🌿\nSolve the rest.", button: "Let's go!" },
 ];
+
+/** Bounding box of a cell list — used to spotlight a (possibly irregular)
+ * cluster with the tutorial's one rectangular hole. */
+function bbox(cells: Coord[]) {
+  let r0 = Infinity, r1 = -Infinity, c0 = Infinity, c1 = -Infinity;
+  for (const [r, c] of cells) {
+    if (r < r0) r0 = r;
+    if (r > r1) r1 = r;
+    if (c < c0) c0 = c;
+    if (c > c1) c1 = c;
+  }
+  return { r0, r1, c0, c1 };
+}
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
@@ -135,9 +141,12 @@ export function GameScreen({ game, onMenu }: Props) {
   const [tutStep, setTutStep] = useState(() => (tutTarget ? 0 : TUT_DONE));
   const tutorial = tutStep < TUT_DONE && tutTarget != null;
 
-  // The mark steps' target sets around the forced placement: the in-grid
-  // cells touching it (no-touch rule), then the rest of its row and column
-  // (one-per-row / one-per-column rules).
+  // The four mark-stage target sets the player ✕'s in order after the forced
+  // placement: cells touching it (no-touch), the rest of its row, the rest
+  // of its column, then — since the placement itself is always a singleton
+  // cluster and so has no same-colour neighbours to mark — the rest of a
+  // *different*, larger cluster for the colour rule (its true solution cell
+  // is left out of the target set, so nothing here spoils it).
   const tutNeighbors = useMemo<Coord[]>(() => {
     if (!tutTarget) return [];
     const out: Coord[] = [];
@@ -162,31 +171,82 @@ export function GameScreen({ game, onMenu }: Props) {
     for (let r = 0; r < size; r++) if (r !== tutTarget[0]) out.push([r, tutTarget[1]]);
     return out;
   }, [tutTarget, size]);
-  const tutMarkTargets = !tutorial
-    ? []
-    : tutStep === 2
-      ? tutNeighbors
-      : tutStep === 3
-        ? tutRowCells
-        : tutStep === 4
-          ? tutColCells
-          : [];
+  // Stage 4's colour-rule payoff: the marks the player just made (the forced
+  // plant's row, column and neighbours) can leave a cluster with exactly ONE
+  // open cell — the colour rule then forces a plant there, a deduction the
+  // player can see for themselves (every other cell of that colour is
+  // visibly ✕'d). Prefer the biggest such cluster so the elimination is
+  // worth showing; singletons teach nothing new. The open cell must be a
+  // sound deduction's answer — the true solution cell — and is verified
+  // against it, so a logic slip here can only skip the stage (null), never
+  // teach a lie. The current L1 seed does offer one (a 4-cell cluster
+  // narrowed to one spot); re-check if L1's seed or the generator changes.
+  const tutColor = useMemo<{ cell: Coord; cells: Coord[] } | null>(() => {
+    if (!tutTarget) return null;
+    const { regions, solution } = game.puzzle;
+    const [tr, tc] = tutTarget;
+    const eliminated = (r: number, c: number) =>
+      r === tr || c === tc || (Math.abs(r - tr) <= 1 && Math.abs(c - tc) <= 1);
+    let best: { cell: Coord; cells: Coord[] } | null = null;
+    for (let id = 0; id < size; id++) {
+      if (id === regions[tr][tc]) continue;
+      const cells: Coord[] = [];
+      const open: Coord[] = [];
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++)
+          if (regions[r][c] === id) {
+            cells.push([r, c]);
+            if (!eliminated(r, c)) open.push([r, c]);
+          }
+      if (
+        cells.length > 1 &&
+        open.length === 1 &&
+        solution[open[0][0]] === open[0][1] &&
+        (!best || cells.length > best.cells.length)
+      )
+        best = { cell: open[0], cells };
+    }
+    return best;
+  }, [tutTarget, game.puzzle, size]);
 
-  // Advance gesture-completed steps by watching the board state: the forced
-  // placement, then each mark step once its whole target set is ✕'d.
+  const tutMarkStages = useMemo<Coord[][]>(
+    () => [tutNeighbors, tutRowCells, tutColCells],
+    [tutNeighbors, tutRowCells, tutColCells],
+  );
+  const tutMarkTargets =
+    tutorial && tutStep >= 1 && tutStep <= 3 ? tutMarkStages[tutStep - 1] : [];
+
+  // Every stage advances off the player's own action: the forced placement
+  // (stage 0), each mark stage once its whole target set is ✕'d, and the
+  // colour deduction once its cell is planted — with a success haptic as the
+  // "step done" reward beat (the checklist chip ticking + the next card
+  // springing in carry the visual half). Stage 4 is skipped outright when
+  // the board offers no one-cell-left cluster.
   useEffect(() => {
     if (!tutorial || !tutTarget) return;
-    if (tutStep === 1 && game.states[tutTarget[0]][tutTarget[1]] === "placed") {
-      setTutStep(2);
+    const done = () =>
+      Haptics?.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {});
+    if (tutStep === 0 && game.states[tutTarget[0]][tutTarget[1]] === "placed") {
+      setTutStep(1);
     } else if (
-      tutStep >= 2 &&
-      tutStep <= 4 &&
+      tutStep >= 1 &&
+      tutStep <= 3 &&
       tutMarkTargets.length > 0 &&
       tutMarkTargets.every(([r, c]) => game.states[r][c] === "marked")
     ) {
-      setTutStep(tutStep + 1);
+      done();
+      setTutStep(tutStep === 3 && !tutColor ? 5 : tutStep + 1);
+    } else if (
+      tutStep === 4 &&
+      tutColor &&
+      game.states[tutColor.cell[0]][tutColor.cell[1]] === "placed"
+    ) {
+      done();
+      setTutStep(5);
     }
-  }, [tutorial, tutStep, tutTarget, tutMarkTargets, game.states]);
+  }, [tutorial, tutStep, tutTarget, tutMarkTargets, tutColor, game.states]);
 
   const finishTutorial = () => {
     setTutStep(TUT_DONE);
@@ -262,26 +322,38 @@ export function GameScreen({ game, onMenu }: Props) {
   const { width: winW } = useWindowDimensions();
   const [boardBox, setBoardBox] = useState<{ x: number; y: number; w: number } | null>(null);
 
-  // The blackout's spotlight hole for the current step (null = total blackout).
-  // Step 1: just the singleton cell. Step 2: the 3×3 block around the plant
-  // (clamped to the grid) — plant visible in the middle, ✕ targets around it.
-  // Step 3: the plant's whole row. Step 4: its whole column.
+  // The blackout's spotlight hole for the current stage (null = total
+  // blackout, used only for the finish stage). Stage 0: just the singleton
+  // cell. Stage 1: the 3×3 block around it (clamped to the grid) — plant
+  // visible in the middle, ✕ targets outlined around it. Stage 2: its whole
+  // row. Stage 3: its whole column. Stage 4: the bounding box of the
+  // one-cell-left colour cluster (see tutColor) — the player sees its ✕'d
+  // cells and the single open spot together; clusters aren't always
+  // rectangular, so the box can include a stray outside cell, and the
+  // pulsing highlight ring (not the box) marks the cell to plant.
   const tutHole = useMemo<Hole | null>(() => {
     if (!tutorial || !tutTarget || !boardBox) return null;
-    if (tutStep < 1 || tutStep > 4) return null;
+    if (tutStep < 0 || tutStep > 4) return null;
+    if (tutStep === 4 && !tutColor) return null;
     const [tr, tc] = tutTarget;
     let r0 = tr, r1 = tr, c0 = tc, c1 = tc;
-    if (tutStep === 2) {
+    if (tutStep === 1) {
       r0 = Math.max(0, tr - 1);
       r1 = Math.min(size - 1, tr + 1);
       c0 = Math.max(0, tc - 1);
       c1 = Math.min(size - 1, tc + 1);
-    } else if (tutStep === 3) {
+    } else if (tutStep === 2) {
       c0 = 0;
       c1 = size - 1;
-    } else if (tutStep === 4) {
+    } else if (tutStep === 3) {
       r0 = 0;
       r1 = size - 1;
+    } else if (tutStep === 4 && tutColor) {
+      const box = bbox(tutColor.cells);
+      r0 = box.r0;
+      r1 = box.r1;
+      c0 = box.c0;
+      c1 = box.c1;
     }
     const { cellPx, frameW } = boardMetrics(winW, size);
     const x0 = boardBox.x + (boardBox.w - frameW) / 2 + BOARD_FRAME;
@@ -293,14 +365,14 @@ export function GameScreen({ game, onMenu }: Props) {
       w: (c1 - c0 + 1) * cellPx + PAD * 2,
       h: (r1 - r0 + 1) * cellPx + PAD * 2,
     };
-  }, [tutorial, tutStep, tutTarget, boardBox, winW, size]);
+  }, [tutorial, tutStep, tutTarget, tutColor, boardBox, winW, size]);
 
   // Tutorial lockout: the blackout scrim already swallows touch-downs outside
   // the spotlight, but a drag granted inside the hole keeps delivering moves
   // after the finger leaves it — so the handlers must gate too. During the
-  // tutorial only the prompted action works: step 1 = double-tap the target
-  // cell, steps 2-4 = mark/unmark the step's target cells (never the plant
-  // itself — a tap on a placed cell would uproot it).
+  // tutorial only the prompted action works: stages 0/4 = double-tap their
+  // one cell, stages 1-3 = mark/unmark the stage's target cells (never a
+  // plant — a tap on a placed cell would uproot it).
   const canMarkAt = (r: number, c: number) =>
     autoAnim == null &&
     (!tutorial || tutMarkTargets.some(([nr, nc]) => nr === r && nc === c));
@@ -321,11 +393,15 @@ export function GameScreen({ game, onMenu }: Props) {
   };
   const place = (r: number, c: number) => {
     if (autoAnim) return;
-    if (
-      tutorial &&
-      (tutStep !== 1 || !tutTarget || r !== tutTarget[0] || c !== tutTarget[1])
-    )
-      return;
+    if (tutorial) {
+      const allowed =
+        tutStep === 0
+          ? tutTarget
+          : tutStep === 4
+            ? tutColor?.cell
+            : null;
+      if (!allowed || r !== allowed[0] || c !== allowed[1]) return;
+    }
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     // A wrong cell costs a heart — cue accordingly (the win sound is fired by
     // the solved effect when the final correct plant completes the board).
@@ -490,7 +566,15 @@ export function GameScreen({ game, onMenu }: Props) {
           onErase={erase}
           onPlace={place}
           onTap={tapCell}
-          highlight={tutorial && tutStep === 1 ? tutTarget : null}
+          highlight={
+            !tutorial
+              ? null
+              : tutStep === 0
+                ? tutTarget
+                : tutStep === 4
+                  ? (tutColor?.cell ?? null)
+                  : null
+          }
           hintCells={
             tutorial && tutMarkTargets.length > 0 ? tutMarkTargets : null
           }
@@ -499,7 +583,7 @@ export function GameScreen({ game, onMenu }: Props) {
 
       <View style={styles.hintRow}>
         <View style={[styles.hintPill, styles.hintFlex]}>
-          <Text style={styles.hintLine}>Mark ✕ · double-tap to plant</Text>
+          <Text style={styles.hintLine}>Mark ✕ · double-tap or hold to plant</Text>
         </View>
         {game.canAutoComplete && !tutorial && !autoAnim && (
           <FinishFab onPress={startAutoComplete} />
@@ -540,10 +624,15 @@ export function GameScreen({ game, onMenu }: Props) {
           hole={tutHole}
           text={TUTORIAL_STEPS[tutStep].text}
           buttonLabel={TUTORIAL_STEPS[tutStep].button}
-          onButton={tutStep === 0 ? () => setTutStep(1) : finishTutorial}
-          step={tutStep + 1}
-          total={TUTORIAL_STEPS.length}
-          pointer={tutStep === 1}
+          onButton={finishTutorial}
+          holeRing={tutStep === 0}
+          pointer={tutStep === 0}
+          checklist={[
+            { label: "No touch", done: tutStep > 1 },
+            { label: "Row", done: tutStep > 2 },
+            { label: "Column", done: tutStep > 3 },
+            { label: "Color", done: tutStep > 4 },
+          ]}
         />
       )}
 

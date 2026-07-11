@@ -21,11 +21,15 @@ export interface Hole {
 interface Props {
   hole: Hole | null;
   text: string;
-  buttonLabel?: string; // when set, the step advances via this button
+  buttonLabel?: string; // when set, the stage advances via this button
   onButton?: () => void;
-  step: number; // 1-based display position, e.g. "1/4"
-  total: number;
-  pointer?: boolean; // bouncing finger under the hole (the double-tap step)
+  checklist?: { label: string; done: boolean }[]; // progressive rule checklist
+  // false suppresses the gold ring around multi-cell holes — the per-cell
+  // hintCells outline already shows what matters, so a second ring around
+  // the whole spotlight band would just read as "this entire rectangle is
+  // important", which it isn't.
+  holeRing?: boolean;
+  pointer?: boolean; // bouncing finger under the hole (the plant stage)
 }
 
 // Dusk-tinted blackout — dark enough that nothing else competes for
@@ -81,8 +85,13 @@ function Pointer({ hole }: { hole: Hole }) {
   );
 }
 
-/** Coach card — springs in on every step change (re-keyed by step). */
-function Card({ text, buttonLabel, onButton, step, total }: Omit<Props, "hole" | "pointer">) {
+/** Coach card — springs in whenever its text changes (re-keyed by text). */
+function Card({
+  text,
+  buttonLabel,
+  onButton,
+  checklist,
+}: Omit<Props, "hole" | "pointer" | "holeRing">) {
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(enter, {
@@ -110,12 +119,19 @@ function Card({ text, buttonLabel, onButton, step, total }: Omit<Props, "hole" |
         },
       ]}
     >
-      <View style={styles.headRow}>
-        <Text style={styles.badge}>TUTORIAL</Text>
-        <Text style={styles.progress}>
-          {step}/{total}
-        </Text>
-      </View>
+      <Text style={styles.badge}>TUTORIAL</Text>
+      {checklist && checklist.length > 0 && (
+        <View style={styles.checklist}>
+          {checklist.map((item) => (
+            <View key={item.label} style={[styles.chip, item.done && styles.chipDone]}>
+              <Text style={[styles.chipText, item.done && styles.chipTextDone]}>
+                {item.done ? "✓ " : ""}
+                {item.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
       <Text style={styles.text}>{text}</Text>
       {buttonLabel && onButton && (
         <View style={styles.btnRow}>
@@ -137,8 +153,8 @@ export function TutorialOverlay({
   text,
   buttonLabel,
   onButton,
-  step,
-  total,
+  checklist,
+  holeRing = true,
   pointer,
 }: Props) {
   const { height: winH } = useWindowDimensions();
@@ -162,12 +178,11 @@ export function TutorialOverlay({
 
   const card = (
     <Card
-      key={step}
+      key={text}
       text={text}
       buttonLabel={buttonLabel}
       onButton={onButton}
-      step={step}
-      total={total}
+      checklist={checklist}
     />
   );
 
@@ -182,18 +197,20 @@ export function TutorialOverlay({
           <View {...block} style={[styles.scrim, { left: 0, top: hole.y, width: Math.max(0, hole.x), height: hole.h }]} />
           <View {...block} style={[styles.scrim, { left: hole.x + hole.w, right: 0, top: hole.y, height: hole.h }]} />
           <View {...block} style={[styles.scrim, { left: 0, right: 0, top: hole.y + hole.h, bottom: 0 }]} />
-          <View
-            pointerEvents="none"
-            style={[
-              styles.holeRing,
-              {
-                left: hole.x - 2,
-                top: hole.y - 2,
-                width: hole.w + 4,
-                height: hole.h + 4,
-              },
-            ]}
-          />
+          {holeRing && (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.holeRing,
+                {
+                  left: hole.x - 2,
+                  top: hole.y - 2,
+                  width: hole.w + 4,
+                  height: hole.h + 4,
+                },
+              ]}
+            />
+          )}
           {pointer && <Pointer hole={hole} />}
           <View pointerEvents="box-none" style={[styles.cardSlot, cardSlot]}>
             {card}
@@ -243,29 +260,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  headRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
   badge: {
     color: theme.accent,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 1.5,
+    marginBottom: 6,
   },
-  progress: {
+  checklist: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 10,
+  },
+  chip: {
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: theme.panelLine,
+  },
+  chipDone: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+  },
+  chipText: {
     color: theme.textDim,
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: "800",
-    fontVariant: ["tabular-nums"],
+  },
+  chipTextDone: {
+    color: theme.frame,
   },
   text: {
     color: theme.text,
-    fontSize: 15,
-    lineHeight: 21,
-    fontWeight: "600",
+    fontSize: 17,
+    lineHeight: 23,
+    fontWeight: "800",
+    textAlign: "center",
   },
   btnRow: {
     marginTop: 10,
