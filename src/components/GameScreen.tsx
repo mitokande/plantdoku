@@ -43,18 +43,23 @@ interface Props {
 
 // First-play tutorial: stages 0..5 run on the real Level 1 board; TUT_DONE =
 // off. Every stage asks for one simple player action — no read-only "Next"
-// screens: plant the forced cell, ✕ each rule's cells yourself (adjacency →
-// row → column), then the colour-rule payoff — those marks have left one
-// cluster with a single open cell, so the player DEDUCES a second plant
-// (stage 4 self-skips if the board doesn't offer that setup). Each stage
-// advances itself the moment its action is done; stage 5 hands off to real
-// solving. The TutorialOverlay blacks out everything except the spotlit
+// screens: plant the forced cell (its touching cells auto-✕, so the no-touch
+// stage just shows the rule and advances on a timer), ✕ each remaining rule's
+// cells yourself (row → column), then the colour-rule payoff — those marks
+// have left one cluster with a single open cell, so the player DEDUCES a
+// second plant (stage 4 self-skips if the board doesn't offer that setup).
+// Each stage advances itself the moment its action is done; stage 5 hands
+// off to real solving. The TutorialOverlay blacks out everything except the spotlit
 // target, and the input handlers lock the board to exactly the prompted
 // action.
 const TUT_DONE = 6;
+// How long the no-touch stage lingers: a correct placement now auto-✕s its
+// touching cells, so stage 1 is satisfied the instant it appears — hold the
+// card long enough to read the rule before auto-advancing.
+const TUT_NOTOUCH_MS = 1400;
 const TUTORIAL_STEPS: { text: string; button?: string }[] = [
   { text: "Double-tap to plant 🌱" },
-  { text: "Plants can't touch ✋\n✕ the cells around it." },
+  { text: "Plants can't touch ✋\nThe cells around it get ✕'d for you." },
   { text: "One plant per row.\n✕ the rest of this row." },
   { text: "One plant per column.\n✕ this column too." },
   { text: "One plant per color 🎨\nOnly one spot left — plant it!" },
@@ -141,9 +146,10 @@ export function GameScreen({ game, onMenu }: Props) {
   const [tutStep, setTutStep] = useState(() => (tutTarget ? 0 : TUT_DONE));
   const tutorial = tutStep < TUT_DONE && tutTarget != null;
 
-  // The four mark-stage target sets the player ✕'s in order after the forced
-  // placement: cells touching it (no-touch), the rest of its row, the rest
-  // of its column, then — since the placement itself is always a singleton
+  // The mark-stage target sets after the forced placement: cells touching it
+  // (auto-✕'d by the placement itself — the stage only narrates), the rest
+  // of its row, the rest of its column (the player ✕'s those two, minus the
+  // pre-marked neighbours), then — since the placement itself is always a singleton
   // cluster and so has no same-colour neighbours to mark — the rest of a
   // *different*, larger cluster for the colour rule (its true solution cell
   // is left out of the target set, so nothing here spoils it).
@@ -236,8 +242,18 @@ export function GameScreen({ game, onMenu }: Props) {
       tutMarkTargets.length > 0 &&
       tutMarkTargets.every(([r, c]) => game.states[r][c] === "marked")
     ) {
-      done();
-      setTutStep(tutStep === 3 && !tutColor ? 5 : tutStep + 1);
+      const advance = () => {
+        done();
+        setTutStep(tutStep === 3 && !tutColor ? 5 : tutStep + 1);
+      };
+      // Stage 1 (no-touch) is already ✕'d by the placement's auto-marks —
+      // let it linger so the rule lands, then move on by itself. The cleanup
+      // cancels the timer if a mark is toggled off mid-wait.
+      if (tutStep === 1) {
+        const t = setTimeout(advance, TUT_NOTOUCH_MS);
+        return () => clearTimeout(t);
+      }
+      advance();
     } else if (
       tutStep === 4 &&
       tutColor &&

@@ -176,6 +176,26 @@ function placeClearingConflicts(
   return grid;
 }
 
+/** ✕-mark the still-empty cells a correct plant at (r,c) rules out: the rest
+ *  of its cluster (one-per-cluster) and the 8 touching cells (no-touch rule).
+ *  Mutates `grid`. */
+function markDeadCells(
+  grid: CellState[][],
+  regions: number[][],
+  r: number,
+  c: number,
+): void {
+  const region = regions[r][c];
+  grid.forEach((row, rr) =>
+    row.forEach((s, cc) => {
+      if (s !== "empty") return;
+      const sameCluster = regions[rr][cc] === region;
+      const touching = Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1;
+      if (sameCluster || touching) grid[rr][cc] = "marked";
+    }),
+  );
+}
+
 function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "NEW_GAME":
@@ -221,8 +241,13 @@ function reducer(state: GameState, action: Action): GameState {
       if (state.states[r][c] === "placed") return state;
       const grid = cloneGrid(state.states);
       grid[r][c] = "placed";
+      const correct = state.puzzle.solution[r] === c;
+      // Reward a correct plant by ✕-ing out the cells it rules out — cluster
+      // remainder + touching cells (same history entry, so one Undo removes
+      // the plant and its marks together).
+      if (correct) markDeadCells(grid, state.puzzle.regions, r, c);
       const next = settle(state, grid, true);
-      if (state.puzzle.solution[r] === c) return next; // correct cell
+      if (correct) return next;
       const hearts = state.hearts - 1;
       return { ...next, hearts, failed: hearts <= 0 };
     }

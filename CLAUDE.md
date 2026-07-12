@@ -194,6 +194,12 @@ Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
   **starts on an ✕-marked cell**, the whole drag **erases** ✕ marks instead
   (mode is fixed at drag start; plants are never affected either way).
 - **Double-tap** a cell → place a **plant** (the cluster's plant, revealed on placement).
+  A **correct** placement also auto-✕s the cells it rules out: the cluster's
+  remaining empty cells **and the 8 touching cells** (`markDeadCells` in the
+  `PLACE` reducer case; wrong plants are left alone — only `empty` cells
+  mark). Same history entry, so one Undo removes the plant and its marks
+  together. `HINT` / `AUTO_COMPLETE` placements don't do this (hint stays
+  "just the plant appearing"; the finish sweep already ✕s everything itself).
 - **Hold** a cell still (no drag) for `HOLD_MS` (450ms) → place a plant there too,
   a third, independent way in — it races the tap/double-tap logic rather than
   replacing it.
@@ -242,8 +248,10 @@ forced double-tap on the easy board's guaranteed **singleton cluster** (hole
 = that cell; pulsing ring via `Board`'s `highlight` + bouncing 👆 — the only
 stage with a visible `holeRing`, suppressed on the multi-cell stages where
 the per-cell `hintCells` outlines / highlight ring already show what
-matters) → mark-✕ the cells touching the plant (hole = 3×3 block, clamped) →
-the rest of its **row** (hole = row strip) → its **column** → the
+matters) → the no-touch stage (hole = 3×3 block, clamped): the placement's
+auto-marks have already ✕'d those cells, so it just states the rule and
+auto-advances after `TUT_NOTOUCH_MS` (~1.4s) → mark-✕ the rest of its
+**row** (hole = row strip) → its **column** → the
 **colour-rule payoff** (`tutColor`): those very marks can leave another
 cluster with exactly ONE open cell, so the colour rule *forces* a plant
 there — a sound deduction the player can see (the cluster's other cells sit
@@ -255,7 +263,8 @@ teach a lie; if no such cluster exists the stage self-skips (stage 3
 completion jumps straight to the finish card). The current L1 seed (1000)
 does offer one — a 4-cell cluster narrowed to one spot — re-check if L1's
 seed or the generator changes. Mark stages advance the moment their whole
-target set is ✕'d, the colour stage on its placement, each with a success
+target set is ✕'d (stage 1 on its linger timer, since the auto-marks satisfy
+it instantly), the colour stage on its placement, each with a success
 haptic as the reward beat; a small **checklist** of chips (No
 touch/Row/Column/Color) in the coach card ticks off as stages complete.
 Step copy is 1-2 short directive lines (hybrid-casual: act, don't read).
