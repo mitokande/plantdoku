@@ -110,7 +110,12 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           <Image
             source={PLANT_SOURCES[plantId]}
             resizeMode="contain"
-            style={[styles.glyph, { tintColor: darken(color) }]}
+            style={[
+              styles.glyph,
+              { tintColor: darken(color) },
+              // Recede further under an ✕ so the mark reads unobstructed.
+              state === "marked" && styles.glyphMarked,
+            ]}
           />
         )}
         {mistake && (
@@ -166,10 +171,10 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           style={[
             styles.mark,
             {
-              fontSize: px * 0.4,
+              fontSize: px * 0.46,
               opacity: markPop.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 0.5],
+                outputRange: [0, 0.82],
               }),
               transform: [{ scale: markPop }],
             },
@@ -209,6 +214,9 @@ const styles = StyleSheet.create({
     width: "60%",
     height: "60%",
     opacity: 0.25,
+  },
+  glyphMarked: {
+    opacity: 0.1,
   },
   mistake: {
     backgroundColor: theme.danger,
