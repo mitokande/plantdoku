@@ -43,13 +43,18 @@ export default function App() {
 
   // Reschedule local reminders each time the app returns to the foreground, so
   // the "we miss you" timers reset on every real visit (they only fire during a
-  // genuine multi-day absence). The ref keeps the listener stable while always
-  // calling the latest closure (game is rebuilt every render).
+  // genuine multi-day absence). Leaving the foreground also flushes the live
+  // board to the resume slot, so an app kill (or a swipe-away) keeps the solve
+  // and its clock. The refs keep the listener stable while always calling the
+  // latest closure (game is rebuilt every render).
   const syncReminders = useRef(game.syncReminders);
   syncReminders.current = game.syncReminders;
+  const saveResume = useRef(game.saveResume);
+  saveResume.current = game.saveResume;
   useEffect(() => {
     const sub = AppState.addEventListener("change", (next) => {
       if (next === "active") syncReminders.current();
+      else saveResume.current();
     });
     return () => sub.remove();
   }, []);
@@ -67,8 +72,28 @@ export default function App() {
     );
   }, [tab, playing]);
 
+  // Play picks up a saved board for the same level instead of wiping it — the
+  // Continue card is the explicit route, this just stops the big green button
+  // from being a trap. Any other saved board (a daily, an endless run) is
+  // superseded, as it would be by any other new game.
   const startLevel = () => {
-    game.newGame(Math.min(game.unlockedLevel, LEVEL_COUNT));
+    const level = Math.min(game.unlockedLevel, LEVEL_COUNT);
+    if (game.resumeSlots.level?.level === level) game.resumeGame("level");
+    else game.newGame(level);
+    setPlaying(true);
+  };
+
+  // Continue from the Home card: whatever mode the saved board was in.
+  const continueBoard = () => {
+    game.resumeGame();
+    setPlaying(true);
+  };
+
+  const startDaily = () => {
+    // Today's daily left half-solved resumes rather than restarting (losing a
+    // streak to a phone call is the worst version of this bug).
+    if (game.resumeSlots.daily) game.resumeGame("daily");
+    else game.newDaily();
     setPlaying(true);
   };
 
@@ -103,6 +128,8 @@ export default function App() {
                 unlockedLevel={game.unlockedLevel}
                 allComplete={game.allComplete}
                 totalStars={game.totalStars}
+                resume={game.resume}
+                onResume={continueBoard}
                 onPlay={startLevel}
                 onEndless={(difficulty) => {
                   game.newEndless(difficulty);
@@ -117,10 +144,8 @@ export default function App() {
                 dailyDone={game.dailyDoneToday}
                 dailyStreak={game.dailyStreak}
                 dailyLog={game.dailyLog}
-                onPlay={() => {
-                  game.newDaily();
-                  setPlaying(true);
-                }}
+                hasSaved={game.resumeSlots.daily != null}
+                onPlay={startDaily}
               />
             )}
           </View>

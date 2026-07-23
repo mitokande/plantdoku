@@ -20,9 +20,15 @@ import { starsFor } from "../game/stars";
 import { cellKey, isSolved } from "../game/validator";
 import type { CellState, Coord, Difficulty, Puzzle } from "../game/types";
 
-// Hearts (lives): placing a plant on a cell that isn't its solution cell costs
-// one; losing all of them fails the board (locks it until the player retries).
+// Hearts (lives): planting on a cell that isn't its solution cell costs one;
+// losing all of them fails the board (locks it until the player retries).
 const MAX_HEARTS = 3;
+
+/** One undo step: the board plus the red-✕ set that went with it. */
+interface Snapshot {
+  states: CellState[][];
+  mistakes: Set<string>;
+}
 
 interface GameState {
   mode: "level" | "daily" | "endless";
@@ -31,8 +37,10 @@ interface GameState {
   endlessDifficulty: Difficulty | null; // set in endless mode
   puzzle: Puzzle;
   states: CellState[][];
-  history: CellState[][][];
-  mistakes: Set<string>; // placed cells that aren't on the solution cell
+  history: Snapshot[];
+  // Cells the player tried to plant on and got wrong: the plant is rejected
+  // and the cell is ✕-marked *red* instead (state "marked" + this set).
+  mistakes: Set<string>;
   placedCount: number;
   seconds: number;
   started: boolean;
@@ -42,10 +50,37 @@ interface GameState {
   hintsUsed: number; // hint requests this board (any kind); gates the 2nd star
 }
 
+/** An in-progress board persisted to storage so leaving (or an app kill)
+ *  doesn't throw the solve away. `v` guards against schema drift: a snapshot
+ *  from an older shape is ignored rather than restored half-read. The undo
+ *  stack is deliberately not persisted — a resumed board starts with a clean
+ *  history (cheap, and undoing across an app restart isn't expected). */
+const RESUME_VERSION = 1;
+
+export interface ResumeSnapshot {
+  v: number;
+  mode: GameState["mode"];
+  level: number;
+  dailyKey: string | null;
+  endlessDifficulty: Difficulty | null;
+  puzzle: Puzzle;
+  states: CellState[][];
+  mistakes: string[];
+  seconds: number;
+  hearts: number;
+  hintsUsed: number;
+  updatedAt: number; // ms epoch — picks the newest board for the Home card
+}
+
+/** One slot per mode, so starting today's daily can't quietly bin a
+ *  half-solved level (each mode supersedes only its own saved board). */
+type ResumeSlots = Partial<Record<GameState["mode"], ResumeSnapshot>>;
+
 type Action =
   | { type: "NEW_GAME"; level: number }
   | { type: "NEW_DAILY" }
   | { type: "NEW_ENDLESS"; difficulty: Difficulty }
+  | { type: "RESTORE"; snap: ResumeSnapshot } // resume a persisted board
   | { type: "PAINT"; r: number; c: number } // swipe/drag → mark ✕
   | { type: "ERASE"; r: number; c: number } // swipe/drag from an ✕ → unmark
   | { type: "PLACE"; r: number; c: number } // double tap → place plant
@@ -53,7 +88,6 @@ type Action =
   | { type: "UNDO" }
   | { type: "RESET" }
   | { type: "HINT" } // place the next row's solution cell, clearing conflicts
-  | { type: "AUTO_COMPLETE" } // place the rest when it's all trivially forced
   | { type: "RETRY" } // after a fail: rebuild the same board, hearts/timer reset
   | { type: "TICK" };
 
@@ -66,6 +100,7 @@ const DAILY_LOG_KEY = "plantdoku:daily:log"; // JSON {dateKey: bestSeconds}
 const ENDLESS_DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 const endlessBestKey = (d: Difficulty) => `plantdoku:best:endless:${d}`;
 const STARS_KEY = "plantdoku:stars"; // JSON {level: bestStars 1..3}
+const RESUME_KEY = "plantdoku:resume"; // JSON ResumeSnapshot of a live board
 const SOUND_KEY = "plantdoku:sound"; // "0" when SFX are muted (default: on)
 const NOTIF_KEY = "plantdoku:notifications"; // "0" when reminders off (default: on)
 
@@ -84,7 +119,9 @@ function placedCoords(states: CellState[][]): Coord[] {
   return out;
 }
 
-/** Placed cells that aren't on their row's solution cell (i.e. wrong guesses). */
+/** Placed cells that aren't on their row's solution cell. Always empty in
+ *  practice — a wrong plant is never kept — but it keeps `solved` keyed off
+ *  the board itself rather than trusting that invariant. */
 function wrongCells(grid: CellState[][], solution: number[]): Set<string> {
   const bad = new Set<string>();
   grid.forEach((row, r) =>
@@ -95,17 +132,37 @@ function wrongCells(grid: CellState[][], solution: number[]): Set<string> {
   return bad;
 }
 
-/** Recompute mistakes / solved / placed count for a grid. */
-function settle(state: GameState, grid: CellState[][], started: boolean): GameState {
+/** Drop red-✕ flags whose cell is no longer ✕-marked (erased, tapped off,
+ *  reset), so clearing the mark clears the red with it. */
+function liveMistakes(grid: CellState[][], mistakes: Set<string>): Set<string> {
+  const live = new Set<string>();
+  for (const key of mistakes) {
+    const [r, c] = key.split(",").map(Number);
+    if (grid[r]?.[c] === "marked") live.add(key);
+  }
+  return live;
+}
+
+/** Push the current board onto the undo stack and recompute solved / placed
+ *  count for `grid`. `mistakes` defaults to carrying the current set forward. */
+function settle(
+  state: GameState,
+  grid: CellState[][],
+  started: boolean,
+  mistakes: Set<string> = state.mistakes,
+): GameState {
   const placed = placedCoords(grid);
-  const mistakes = wrongCells(grid, state.puzzle.solution);
-  // A full board with no wrong cells is necessarily the unique solution.
-  const solved = isSolved(placed.length, state.puzzle.size, mistakes.size);
+  // Only correct plants are ever kept, so a full board is the unique solution.
+  const solved = isSolved(
+    placed.length,
+    state.puzzle.size,
+    wrongCells(grid, state.puzzle.solution).size,
+  );
   return {
     ...state,
     states: grid,
-    history: [...state.history, state.states],
-    mistakes,
+    history: [...state.history, { states: state.states, mistakes: state.mistakes }],
+    mistakes: liveMistakes(grid, mistakes),
     placedCount: placed.length,
     solved,
     started,
@@ -154,45 +211,89 @@ function freshEndlessState(difficulty: Difficulty): GameState {
   return blankState("endless", 0, null, difficulty, generatePuzzle(difficulty));
 }
 
-/** Grid with (r,c) placed and any placed markers it would conflict with cleared. */
-function placeClearingConflicts(
-  state: GameState,
-  r: number,
-  c: number,
-): CellState[][] {
-  const { regions, size } = state.puzzle;
-  const grid = cloneGrid(state.states);
-  for (let rr = 0; rr < size; rr++) {
-    for (let cc = 0; cc < size; cc++) {
-      if (grid[rr][cc] !== "placed") continue;
-      const sameRow = rr === r;
-      const sameCol = cc === c;
-      const sameRegion = regions[rr][cc] === regions[r][c];
-      const adjacent = Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1;
-      if (sameRow || sameCol || sameRegion || adjacent) grid[rr][cc] = "empty";
-    }
-  }
-  grid[r][c] = "placed";
-  return grid;
+/** Serialise the live board for the resume slot (null when there's nothing
+ *  worth saving: untouched, wiped back to blank by Reset, already won, or
+ *  already lost). */
+function toSnapshot(state: GameState): ResumeSnapshot | null {
+  if (!state.started || state.solved || state.failed) return null;
+  if (state.states.every((row) => row.every((s) => s === "empty"))) return null;
+  return {
+    v: RESUME_VERSION,
+    mode: state.mode,
+    level: state.level,
+    dailyKey: state.dailyKey,
+    endlessDifficulty: state.endlessDifficulty,
+    puzzle: state.puzzle,
+    states: state.states,
+    mistakes: [...state.mistakes],
+    seconds: state.seconds,
+    hearts: state.hearts,
+    hintsUsed: state.hintsUsed,
+    updatedAt: Date.now(),
+  };
 }
 
-/** ✕-mark the still-empty cells a correct plant at (r,c) rules out: the rest
- *  of its cluster (one-per-cluster) and the 8 touching cells (no-touch rule).
- *  Mutates `grid`. */
-function markDeadCells(
-  grid: CellState[][],
-  regions: number[][],
-  r: number,
-  c: number,
-): void {
-  const region = regions[r][c];
-  grid.forEach((row, rr) =>
-    row.forEach((s, cc) => {
-      if (s !== "empty") return;
-      const sameCluster = regions[rr][cc] === region;
-      const touching = Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1;
-      if (sameCluster || touching) grid[rr][cc] = "marked";
-    }),
+/** Sanity-check a stored snapshot. Anything off (old schema, wrong board
+ *  shape, a finished or lost board, yesterday's daily) is dropped rather than
+ *  restored — a bad resume is worse than no resume. */
+function validSnapshot(snap: ResumeSnapshot | undefined): boolean {
+  if (!snap || snap.v !== RESUME_VERSION || !snap.puzzle) return false;
+  const { size, solution, regions } = snap.puzzle;
+  if (!Array.isArray(solution) || solution.length !== size) return false;
+  if (!Array.isArray(regions) || regions.length !== size) return false;
+  if (!Array.isArray(snap.states) || snap.states.length !== size) return false;
+  if (snap.states.some((row) => !Array.isArray(row) || row.length !== size))
+    return false;
+  if (!(snap.hearts > 0) || !(snap.hearts <= MAX_HEARTS)) return false;
+  // A complete board would re-fire the win path (stars, unlocks, cards) on
+  // restore, so only a genuinely mid-solve board is resumable.
+  if (placedCoords(snap.states).length >= size) return false;
+  if (snap.mode === "level" && (snap.level < 1 || snap.level > LEVEL_COUNT))
+    return false;
+  // Yesterday's daily is a different puzzle now — let it go.
+  if (snap.mode === "daily" && snap.dailyKey !== todayKey()) return false;
+  if (snap.mode === "endless" && !snap.endlessDifficulty) return false;
+  return true;
+}
+
+/** Read the stored slot map, keeping only the entries that still check out. */
+function parseSlots(raw: string): ResumeSlots {
+  let parsed: ResumeSlots;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+  const out: ResumeSlots = {};
+  for (const mode of ["level", "daily", "endless"] as const) {
+    const snap = parsed[mode];
+    if (validSnapshot(snap) && snap?.mode === mode) out[mode] = snap;
+  }
+  return out;
+}
+
+/** The UI-facing shape of a saved board (the Continue card's contents). */
+function resumeSummary(snap: ResumeSnapshot | null | undefined) {
+  if (!snap) return null;
+  return {
+    mode: snap.mode,
+    level: snap.level,
+    dailyKey: snap.dailyKey,
+    difficulty: snap.endlessDifficulty,
+    placed: placedCoords(snap.states).length,
+    size: snap.puzzle.size,
+    seconds: snap.seconds,
+    hearts: snap.hearts,
+  };
+}
+
+/** The most recently touched saved board — what "Continue" means on Home. */
+function newestSlot(slots: ResumeSlots): ResumeSnapshot | null {
+  return (
+    Object.values(slots).sort(
+      (a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0),
+    )[0] ?? null
   );
 }
 
@@ -206,6 +307,29 @@ function reducer(state: GameState, action: Action): GameState {
 
     case "NEW_ENDLESS":
       return freshEndlessState(action.difficulty);
+
+    // Resume a persisted board: the clock picks up where it stopped, hearts
+    // and hints carry over, the undo stack starts empty (not persisted).
+    case "RESTORE": {
+      const { snap } = action;
+      const base = blankState(
+        snap.mode,
+        snap.level,
+        snap.dailyKey,
+        snap.endlessDifficulty,
+        snap.puzzle,
+      );
+      return {
+        ...base,
+        states: snap.states,
+        mistakes: liveMistakes(snap.states, new Set(snap.mistakes)),
+        placedCount: placedCoords(snap.states).length,
+        seconds: snap.seconds,
+        started: true,
+        hearts: snap.hearts,
+        hintsUsed: snap.hintsUsed,
+      };
+    }
 
     case "TICK":
       return state.started && !state.solved && !state.failed
@@ -232,22 +356,29 @@ function reducer(state: GameState, action: Action): GameState {
       return settle(state, grid, true);
     }
 
-    // Double tap: place a plant (replaces an ✕; idempotent if already placed).
-    // A plant on the wrong cell stays put but flags red and costs a heart;
-    // losing the last heart fails the board.
+    // Double tap: try to plant (replaces an ✕; idempotent if already placed).
+    // A wrong cell doesn't keep the plant — the cell turns into a *red* ✕
+    // (it's now known-bad) and costs a heart; the last heart fails the board.
+    // Re-tapping a red ✕ is a no-op, so one slip can't drain hearts twice.
+    // A placement never ✕s anything else for the player — every other
+    // elimination (cluster, row, column, no-touch) is theirs to mark.
     case "PLACE": {
       if (state.solved || state.failed) return state;
       const { r, c } = action;
       if (state.states[r][c] === "placed") return state;
+      if (state.mistakes.has(cellKey(r, c))) return state;
       const grid = cloneGrid(state.states);
-      grid[r][c] = "placed";
-      const correct = state.puzzle.solution[r] === c;
-      // Reward a correct plant by ✕-ing out the cells it rules out — cluster
-      // remainder + touching cells (same history entry, so one Undo removes
-      // the plant and its marks together).
-      if (correct) markDeadCells(grid, state.puzzle.regions, r, c);
-      const next = settle(state, grid, true);
-      if (correct) return next;
+      if (state.puzzle.solution[r] === c) {
+        grid[r][c] = "placed";
+        return settle(state, grid, true);
+      }
+      grid[r][c] = "marked";
+      const next = settle(
+        state,
+        grid,
+        true,
+        new Set(state.mistakes).add(cellKey(r, c)),
+      );
       const hearts = state.hearts - 1;
       return { ...next, hearts, failed: hearts <= 0 };
     }
@@ -266,20 +397,26 @@ function reducer(state: GameState, action: Action): GameState {
       // Undo never refunds a spent heart (so it can't be used to probe cells).
       if (state.failed || state.history.length === 0) return state;
       const prev = state.history[state.history.length - 1];
-      const placed = placedCoords(prev);
-      const mistakes = wrongCells(prev, state.puzzle.solution);
+      const placed = placedCoords(prev.states);
       return {
         ...state,
-        states: prev,
+        states: prev.states,
         history: state.history.slice(0, -1),
-        mistakes,
+        mistakes: prev.mistakes,
         placedCount: placed.length,
-        solved: isSolved(placed.length, state.puzzle.size, mistakes.size),
+        solved: isSolved(
+          placed.length,
+          state.puzzle.size,
+          wrongCells(prev.states, state.puzzle.solution).size,
+        ),
       };
     }
 
     case "RESET":
-      return { ...settle(state, emptyGrid(state.puzzle.size), state.started), history: [] };
+      return {
+        ...settle(state, emptyGrid(state.puzzle.size), state.started, new Set()),
+        history: [],
+      };
 
     // After a fail: same puzzle, blank board, hearts + timer reset.
     case "RETRY":
@@ -291,8 +428,9 @@ function reducer(state: GameState, action: Action): GameState {
         state.puzzle,
       );
 
-    // Places the first still-open row's true solution cell, clearing any
-    // placed cells it conflicts with (including a wrong guess in that row).
+    // Places the first still-open row's true solution cell (overwriting an ✕
+    // there, red or not — placed plants are all correct, so nothing can
+    // conflict with it).
     case "HINT": {
       if (state.solved || state.failed) return state;
       const { solution, size } = state.puzzle;
@@ -304,25 +442,10 @@ function reducer(state: GameState, action: Action): GameState {
         }
       }
       if (target === -1) return state;
-      const next = settle(
-        state,
-        placeClearingConflicts(state, target, solution[target]),
-        true,
-      );
-      return { ...next, hintsUsed: state.hintsUsed + 1 };
-    }
-
-    // Place the last remaining plant. Only offered with one plant left and a
-    // mistake-free board, so the unfilled row's solution cell completes it —
-    // solved flips through the standard path (stars/best/cards all normal).
-    case "AUTO_COMPLETE": {
-      if (state.solved || state.failed || state.mistakes.size > 0) return state;
-      const { size, solution } = state.puzzle;
-      if (state.placedCount !== size - 1) return state;
       const grid = cloneGrid(state.states);
-      for (let r = 0; r < size; r++)
-        if (!grid[r].includes("placed")) grid[r][solution[r]] = "placed";
-      return settle(state, grid, true);
+      grid[target][solution[target]] = "placed";
+      const next = settle(state, grid, true);
+      return { ...next, hintsUsed: state.hintsUsed + 1 };
     }
 
     default:
@@ -358,6 +481,8 @@ export function useGame(initialLevel = 1) {
   const [solveStars, setSolveStars] = useState<number | null>(null);
   // Plant cards whose star milestone was crossed by the solve on screen.
   const [newCards, setNewCards] = useState<PlantCard[]>([]);
+  // Saved mid-solve boards, one per mode (drives the Home "Continue" card).
+  const [slots, setSlots] = useState<ResumeSlots>({});
 
   // Load saved progression + best times once.
   useEffect(() => {
@@ -370,6 +495,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LAST_KEY,
         DAILY_LOG_KEY,
         STARS_KEY,
+        RESUME_KEY,
         SOUND_KEY,
         NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
@@ -403,6 +529,16 @@ export function useGame(initialLevel = 1) {
           try {
             setStarsByLevel(JSON.parse(v));
           } catch {}
+        } else if (key === RESUME_KEY) {
+          const parsed = parseSlots(v);
+          setSlots(parsed);
+          // Snapshots we refuse to restore (stale daily, old schema) would
+          // otherwise sit in storage forever.
+          if (Object.keys(parsed).length === 0) {
+            AsyncStorage.removeItem(RESUME_KEY).catch(() => {});
+          } else {
+            AsyncStorage.setItem(RESUME_KEY, JSON.stringify(parsed)).catch(() => {});
+          }
         } else if (key === SOUND_KEY) {
           const on = v !== "0";
           setSoundOnState(on);
@@ -422,13 +558,84 @@ export function useGame(initialLevel = 1) {
     };
   }, []);
 
-  // One plant left on a mistake-free board — gates the floating auto-complete
-  // button (the last placement is fully determined, so it's pure mop-up).
-  const canAutoComplete =
-    !state.solved &&
-    !state.failed &&
-    state.mistakes.size === 0 &&
-    state.placedCount === state.puzzle.size - 1;
+  // --- Resume slot ---------------------------------------------------------
+  // The live board is written to storage on every move (moves are far rarer
+  // than ticks, so this stays cheap) and, via `saveResume`, when the player
+  // leaves the board or the app goes to the background — which is what keeps
+  // the elapsed time from lagging behind a long think. Solving or failing
+  // clears the slot: there's nothing left to come back to.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  // Mirrors `slots` for the callbacks below, which must read the freshest map
+  // without waiting for a re-render (two saves can land in one tick).
+  const slotsRef = useRef(slots);
+  slotsRef.current = slots;
+
+  // In-memory state updates immediately; the disk write is debounced so a
+  // drag painting a dozen ✕s is one write, not a dozen. Anything that must
+  // survive right now (leaving the board, backgrounding, starting a new game)
+  // passes `immediate` — and backgrounding always follows a move, so the
+  // worst case for a hard kill is losing the last half-second of marks.
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Writes whatever is in `slotsRef` — reading the ref (not a captured value)
+  // is what lets the debounce timer and the unmount flush stay correct.
+  const persistSlots = () => {
+    flushTimer.current = null;
+    const cur = slotsRef.current;
+    if (Object.keys(cur).length === 0) {
+      AsyncStorage.removeItem(RESUME_KEY).catch(() => {});
+    } else {
+      AsyncStorage.setItem(RESUME_KEY, JSON.stringify(cur)).catch(() => {});
+    }
+  };
+
+  // Never drop a pending write on teardown.
+  useEffect(() => () => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      persistSlots();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only
+  }, []);
+
+  const writeSlots = (next: ResumeSlots, immediate = false) => {
+    slotsRef.current = next;
+    setSlots(next);
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    if (immediate) persistSlots();
+    else flushTimer.current = setTimeout(persistSlots, 500);
+  };
+
+  /** Store (or, with null, drop) the saved board for one mode. */
+  const putSlot = (
+    mode: GameState["mode"],
+    snap: ResumeSnapshot | null,
+    immediate = false,
+  ) => {
+    const cur = slotsRef.current;
+    if (!snap && !cur[mode]) return; // nothing to clear — skip the write
+    const next = { ...cur };
+    if (snap) next[mode] = snap;
+    else delete next[mode];
+    writeSlots(next, immediate);
+  };
+
+  // Capture the board as it stands right now (used on exit / backgrounding).
+  const saveResume = () => {
+    const snap = toSnapshot(stateRef.current);
+    if (snap) putSlot(snap.mode, snap, true);
+  };
+
+  useEffect(() => {
+    const snap = toSnapshot(state);
+    // `started` only flips on the first move, so a fresh board writes nothing
+    // until it's actually been touched. Once it has, a board that stops being
+    // resumable — won, lost, or wiped blank by Reset — clears its slot.
+    if (snap) putSlot(snap.mode, snap);
+    else if (state.started) putSlot(state.mode, null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- board moves only; `seconds` deliberately excluded (see saveResume)
+  }, [state.states, state.mistakes, state.hearts, state.hintsUsed, state.solved, state.failed, state.puzzle]);
 
   // Tick the timer once per second while a solve is in progress. The pause
   // flag (a ref so the interval never restarts) freezes the clock while the
@@ -668,6 +875,51 @@ export function useGame(initialLevel = 1) {
     canUndo: state.history.length > 0,
     undoDepth: state.history.length,
     hintsUsed: state.hintsUsed,
+    // The most recent saved board, as the Home "Continue" card needs it.
+    resume: resumeSummary(newestSlot(slots)),
+    // Per-mode summaries, so Play / the Daily tab can pick their own board up
+    // instead of starting over on top of it.
+    resumeSlots: {
+      level: resumeSummary(slots.level),
+      daily: resumeSummary(slots.daily),
+      endless: resumeSummary(slots.endless),
+    },
+    // Pick a saved board back up (clock, hearts and hints included).
+    // Defaults to the most recent one — the Continue card's board.
+    resumeGame: (mode?: GameState["mode"]) => {
+      const snap = mode ? slots[mode] : newestSlot(slots);
+      if (!snap) return;
+      analytics.track("board_resumed", {
+        mode: snap.mode,
+        level: snap.level || undefined,
+        placed: placedCoords(snap.states).length,
+        size: snap.puzzle.size,
+        seconds: snap.seconds,
+      });
+      dispatch({ type: "RESTORE", snap });
+    },
+    // Persist the board as it stands. Called when the player leaves it and
+    // when the app backgrounds, so the saved clock matches what they saw.
+    saveResume,
+    // Leaving an unfinished board — the retention event the funnel is missing.
+    // (Called by GameScreen on its way out; no-ops on a won/lost board.)
+    abandonBoard: () => {
+      const s = stateRef.current;
+      if (!s.started || s.solved || s.failed) return;
+      saveResume();
+      analytics.track("board_abandoned", {
+        mode: s.mode,
+        level: s.level || undefined,
+        difficulty: boardDifficulty(),
+        size: s.puzzle.size,
+        tier: s.puzzle.tier,
+        placed: s.placedCount,
+        progress: Math.round((s.placedCount / s.puzzle.size) * 100),
+        seconds: s.seconds,
+        hints: s.hintsUsed,
+        hearts_left: s.hearts,
+      });
+    },
     onboarded,
     soundOn,
     setSoundOn: (on: boolean) => {
@@ -719,6 +971,7 @@ export function useGame(initialLevel = 1) {
         DAILY_LAST_KEY,
         DAILY_LOG_KEY,
         STARS_KEY,
+        RESUME_KEY,
         SOUND_KEY,
         NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
@@ -738,14 +991,17 @@ export function useGame(initialLevel = 1) {
       setNotifsOnState(true);
       notifications.cancelAll();
       setDaily({ streak: 0, last: null, log: {} });
+      writeSlots({}, true);
       dispatch({ type: "NEW_GAME", level: 1 });
     },
+    // Starting a new board supersedes the saved board *of that mode* only.
     newGame: (level: number) => {
       analytics.track("game_started", {
         mode: "level",
         level,
         difficulty: getLevel(level).difficulty,
       });
+      putSlot("level", null, true);
       dispatch({ type: "NEW_GAME", level });
     },
     newDaily: () => {
@@ -753,10 +1009,12 @@ export function useGame(initialLevel = 1) {
         mode: "daily",
         difficulty: DAILY_DIFFICULTY,
       });
+      putSlot("daily", null, true);
       dispatch({ type: "NEW_DAILY" });
     },
     newEndless: (difficulty: Difficulty) => {
       analytics.track("game_started", { mode: "endless", difficulty });
+      putSlot("endless", null, true);
       dispatch({ type: "NEW_ENDLESS", difficulty });
     },
     paint: (r: number, c: number) => dispatch({ type: "PAINT", r, c }),
@@ -795,16 +1053,6 @@ export function useGame(initialLevel = 1) {
         level: state.level || undefined,
       });
       dispatch({ type: "HINT" });
-    },
-    // One plant left: place it in one tap.
-    canAutoComplete,
-    autoComplete: () => {
-      if (!canAutoComplete) return;
-      analytics.track("auto_completed", {
-        mode: state.mode,
-        level: state.level || undefined,
-      });
-      dispatch({ type: "AUTO_COMPLETE" });
     },
   };
 }

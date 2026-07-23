@@ -34,7 +34,6 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
     new Animated.Value(state === "placed" ? 1 : 0),
   ).current;
   const markPop = useRef(new Animated.Value(state === "marked" ? 1 : 0)).current;
-  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (state === "placed") {
@@ -60,31 +59,6 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
       markPop.setValue(0);
     }
   }, [state, plantPop, markPop]);
-
-  // Wrong placements breathe red until the player clears them.
-  useEffect(() => {
-    if (!mistake) {
-      pulse.stopAnimation();
-      pulse.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 420,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [mistake, pulse]);
 
   return (
     <View
@@ -118,22 +92,12 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
             ]}
           />
         )}
+        {/* A rejected plant leaves a red ✕: the tile keeps a steady red wash
+            (these stick around, so a pulse would be noise) under the mark. */}
         {mistake && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              styles.mistake,
-              {
-                opacity: pulse.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.35, 0.65],
-                }),
-              },
-            ]}
-          />
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.mistake]} />
         )}
-        {state === "marked" && (
+        {state === "marked" && !mistake && (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -170,11 +134,12 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           selectable={false}
           style={[
             styles.mark,
+            mistake && styles.markMistake,
             {
-              fontSize: px * 0.46,
+              fontSize: px * (mistake ? 0.54 : 0.46),
               opacity: markPop.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, 0.82],
+                outputRange: [0, mistake ? 1 : 0.82],
               }),
               transform: [{ scale: markPop }],
             },
@@ -220,6 +185,7 @@ const styles = StyleSheet.create({
   },
   mistake: {
     backgroundColor: theme.danger,
+    opacity: 0.34,
   },
   // Eliminated (✕) cells dim slightly so they recede from the live board.
   markScrim: {
@@ -243,6 +209,10 @@ const styles = StyleSheet.create({
     color: theme.mark,
     fontWeight: "900",
     userSelect: "none",
+  },
+  // A wrong guess reads as a bigger, blood-red ✕ against the red wash.
+  markMistake: {
+    color: theme.dangerDark,
   },
 });
 

@@ -13,6 +13,7 @@ import {
 
 import { LinearGradient } from "expo-linear-gradient";
 
+import { analytics } from "../analytics";
 import { audio } from "../audio";
 import type { Game } from "../state/useGame";
 import { nextCard } from "../game/cards";
@@ -43,9 +44,8 @@ interface Props {
 
 // First-play tutorial: stages 0..5 run on the real Level 1 board; TUT_DONE =
 // off. Every stage asks for one simple player action — no read-only "Next"
-// screens: plant the forced cell (its touching cells auto-✕, so the no-touch
-// stage just shows the rule and advances on a timer), ✕ each remaining rule's
-// cells yourself (row → column), then the colour-rule payoff — those marks
+// screens: plant the forced cell, then ✕ each rule's cells yourself
+// (neighbours → row → column), then the colour-rule payoff — those marks
 // have left one cluster with a single open cell, so the player DEDUCES a
 // second plant (stage 4 self-skips if the board doesn't offer that setup).
 // Each stage advances itself the moment its action is done; stage 5 hands
@@ -53,17 +53,20 @@ interface Props {
 // target, and the input handlers lock the board to exactly the prompted
 // action.
 const TUT_DONE = 6;
-// How long the no-touch stage lingers: a correct placement now auto-✕s its
-// touching cells, so stage 1 is satisfied the instant it appears — hold the
-// card long enough to read the rule before auto-advancing.
-const TUT_NOTOUCH_MS = 1400;
-const TUTORIAL_STEPS: { text: string; button?: string }[] = [
-  { text: "Double-tap to plant 🌱" },
-  { text: "Plants can't touch ✋\nThe cells around it get ✕'d for you." },
-  { text: "One plant per row.\n✕ the rest of this row." },
-  { text: "One plant per column.\n✕ this column too." },
-  { text: "One plant per color 🎨\nOnly one spot left — plant it!" },
-  { text: "Your turn! 🌿\nSolve the rest.", button: "Let's go!" },
+// `name` is the analytics label for the stage — each one fires a
+// `tutorial_step` event when reached, so the funnel shows exactly which
+// instruction players quit on (the tutorial is forced, so a drop here is a
+// lost install). Keep the names stable; renaming one breaks the funnel.
+const TUTORIAL_STEPS: { name: string; text: string; button?: string }[] = [
+  { name: "plant", text: "Double-tap to plant 🌱" },
+  { name: "no_touch", text: "Plants can't touch ✋\n✕ the cells around it." },
+  { name: "row", text: "One plant per row.\n✕ the rest of this row." },
+  { name: "column", text: "One plant per column.\n✕ this column too." },
+  {
+    name: "colour",
+    text: "One plant per color 🎨\nOnly one spot left — plant it!",
+  },
+  { name: "free_play", text: "Your turn! 🌿\nSolve the rest.", button: "Let's go!" },
 ];
 
 /** Bounding box of a cell list — used to spotlight a (possibly irregular)
@@ -81,31 +84,6 @@ function bbox(cells: Coord[]) {
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
-/** Small "Finish" button that joins the hint-pill row — appears (with a pop)
- * when the rest of the board is trivially forced. */
-function FinishFab({ onPress }: { onPress: () => void }) {
-  const pop = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(pop, {
-      toValue: 1,
-      friction: 6,
-      tension: 120,
-      useNativeDriver: true,
-    }).start();
-  }, [pop]);
-  return (
-    <Animated.View style={{ opacity: pop, transform: [{ scale: pop }] }}>
-      <Button
-        small
-        label="Finish"
-        icon="checkmark-done"
-        variant="solid"
-        onPress={onPress}
-      />
-    </Animated.View>
-  );
-}
-
 // Garden-at-dusk depth: slightly lighter glade behind the board, darker
 // canopy at the top and bottom edges.
 const BG_GRADIENT = ["#0E1F14", "#1D3826", "#0B1710"] as const;
@@ -121,10 +99,18 @@ export function GameScreen({ game, onMenu }: Props) {
   const { size } = game.puzzle;
   const [showHelp, setShowHelp] = useState(false);
 
+  // Every way out of the board goes through here: an unfinished board is
+  // saved to the resume slot (so Home can offer Continue) and reported as
+  // abandoned. Both no-op on a board that was won or lost.
+  const leave = () => {
+    game.abandonBoard();
+    onMenu();
+  };
+
   // Android back returns to the menu (an open overlay registers later and
   // consumes the press first).
   useBackHandler(() => {
-    onMenu();
+    leave();
     return true;
   });
 
@@ -146,10 +132,9 @@ export function GameScreen({ game, onMenu }: Props) {
   const [tutStep, setTutStep] = useState(() => (tutTarget ? 0 : TUT_DONE));
   const tutorial = tutStep < TUT_DONE && tutTarget != null;
 
-  // The mark-stage target sets after the forced placement: cells touching it
-  // (auto-✕'d by the placement itself — the stage only narrates), the rest
-  // of its row, the rest of its column (the player ✕'s those two, minus the
-  // pre-marked neighbours), then — since the placement itself is always a singleton
+  // The mark-stage target sets after the forced placement: the cells touching
+  // it, the rest of its row, the rest of its column (the player ✕'s all
+  // three), then — since the placement itself is always a singleton
   // cluster and so has no same-colour neighbours to mark — the rest of a
   // *different*, larger cluster for the colour rule (its true solution cell
   // is left out of the target set, so nothing here spoils it).
@@ -242,18 +227,8 @@ export function GameScreen({ game, onMenu }: Props) {
       tutMarkTargets.length > 0 &&
       tutMarkTargets.every(([r, c]) => game.states[r][c] === "marked")
     ) {
-      const advance = () => {
-        done();
-        setTutStep(tutStep === 3 && !tutColor ? 5 : tutStep + 1);
-      };
-      // Stage 1 (no-touch) is already ✕'d by the placement's auto-marks —
-      // let it linger so the rule lands, then move on by itself. The cleanup
-      // cancels the timer if a mark is toggled off mid-wait.
-      if (tutStep === 1) {
-        const t = setTimeout(advance, TUT_NOTOUCH_MS);
-        return () => clearTimeout(t);
-      }
-      advance();
+      done();
+      setTutStep(tutStep === 3 && !tutColor ? 5 : tutStep + 1);
     } else if (
       tutStep === 4 &&
       tutColor &&
@@ -263,6 +238,17 @@ export function GameScreen({ game, onMenu }: Props) {
       setTutStep(5);
     }
   }, [tutorial, tutStep, tutTarget, tutMarkTargets, tutColor, game.states]);
+
+  // Drop-off funnel: one event per stage the player actually reaches. Stage 4
+  // can be skipped by the board (3 → 5), which shows up as a gap rather than
+  // a drop. `onboarding_completed` closes the funnel.
+  useEffect(() => {
+    if (!tutorial) return;
+    analytics.track("tutorial_step", {
+      step: tutStep,
+      name: TUTORIAL_STEPS[tutStep].name,
+    });
+  }, [tutorial, tutStep]);
 
   const finishTutorial = () => {
     setTutStep(TUT_DONE);
@@ -278,60 +264,6 @@ export function GameScreen({ game, onMenu }: Props) {
     return () => game.setTimerPaused(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- ref write; game identity churns per render
   }, [tutorial]);
-
-  // --- Auto-complete (one plant left) ---------------------------------------
-  // Pressing Finish plays a staged sweep instead of jumping to the win
-  // overlay: every still-empty cell gets its ✕ one by one in reading order
-  // (mark pop + tick each, like a fast drag), then the last plant pops in
-  // with the place cue, then — after a beat — the overlay + win fanfare.
-  // While `autoAnim` is set the board and controls are locked and the win
-  // overlay (and its sound, below) wait for it to clear.
-  const [autoAnim, setAutoAnim] = useState<Coord | null>(null);
-  const autoTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  useEffect(() => () => autoTimers.current.forEach(clearTimeout), []);
-
-  const startAutoComplete = () => {
-    if (autoAnim) return;
-    const { size: n, solution } = game.puzzle;
-    let target: Coord | null = null;
-    for (let r = 0; r < n && !target; r++)
-      if (!game.states[r].includes("placed")) target = [r, solution[r]];
-    if (!target) return;
-    const [tr, tc] = target;
-    // Every cell still empty except the final plant's own cell.
-    const toMark: Coord[] = [];
-    for (let r = 0; r < n; r++)
-      for (let c = 0; c < n; c++)
-        if (game.states[r][c] === "empty" && !(r === tr && c === tc))
-          toMark.push([r, c]);
-    setAutoAnim(target);
-    Haptics?.selectionAsync().catch(() => {});
-    // Per-cell pace scaled so the whole sweep stays ~a second regardless of
-    // how many cells are left (the audio facade pools the overlapping ticks).
-    const stepMs = Math.max(35, Math.min(80, 1100 / Math.max(1, toMark.length)));
-    let i = 0;
-    const tick = () => {
-      if (i < toMark.length) {
-        const [r, c] = toMark[i++];
-        Haptics?.selectionAsync().catch(() => {});
-        audio.play("mark");
-        game.paint(r, c);
-        autoTimers.current.push(setTimeout(tick, stepMs));
-        return;
-      }
-      autoTimers.current.push(
-        setTimeout(() => {
-          Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-            () => {},
-          );
-          audio.play("place");
-          game.autoComplete();
-          autoTimers.current.push(setTimeout(() => setAutoAnim(null), 550));
-        }, 200),
-      );
-    };
-    autoTimers.current.push(setTimeout(tick, 150));
-  };
 
   // Board frame position (relative to the screen root — the overlay's space),
   // measured off the board wrapper so the spotlight can ring exact cells.
@@ -390,8 +322,7 @@ export function GameScreen({ game, onMenu }: Props) {
   // one cell, stages 1-3 = mark/unmark the stage's target cells (never a
   // plant — a tap on a placed cell would uproot it).
   const canMarkAt = (r: number, c: number) =>
-    autoAnim == null &&
-    (!tutorial || tutMarkTargets.some(([nr, nc]) => nr === r && nc === c));
+    !tutorial || tutMarkTargets.some(([nr, nc]) => nr === r && nc === c);
 
   // Drag-paint fires the mark cue once per cell — even on a fast swipe every
   // cell ticks (the audio facade pools voices so they overlap, see src/audio).
@@ -408,7 +339,6 @@ export function GameScreen({ game, onMenu }: Props) {
     game.erase(r, c);
   };
   const place = (r: number, c: number) => {
-    if (autoAnim) return;
     if (tutorial) {
       const allowed =
         tutStep === 0
@@ -431,23 +361,23 @@ export function GameScreen({ game, onMenu }: Props) {
     game.tap(r, c);
   };
 
-  // Win fanfare — held back while the auto-complete sequence is mid-flight so
-  // the place cue and plant pop get their beat before the overlay lands.
+  // Win fanfare.
   React.useEffect(() => {
-    if (game.solved && !autoAnim) {
+    if (game.solved) {
       Haptics?.notificationAsync(
         Haptics.NotificationFeedbackType.Success,
       ).catch(() => {});
       audio.play("win");
     }
-  }, [game.solved, autoAnim]);
+  }, [game.solved]);
 
   // Out of hearts: sound the game-over cue (the FailOverlay takes the screen).
   React.useEffect(() => {
     if (game.failed) audio.play("fail");
   }, [game.failed]);
 
-  // Juice: shake the board (+ error haptic) when a plant lands on a wrong cell.
+  // Juice: shake the board (+ error haptic) when a plant is rejected by a
+  // wrong cell (which turns it into a red ✕).
   const shake = useRef(new Animated.Value(0)).current;
   const prevMistakes = useRef(0);
   useEffect(() => {
@@ -487,7 +417,7 @@ export function GameScreen({ game, onMenu }: Props) {
       style={styles.wrap}
     >
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={onMenu} style={styles.iconBtn}>
+        <Pressable hitSlop={10} onPress={leave} style={styles.iconBtn}>
           <Text style={styles.iconTxt}>‹ Menu</Text>
         </Pressable>
         <View style={styles.pill}>
@@ -601,9 +531,6 @@ export function GameScreen({ game, onMenu }: Props) {
         <View style={[styles.hintPill, styles.hintFlex]}>
           <Text style={styles.hintLine}>Mark ✕ · double-tap or hold to plant</Text>
         </View>
-        {game.canAutoComplete && !tutorial && !autoAnim && (
-          <FinishFab onPress={startAutoComplete} />
-        )}
       </View>
 
       <View style={styles.controls}>
@@ -611,7 +538,7 @@ export function GameScreen({ game, onMenu }: Props) {
           label="Undo"
           icon="arrow-undo"
           onPress={game.undo}
-          disabled={!game.canUndo || tutorial || autoAnim != null}
+          disabled={!game.canUndo || tutorial}
           badge={game.undoDepth}
           flex
         />
@@ -620,7 +547,7 @@ export function GameScreen({ game, onMenu }: Props) {
           icon="bulb"
           variant="ghost"
           onPress={game.requestHint}
-          disabled={tutorial || autoAnim != null}
+          disabled={tutorial}
           badge={game.hintsUsed}
           flex
         />
@@ -628,7 +555,7 @@ export function GameScreen({ game, onMenu }: Props) {
           label="Reset"
           icon="refresh"
           onPress={game.reset}
-          disabled={tutorial || autoAnim != null}
+          disabled={tutorial}
           flex
         />
       </View>
@@ -652,7 +579,7 @@ export function GameScreen({ game, onMenu }: Props) {
         />
       )}
 
-      {game.solved && !autoAnim && (
+      {game.solved && (
         <WinOverlay
           level={game.level}
           seconds={game.seconds}
@@ -697,7 +624,7 @@ export function GameScreen({ game, onMenu }: Props) {
               ? game.newEndless(game.endlessDifficulty)
               : game.newGame(game.level + 1)
           }
-          onMenu={onMenu}
+          onMenu={leave}
         />
       )}
 
@@ -711,7 +638,7 @@ export function GameScreen({ game, onMenu }: Props) {
                 : `Level ${game.level}`
           }
           onRetry={game.retry}
-          onMenu={onMenu}
+          onMenu={leave}
         />
       )}
     </LinearGradient>

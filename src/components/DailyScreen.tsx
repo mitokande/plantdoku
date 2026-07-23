@@ -12,13 +12,21 @@ interface Props {
   dailyStreak: number;
   /** dateKey -> best seconds for every daily ever solved. */
   dailyLog: Record<string, number>;
+  /** Today's daily was left unfinished — the CTA continues it. */
+  hasSaved: boolean;
   onPlay: () => void;
 }
 
 const HISTORY_MAX = 14;
 
 /** Daily tab: today's puzzle, the streak, and recent solve history. */
-export function DailyScreen({ dailyDone, dailyStreak, dailyLog, onPlay }: Props) {
+export function DailyScreen({
+  dailyDone,
+  dailyStreak,
+  dailyLog,
+  hasSaved,
+  onPlay,
+}: Props) {
   const tk = todayKey();
   const history = Object.keys(dailyLog)
     .sort()
@@ -42,7 +50,13 @@ export function DailyScreen({ dailyDone, dailyStreak, dailyLog, onPlay }: Props)
         </Text>
         <View style={styles.heroBtn}>
           <Button
-            label={dailyDone ? "Replay for a better time" : "Play today's puzzle"}
+            label={
+              dailyDone
+                ? "Replay for a better time"
+                : hasSaved
+                  ? "Continue today's puzzle"
+                  : "Play today's puzzle"
+            }
             icon="play"
             variant="solid"
             onPress={onPlay}

@@ -15,18 +15,23 @@ plant type / colour. The player places one plant marker so there is:
 
 Every generated board has exactly **one** solution.
 
-**Hearts / fail**: the player gets **3 hearts** per board (all modes). Placing a
-plant on a cell that isn't its `solution[r]` cell costs a heart — the plant stays
-put but flags red (the board's `mistakes` set, which replaced the old rule-based
-`conflicts` highlight so a *correct* cell next to a wrong one is never reddened)
-and the board shakes. Losing the last heart sets `failed`: the board locks, the
-timer stops, and `FailOverlay` offers **Try again** (`useGame.retry()` rebuilds
-the same board with hearts/timer reset) or Menu. Undo never refunds a spent heart
-(so it can't be used to probe cells). A board can only be solved by filling it
-with zero wrong cells, so `isSolved` now keys off `mistakes.size` (a full,
-mistake-free board is necessarily the unique solution). Hearts render in
-`Hearts.tsx` (header row, pops when one breaks); `MAX_HEARTS` lives in
-`useGame.ts`.
+**Hearts / fail**: the player gets **3 hearts** per board (all modes). Planting
+on a cell that isn't its `solution[r]` cell costs a heart and the board shakes —
+and the plant **is not kept**: the cell becomes a **red ✕** instead (state
+`"marked"` + membership in the board's `mistakes` set, which `Cell.tsx` draws as
+a steady red wash + an oversized `dangerDark` ✕). So a wrong guess reads as
+"eliminated", not as a plant sitting in a bad spot, and only correct plants are
+ever on the board. Consequences: `mistakes` is now **explicit reducer state**
+(not derived from the grid) and travels with each undo `Snapshot`; it is pruned
+by `liveMistakes` whenever the cell stops being ✕-marked (tap/erase/reset clears
+the red with the mark); re-planting a red-✕ cell is a **no-op**, so one slip
+can't drain two hearts; and `solved` is just "board full" (`wrongCells` stays
+empty by construction but still feeds `isSolved` as a guard). Losing the last
+heart sets `failed`: the board locks, the timer stops, and `FailOverlay` offers
+**Try again** (`useGame.retry()` rebuilds the same board with hearts/timer
+reset) or Menu. Undo never refunds a spent heart (so it can't be used to probe
+cells). Hearts render in `Hearts.tsx` (header row, pops when one breaks);
+`MAX_HEARTS` lives in `useGame.ts`.
 
 Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9** — each also gated by deduction
 tier (see Generator), so every board is solvable by pure logic, no guessing.
@@ -51,31 +56,16 @@ Locked until the player reaches level 15 (`ENDLESS_UNLOCK_LEVEL` in
 
 **Hint**: one tap places the next plant — the reducer's `HINT` action
 (`useGame.ts`) scans rows for the first one whose `solution[r]` cell isn't
-already `"placed"` and places it via `placeClearingConflicts` (the same
-conflict-clearing a manual double-tap gets, so it also silently corrects a
-wrong guess sitting in that row/column/cluster/adjacency). One undoable step,
+already `"placed"` and plants it, overwriting whatever ✕ was there (nothing can
+conflict with it: every plant on the board is correct — see Hearts / fail — so
+the old `placeClearingConflicts` helper is gone). One undoable step,
 never a mistake, no message or highlight — just the plant appearing. Counts
 toward `hintsUsed` (gates the "no hints" star, see Stars below).
 
-**Auto-complete**: when exactly **one plant is left** on a mistake-free board
-(`useGame.canAutoComplete` = `placedCount === size - 1 && mistakes.size === 0`
-and not solved/failed), a small "Finish" button (`FinishFab` in
-`GameScreen.tsx`) pops in beside the hint pill below the board, in the
-same `hintRow` — the pill text is kept short ("Mark ✕ · double-tap to
-plant") so both fit on one line. Tapping it runs a **staged sweep** (`startAutoComplete` /
-`autoAnim` state in `GameScreen`), not an instant jump: every still-empty
-cell gets ✕-marked one by one in reading order (mark pop + tick + a
-selection haptic per cell via `game.paint`, pace scaled so the sweep stays
-~1s however many cells remain; no highlight ring on the plant cell) →
-dispatch `AUTO_COMPLETE`
-(plant pops in with the place cue) → hold a beat (~550ms) → win overlay +
-fanfare (the solved sound effect and `WinOverlay` render both wait for
-`autoAnim` to clear). Board input and Undo/Hint/Reset are locked while the
-sequence runs; timers are cleared on unmount. The `AUTO_COMPLETE` reducer action places `solution[r]`
-in the one plantless row (overwriting an ✕ there, like a manual double-tap)
-via a single `settle`, so solved flips through the standard path
-(stars/best/cards all normal) and `hintsUsed` is untouched — finishing costs
-no star. Analytics: `auto_completed`.
+**No auto-complete**: the last plant is placed by the player like every other
+one (a "Finish" button + staged sweep existed briefly and was removed — no
+`AUTO_COMPLETE` action, `canAutoComplete`, `FinishFab`, or `auto_completed`
+event; don't re-add without asking).
 
 **Stars** (`src/game/stars.ts`): level mode only — ★ solved, +★ no hints,
 +★ under par (par by size+tier). Best per level persists as JSON under
@@ -113,6 +103,27 @@ streak and a solve-history list, win overlay swaps BEST→STREAK and Next→Shar
 test in runTests — do not change `dailySeed` (and see the generator NOTE
 above: generator changes also change daily boards across app versions).
 
+**Resume in-progress board**: leaving a board (or the app dying) no longer
+throws the solve away. `useGame` keeps a `ResumeSnapshot` — puzzle, grid, red-✕
+set, elapsed seconds, hearts, hints — persisted under `plantdoku:resume` as
+**one slot per mode** (`{level?, daily?, endless?}`), so starting today's daily
+can't quietly bin a half-solved level; each new board only supersedes its own
+mode's slot. The undo stack is deliberately *not* persisted (a resumed board
+starts with a clean history). Writes happen on every move but are **debounced
+500ms** (a drag is one write); `saveResume()` flushes immediately and is called
+when the player leaves the board (`GameScreen`'s `leave()`) and when the app
+backgrounds (`App.tsx` `AppState` listener), which is what keeps the saved
+clock honest. A slot is dropped when its board is solved, failed, or wiped
+blank by Reset; `parseSlots`/`validSnapshot` also drop anything stale on load
+(old `v`, wrong board shape, a *complete* board — which would re-fire the win
+path — or yesterday's daily). Home shows a **Continue card** above PLAY for the
+most recently touched slot (`newestSlot`, hence `updatedAt`); PLAY itself
+resumes the level slot when it matches the level it would start, and the Daily
+tab's CTA becomes "Continue today's puzzle" — so no primary button is a trap.
+Endless chips always start a fresh board (the Continue card is the way back
+into a saved endless run). Resuming mid-tutorial is safe: the stage machine
+re-derives from the board and cascades to the furthest completed stage.
+
 ## Tech stack
 
 - **Expo SDK 54** (managed) + **TypeScript**, React Native **0.81.5**, React **19.1.0**.
@@ -142,12 +153,28 @@ union — add new events there to keep the taxonomy in one place. App lifecycle
 
 Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 `level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
-`mistake_made`, `hint_requested`, `card_unlocked`,
-`undo_used`/`board_reset`/`board_retried`, `onboarding_completed`,
-`data_flushed` — which also calls `analytics.reset()`) and `App.tsx`
-(`screen_viewed` per tab/game). Keep analytics **out of `src/game/*`** so the
-headless Node tests stay framework-free (the facade imports RN; `useGame`
-already does).
+`board_abandoned`/`board_resumed`, `mistake_made`, `hint_requested`,
+`card_unlocked`, `undo_used`/`board_reset`/`board_retried`,
+`onboarding_completed`, `data_flushed` — which also calls `analytics.reset()`),
+`GameScreen.tsx` (`tutorial_step`) and `App.tsx` (`screen_viewed` per
+tab/game). Keep analytics **out of `src/game/*`** so the headless Node tests
+stay framework-free (the facade imports RN; `useGame` already does).
+
+Two of these exist purely to answer product questions the funnel couldn't
+before, and both are worth keeping intact:
+
+- **`tutorial_step`** — one event per tutorial stage *reached*, with the
+  stage's stable `name` (`plant` · `no_touch` · `row` · `column` · `colour` ·
+  `free_play`, from `TUTORIAL_STEPS`). The tutorial is forced on first play, so
+  a drop here is a lost install; `onboarding_completed` closes the funnel.
+  Stage 4 self-skips on boards with no one-cell-left cluster, which reads as a
+  gap, not a drop. Renaming a stage breaks the funnel's history.
+- **`board_abandoned`** — the player left an unfinished board (`GameScreen`'s
+  `leave()` → `game.abandonBoard()`, which covers the header Menu button and
+  Android back; it no-ops on a won/lost board). Carries `progress` (% of plants
+  placed), `seconds`, `hints` and `hearts_left`, so rage-quits are separable
+  from "put the phone down". Paired with `board_resumed` it also measures
+  whether the resume feature actually gets used.
 
 ## Audio (`src/audio/`)
 
@@ -193,13 +220,13 @@ Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
 - **Swipe / drag** across cells → paint **✕** marks quickly. If the drag
   **starts on an ✕-marked cell**, the whole drag **erases** ✕ marks instead
   (mode is fixed at drag start; plants are never affected either way).
-- **Double-tap** a cell → place a **plant** (the cluster's plant, revealed on placement).
-  A **correct** placement also auto-✕s the cells it rules out: the cluster's
-  remaining empty cells **and the 8 touching cells** (`markDeadCells` in the
-  `PLACE` reducer case; wrong plants are left alone — only `empty` cells
-  mark). Same history entry, so one Undo removes the plant and its marks
-  together. `HINT` / `AUTO_COMPLETE` placements don't do this (hint stays
-  "just the plant appearing"; the finish sweep already ✕s everything itself).
+- **Double-tap** a cell → try to place a **plant** (the cluster's plant,
+  revealed on placement). On a wrong cell nothing is planted — it becomes a red
+  ✕ and costs a heart (see Hearts / fail).
+  A placement **never auto-✕s anything** else — no cluster remainder, no touching
+  cells. Every elimination is the player's to mark (a `markDeadCells` helper
+  in the `PLACE` case did this briefly and was removed; don't re-add without
+  asking).
 - **Hold** a cell still (no drag) for `HOLD_MS` (450ms) → place a plant there too,
   a third, independent way in — it races the tap/double-tap logic rather than
   replacing it.
@@ -248,9 +275,8 @@ forced double-tap on the easy board's guaranteed **singleton cluster** (hole
 = that cell; pulsing ring via `Board`'s `highlight` + bouncing 👆 — the only
 stage with a visible `holeRing`, suppressed on the multi-cell stages where
 the per-cell `hintCells` outlines / highlight ring already show what
-matters) → the no-touch stage (hole = 3×3 block, clamped): the placement's
-auto-marks have already ✕'d those cells, so it just states the rule and
-auto-advances after `TUT_NOTOUCH_MS` (~1.4s) → mark-✕ the rest of its
+matters) → the no-touch stage (hole = 3×3 block, clamped): mark-✕ the 8
+cells around the plant → mark-✕ the rest of its
 **row** (hole = row strip) → its **column** → the
 **colour-rule payoff** (`tutColor`): those very marks can leave another
 cluster with exactly ONE open cell, so the colour rule *forces* a plant
@@ -263,8 +289,7 @@ teach a lie; if no such cluster exists the stage self-skips (stage 3
 completion jumps straight to the finish card). The current L1 seed (1000)
 does offer one — a 4-cell cluster narrowed to one spot — re-check if L1's
 seed or the generator changes. Mark stages advance the moment their whole
-target set is ✕'d (stage 1 on its linger timer, since the auto-marks satisfy
-it instantly), the colour stage on its placement, each with a success
+target set is ✕'d, the colour stage on its placement, each with a success
 haptic as the reward beat; a small **checklist** of chips (No
 touch/Row/Column/Color) in the coach card ticks off as stages complete.
 Step copy is 1-2 short directive lines (hybrid-casual: act, don't read).
@@ -300,7 +325,9 @@ walkthrough can't cost the L1 under-par star. Completion persists
 - Region tints (`palette.ts` `REGION_COLORS`) are **muted botanical** tones —
   earthy, low-saturation garden colours, light enough for the dark ✕ mark and
   sprites to stay readable.
-- Rule violations tint the offending cells red (`theme.dangerTile`).
+- A rejected guess is a **red ✕ cell**: steady `theme.danger` wash + a larger
+  `theme.dangerDark` ✕ (no pulse — these persist, so a breathing tile would be
+  noise). Nothing else on the board is ever tinted red.
 - Win: custom `Confetti` (Animated, dependency-free) + result card with time /
   best / "New best".
 - Theme: "garden at dusk" — deep green ground so pastel clusters pop
@@ -329,8 +356,8 @@ src/game/
   validator.ts   findConflicts (row/col/cluster/adjacency) + isSolved
   runTests.ts    headless correctness tests (npm test)
 src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
-                 timer, unlocked level + per-level best + onboarded + soundOn
-                 (AsyncStorage)
+                 RESTORE (resume), timer, unlocked level + per-level best +
+                 onboarded + soundOn + resume slots (AsyncStorage)
 src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —
                  RN ONLY, no-op on web (do not import in core)
 src/components/
@@ -338,8 +365,8 @@ src/components/
   Cell.tsx       display-only cell (colour, ✕, placed plant + ring)
   GameScreen.tsx header (Level N, Help ?), stats, board, controls, win overlay;
                  haptics; first-play tutorial state machine
-  HomeScreen.tsx Home tab: pulsing PLAY, card-collection showcase panel,
-                 endless card (with the level-15 lock)
+  HomeScreen.tsx Home tab: Continue card (resume slot), pulsing PLAY,
+                 card-collection showcase panel, endless card (level-15 lock)
   CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
@@ -355,7 +382,8 @@ src/theme.ts, src/format.ts
 App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) +
                  Home/Cards/Daily pages + BottomNav; `playing` swaps in a
                  full-screen GameScreen (no HUD/nav); Android back returns
-                 to the Home tab first
+                 to the Home tab first; resume-aware Play/Daily entry points
+                 + AppState listener (reminder re-sync + resume flush)
 scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
 scripts/pick_level_seeds.ts  offline seed picker for the level table
 scripts/make_sfx.py          stdlib-only SFX synth -> assets/audio/*.wav
@@ -416,7 +444,7 @@ background to transparent, then extracts each plant as a **connected component**
 ## Status
 
 Feature-complete and verified: generator + unique solutions, gesture model,
-live conflict highlighting, hint, undo/reset, timer + per-level best times,
+hearts + red-✕ mistakes, hint, undo/reset, timer + per-level best times,
 win animation, 30-level seeded progression with unlock persistence, first-play
 interactive tutorial + Help overlay. Runs on iOS/Android (Expo Go) and web.
 

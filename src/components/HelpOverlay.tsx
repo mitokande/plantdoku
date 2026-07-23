@@ -81,7 +81,7 @@ export function HelpOverlay({ onClose }: Props) {
         <Row icon="move" text="Drag across cells to mark many ✕ — start on an ✕ to erase instead." />
 
         <Text style={styles.section}>HEARTS</Text>
-        <Row icon="heart" text="You have 3 hearts. Planting on the wrong cell loses one — run out and the board resets." />
+        <Row icon="heart" text="You have 3 hearts. Plant on the wrong cell and it won't take root — the cell turns into a red ✕ and you lose a heart. Run out and the board resets." />
 
         <View style={styles.btnRow}>
           <Button label="Close" variant="solid" onPress={onClose} />

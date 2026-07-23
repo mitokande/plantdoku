@@ -45,13 +45,15 @@ export type EventName =
   | "board_failed"
   | "board_retried"
   | "board_reset"
+  | "board_abandoned" // left an unfinished board (drop-off signal)
+  | "board_resumed" // picked a saved board back up
   | "hint_requested"
-  | "auto_completed"
   | "mistake_made"
   | "undo_used"
   | "card_unlocked"
   | "daily_completed"
   | "endless_completed"
+  | "tutorial_step" // one per tutorial stage reached (drop-off funnel)
   | "onboarding_completed"
   | "notifications_enabled"
   | "notifications_disabled"

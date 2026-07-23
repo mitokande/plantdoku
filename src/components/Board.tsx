@@ -56,7 +56,7 @@ const HOLD_MS = 450;
 interface Props {
   puzzle: Puzzle;
   states: CellState[][];
-  mistakes: Set<string>; // wrong placements, drawn red
+  mistakes: Set<string>; // rejected guesses, drawn as red ✕ cells
   onPaint: (r: number, c: number) => void; // swipe → mark ✕
   onErase: (r: number, c: number) => void; // swipe from an ✕ → unmark
   onPlace: (r: number, c: number) => void; // double tap or hold → plant

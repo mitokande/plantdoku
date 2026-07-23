@@ -3,15 +3,32 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { CARDS, nextCard, RARITY_COLORS, unlockedCards } from "../game/cards";
+import { dailyNumber } from "../game/daily";
 import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
+import { formatTime } from "../format";
 import { radius, theme } from "../theme";
+
+/** The saved mid-solve board behind the Continue card (see useGame.resume). */
+export interface ResumeInfo {
+  mode: "level" | "daily" | "endless";
+  level: number;
+  dailyKey: string | null;
+  difficulty: Difficulty | null;
+  placed: number;
+  size: number;
+  seconds: number;
+  hearts: number;
+}
 
 interface Props {
   unlockedLevel: number;
   allComplete: boolean;
   totalStars: number;
+  /** An unfinished board waiting to be picked up, if there is one. */
+  resume: ResumeInfo | null;
+  onResume: () => void;
   onPlay: () => void;
   onEndless: (difficulty: Difficulty) => void;
   /** Jump to the Cards tab (showcase panel tap-through). */
@@ -65,10 +82,29 @@ function Rise({ delay, children }: { delay: number; children: React.ReactNode })
   );
 }
 
+const DIFF_LABEL: Record<Difficulty, string> = {
+  easy: "Easy",
+  medium: "Medium",
+  hard: "Hard",
+};
+
+/** What the Continue card calls the board it saved. */
+function resumeLabel(r: ResumeInfo): string {
+  if (r.mode === "daily") {
+    return r.dailyKey ? `Daily #${dailyNumber(r.dailyKey)}` : "Daily puzzle";
+  }
+  if (r.mode === "endless") {
+    return `Endless · ${r.difficulty ? DIFF_LABEL[r.difficulty] : ""}`.trim();
+  }
+  return `Level ${r.level}`;
+}
+
 export function HomeScreen({
   unlockedLevel,
   allComplete,
   totalStars,
+  resume,
+  onResume,
   onPlay,
   onEndless,
   onCards,
@@ -111,6 +147,31 @@ export function HomeScreen({
           </View>
           <Text style={styles.title}>Plantdoku</Text>
         </Rise>
+
+        {/* An unfinished board is the most valuable thing on this screen —
+            it sits directly above PLAY so it can't be missed. */}
+        {resume && (
+          <Rise delay={80}>
+            <Pressable onPress={onResume} style={styles.resumeEdge}>
+              {({ pressed }) => (
+                <View style={[styles.resume, pressed && styles.resumePressed]}>
+                  <Ionicons name="play-circle" size={30} color={theme.gold} />
+                  <View style={styles.resumeText}>
+                    <Text style={styles.resumeTitle}>
+                      Continue · {resumeLabel(resume)}
+                    </Text>
+                    <Text style={styles.resumeSub}>
+                      {`${resume.placed}/${resume.size} planted · ${formatTime(
+                        resume.seconds,
+                      )} · ${"♥".repeat(resume.hearts)}`}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.textDim} />
+                </View>
+              )}
+            </Pressable>
+          </Rise>
+        )}
 
         <Rise delay={120}>
           {allComplete ? (
@@ -282,6 +343,45 @@ const styles = StyleSheet.create({
     textAlign: "center",
     letterSpacing: 0.5,
     marginBottom: 22,
+  },
+  // Continue card: same chunky 3D edge as PLAY, but panel-coloured and
+  // gold-lined so it reads as secondary to the big green button.
+  resumeEdge: {
+    ...CARD_W,
+    borderRadius: radius.md,
+    backgroundColor: theme.panelEdge,
+    marginBottom: 12,
+  },
+  resume: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: theme.panel,
+    borderWidth: 1,
+    borderColor: theme.gold,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: EDGE,
+  },
+  resumePressed: {
+    marginTop: EDGE,
+    marginBottom: 0,
+  },
+  resumeText: {
+    flex: 1,
+    gap: 2,
+  },
+  resumeTitle: {
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  resumeSub: {
+    color: theme.textDim,
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
   },
   playEdge: {
     ...CARD_W,
