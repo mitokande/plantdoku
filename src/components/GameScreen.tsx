@@ -29,6 +29,7 @@ import { FailOverlay } from "./FailOverlay";
 import { Hearts } from "./Hearts";
 import { HelpOverlay } from "./HelpOverlay";
 import { TutorialOverlay, type Hole } from "./TutorialOverlay";
+import { FLOURISH_MS, WinFlourish } from "./WinFlourish";
 import { WinOverlay } from "./WinOverlay";
 
 let Haptics: typeof import("expo-haptics") | null = null;
@@ -324,6 +325,9 @@ export function GameScreen({ game, onMenu }: Props) {
   const canMarkAt = (r: number, c: number) =>
     !tutorial || tutMarkTargets.some(([nr, nc]) => nr === r && nc === c);
 
+  // The plant of the most recent placement — what the win flourish blooms.
+  const lastPlanted = useRef<string | null>(null);
+
   // Drag-paint fires the mark cue once per cell — even on a fast swipe every
   // cell ticks (the audio facade pools voices so they overlap, see src/audio).
   const paint = (r: number, c: number) => {
@@ -351,7 +355,11 @@ export function GameScreen({ game, onMenu }: Props) {
     Haptics?.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     // A wrong cell costs a heart — cue accordingly (the win sound is fired by
     // the solved effect when the final correct plant completes the board).
-    audio.play(game.puzzle.solution[r] === c ? "place" : "mistake");
+    const correct = game.puzzle.solution[r] === c;
+    audio.play(correct ? "place" : "mistake");
+    // Remember what was planted last: if this move completes the board, that
+    // plant is the one the win flourish blooms.
+    if (correct) lastPlanted.current = game.puzzle.plants[game.puzzle.regions[r][c]];
     game.place(r, c);
   };
   const tapCell = (r: number, c: number) => {
@@ -360,15 +368,37 @@ export function GameScreen({ game, onMenu }: Props) {
     audio.play("mark");
     game.tap(r, c);
   };
-
-  // Win fanfare.
-  React.useEffect(() => {
-    if (game.solved) {
-      Haptics?.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      ).catch(() => {});
-      audio.play("win");
+  // A hint can be the move that finishes the board, so it records its plant
+  // too. Mirrors the reducer's HINT scan (first row whose solution cell is not
+  // yet planted); if the two ever drift, the only cost is which plant blooms.
+  const hint = () => {
+    const { solution, plants, regions } = game.puzzle;
+    const row = solution.findIndex(
+      (c, r) => game.states[r][c] !== "placed",
+    );
+    if (row >= 0) {
+      lastPlanted.current = plants[regions[row][solution[row]]];
     }
+    game.requestHint();
+  };
+
+  // Win fanfare: sound + haptic on the solved edge, then the flourish (a big
+  // bloom of the plant that finished the board) holds the screen before the
+  // result card. `flourish` gates WinOverlay; a timer backstops the animation
+  // callback so the modal can never be stranded behind it.
+  const [flourish, setFlourish] = useState(false);
+  React.useEffect(() => {
+    if (!game.solved) {
+      setFlourish(false);
+      return;
+    }
+    Haptics?.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {},
+    );
+    audio.play("win");
+    setFlourish(true);
+    const t = setTimeout(() => setFlourish(false), FLOURISH_MS + 400);
+    return () => clearTimeout(t);
   }, [game.solved]);
 
   // Out of hearts: sound the game-over cue (the FailOverlay takes the screen).
@@ -546,7 +576,7 @@ export function GameScreen({ game, onMenu }: Props) {
           label="Hint"
           icon="bulb"
           variant="ghost"
-          onPress={game.requestHint}
+          onPress={hint}
           disabled={tutorial}
           badge={game.hintsUsed}
           flex
@@ -579,7 +609,20 @@ export function GameScreen({ game, onMenu }: Props) {
         />
       )}
 
-      {game.solved && (
+      {game.solved && flourish && (
+        <WinFlourish
+          plantId={
+            // The freshly unlocked card outranks the last plant placed — it is
+            // the more exciting thing to bloom, and the win card reveals it next.
+            (game.mode === "level" && game.newCards[0]?.plantId) ||
+            lastPlanted.current ||
+            game.puzzle.plants[0]
+          }
+          onDone={() => setFlourish(false)}
+        />
+      )}
+
+      {game.solved && !flourish && (
         <WinOverlay
           level={game.level}
           seconds={game.seconds}

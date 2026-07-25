@@ -330,8 +330,17 @@ walkthrough can't cost the L1 under-par star. Completion persists
 - A rejected guess is a **red ✕ cell**: steady `theme.danger` wash + a larger
   `theme.dangerDark` ✕ (no pulse — these persist, so a breathing tile would be
   noise). Nothing else on the board is ever tinted red.
-- Win: custom `Confetti` (Animated, dependency-free) + result card with time /
-  best / "New best".
+- Win: a **flourish beat first**, then the modal. `WinFlourish.tsx` dims the
+  solved board (not fully — the finished grid should still read behind it) and
+  blooms one plant huge in the middle with a gold halo and a 12-spark burst for
+  `FLOURISH_MS` (1250ms); `GameScreen`'s `flourish` state gates `WinOverlay`
+  until it ends, with a `setTimeout` backstopping the animation callback so a
+  dropped callback can't strand the result card. The plant is the freshly
+  unlocked card's if the solve earned one (the win card reveals it seconds
+  later), else the last one planted — tracked in `lastPlanted` by both `place`
+  and the `hint` wrapper, since a hint can be the finishing move. Then the
+  custom `Confetti` (Animated, dependency-free) + result card with time / best /
+  "New best".
 - Theme: "garden at dusk" — deep green ground so pastel clusters pop
   (`src/theme.ts`).
 
@@ -377,7 +386,8 @@ src/components/
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
-  Button.tsx (solid/ghost/danger), WinOverlay.tsx (Next level / coming soon),
+  Button.tsx (solid/ghost/danger), WinFlourish.tsx (big plant bloom before the
+  win modal), WinOverlay.tsx (Next level / coming soon),
   FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
 src/theme.ts, src/format.ts
