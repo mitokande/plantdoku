@@ -207,8 +207,10 @@ npm start            # Expo dev server (Expo Go / simulators)
 npm run web          # run in a browser
 npm test             # headless game-core tests (tsx src/game/runTests.ts)
 npm run typecheck    # tsc --noEmit
-# Regenerate sprites from the source sheet:
-SHEET=/path/to/sheet.png python3 scripts/slice_sprites.py
+npm run sprites:check          # audit assets/plants against the sprite spec
+# Rebuild the plant sprites from the raw art (see Sprite assets):
+python3 scripts/prep_sprites.py --in art/raw --fit area
+SHEET=/path/to/sheet.png python3 scripts/slice_sprites.py   # sheet -> raw cuts
 python3 scripts/make_sfx.py    # regenerate the placeholder SFX (assets/audio/)
 ```
 
@@ -384,6 +386,7 @@ App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) 
                  full-screen GameScreen (no HUD/nav); Android back returns
                  to the Home tab first; resume-aware Play/Daily entry points
                  + AppState listener (reminder re-sync + resume flush)
+scripts/gen_art.py           Gemini image-gen for the raw art (prompts + CLI)
 scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
 scripts/pick_level_seeds.ts  offline seed picker for the level table
 scripts/make_sfx.py          stdlib-only SFX synth -> assets/audio/*.wav
@@ -422,11 +425,44 @@ keeps a closest-to-band solvable board as a fallback so it never throws.
 
 ## Sprite assets
 
-`scripts/slice_sprites.py` slices the source sheet (1254×1254, 17 plants: rows of
-4/4/4/5) into transparent PNGs in `assets/plants/`. It flood-fills the dark
-background to transparent, then extracts each plant as a **connected component**
-(via `scipy.ndimage.label`) so neighbouring sprites never bleed into a crop. The
-17 ids in `palette.ts` must match the output filenames.
+> **Art status**: the plant set was rebuilt because the previous one copied
+> *Plants vs. Zombies* character designs and trademarked names (Peashooter,
+> Sunflower, Chomper, Cherry Bomb, Garlic — which were also the `palette.ts`
+> ids and `cards.ts` card names). Those files are deleted; the 17 ids are now
+> the owner's own AI-generated botanical set (`sprout` · `sunflower` · `daisy`
+> · `clover` · `tulip` · `cactus` · `aloe` · `fern` · `toadstool` · `lavender`
+> · `monstera` · `waterlily` · `bonsai` · `pitcher` · `frostbloom` ·
+> `emberbud` · `nightspire`), ordered to match `CARDS`. All 17 are now real
+> art — the last four placeholders (`sunflower`, `daisy`, `cactus`, `aloe`)
+> were generated with `scripts/gen_art.py` and `npm run sprites:check` passes.
+> **The app icon and splash are still the old infringing art.** Full plan,
+> style spec and generation prompts: `docs/art-brief.md`.
+
+Raw source art lives in `art/raw/<plant-id>.png` (the master files);
+`assets/plants/` holds only the normalised 512² output the app bundles. Ids,
+requires (`plants.ts`) and files must always land together — Metro resolves
+`require` at bundle time, so a missing sprite breaks the build, not just a
+render.
+
+`scripts/prep_sprites.py` is the ingest pipeline for *any* source of art
+(commission, licensed pack, AI batch, vector export): `--in <dir>` of
+`<plant-id>.png` files → trim to the real silhouette → scale to a uniform
+content box → centre on a **512×512** transparent canvas → optimise. `--fit
+area` normalises visual *mass* rather than bounding boxes (mixes spindly and
+solid plants without one looking undersized). Sources that arrive on a flat
+backdrop instead of transparency (an AI batch, a photo) are **cut out
+automatically, per file** — `is_opaque` decides, so a mixed directory is safe;
+the fill is seeded from every border pixel and the kept area is eroded 1px so
+no backdrop halo survives (`--bg always|never` forces it, `--bg-tol` tunes it).
+Ids are read from `palette.ts`, so source art and code can't
+drift. `npm run sprites:check` (= `--check`) audits the shipped set — square,
+uniform, ≥384px (the card modal is 120pt = 360px at 3x), padded, not oversized
+— and exits non-zero, so it can gate a release build. It currently passes.
+
+`scripts/slice_sprites.py` handles the older path: one 1254×1254 sheet (17
+plants, rows of 4/4/4/5) → flood-fill the background, extract each plant as a
+**connected component** (via `scipy.ndimage.label`) so neighbours never bleed
+into a crop. Feed its output through `prep_sprites.py` to normalise it.
 
 ## Verification approach (no device needed)
 

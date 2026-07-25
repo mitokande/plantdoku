@@ -2,24 +2,28 @@
 // No react-native / asset imports here so this module runs under plain Node.
 
 /** Plant ids — must exactly match the PNG filenames in assets/plants/. */
+// Ordered to match CARDS in cards.ts (commons → rares → legendaries); the
+// board only ever maps region id → PLANT_IDS[i], so the order is free.
+// Every id must have a file in assets/plants and a require in plants.ts —
+// see docs/art-brief.md for the concept + style each id stands for.
 export const PLANT_IDS: string[] = [
-  "peashooter",
+  "sprout",
   "sunflower",
-  "cactus",
-  "chomper",
-  "ice-crystal",
-  "garlic",
-  "leaf",
-  "cherries",
-  "bluebell",
-  "yellow-mushroom",
-  "purple-mushroom",
-  "aloe",
-  "flame",
-  "lotus",
-  "vine",
   "daisy",
-  "purple-spike",
+  "clover",
+  "tulip",
+  "cactus",
+  "aloe",
+  "fern",
+  "toadstool",
+  "lavender",
+  "monstera",
+  "waterlily",
+  "bonsai",
+  "pitcher",
+  "frostbloom",
+  "emberbud",
+  "nightspire",
 ];
 
 /**

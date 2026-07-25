@@ -10,6 +10,13 @@ import type { Difficulty } from "../game/types";
 import { formatTime } from "../format";
 import { radius, theme } from "../theme";
 
+// The little row of plants over the wordmark. Purely decorative, picked for
+// contrasting silhouettes and hues at 50pt. Filtered through PLANT_SOURCES so a
+// renamed/dropped id (the art rebuild binned three of the originals, which just
+// rendered as gaps) can never silently thin the row out again.
+const DECO_PLANTS = ["sunflower", "toadstool", "tulip", "monstera", "lavender"]
+  .filter((id) => PLANT_SOURCES[id]);
+
 /** The saved mid-solve board behind the Continue card (see useGame.resume). */
 export interface ResumeInfo {
   mode: "level" | "daily" | "endless";
@@ -141,7 +148,7 @@ export function HomeScreen({
       <View style={styles.content}>
         <Rise delay={0}>
           <View style={styles.deco}>
-            {["sunflower", "cactus", "cherries", "lotus", "bluebell"].map((id) => (
+            {DECO_PLANTS.map((id) => (
               <Image key={id} source={PLANT_SOURCES[id]} style={styles.decoImg} />
             ))}
           </View>

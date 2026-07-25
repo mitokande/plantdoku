@@ -37,6 +37,13 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# asset scripts
+__pycache__/
+
+# local build artefacts (EAS output — never commit these, they're ~60MB each)
+*.apk
+*.aab
+
 # generated native folders
 /ios
 /android

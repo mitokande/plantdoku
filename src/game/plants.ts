@@ -1,25 +1,27 @@
 // RN-only: maps each plant id to its bundled sprite. Kept separate from
 // palette.ts so the generator/solver stay importable under plain Node (no
 // require('*.png')). Keys must match PLANT_IDS / the files in assets/plants.
+// (Metro resolves these at bundle time, so a missing file breaks the build,
+// not just a render — ids and art always land together.)
 
 import type { ImageSourcePropType } from "react-native";
 
 export const PLANT_SOURCES: Record<string, ImageSourcePropType> = {
-  peashooter: require("../../assets/plants/peashooter.png"),
+  sprout: require("../../assets/plants/sprout.png"),
   sunflower: require("../../assets/plants/sunflower.png"),
-  cactus: require("../../assets/plants/cactus.png"),
-  chomper: require("../../assets/plants/chomper.png"),
-  "ice-crystal": require("../../assets/plants/ice-crystal.png"),
-  garlic: require("../../assets/plants/garlic.png"),
-  leaf: require("../../assets/plants/leaf.png"),
-  cherries: require("../../assets/plants/cherries.png"),
-  bluebell: require("../../assets/plants/bluebell.png"),
-  "yellow-mushroom": require("../../assets/plants/yellow-mushroom.png"),
-  "purple-mushroom": require("../../assets/plants/purple-mushroom.png"),
-  aloe: require("../../assets/plants/aloe.png"),
-  flame: require("../../assets/plants/flame.png"),
-  lotus: require("../../assets/plants/lotus.png"),
-  vine: require("../../assets/plants/vine.png"),
   daisy: require("../../assets/plants/daisy.png"),
-  "purple-spike": require("../../assets/plants/purple-spike.png"),
+  clover: require("../../assets/plants/clover.png"),
+  tulip: require("../../assets/plants/tulip.png"),
+  cactus: require("../../assets/plants/cactus.png"),
+  aloe: require("../../assets/plants/aloe.png"),
+  fern: require("../../assets/plants/fern.png"),
+  toadstool: require("../../assets/plants/toadstool.png"),
+  lavender: require("../../assets/plants/lavender.png"),
+  monstera: require("../../assets/plants/monstera.png"),
+  waterlily: require("../../assets/plants/waterlily.png"),
+  bonsai: require("../../assets/plants/bonsai.png"),
+  pitcher: require("../../assets/plants/pitcher.png"),
+  frostbloom: require("../../assets/plants/frostbloom.png"),
+  emberbud: require("../../assets/plants/emberbud.png"),
+  nightspire: require("../../assets/plants/nightspire.png"),
 };

@@ -37,7 +37,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "tsx src/game/runTests.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sprites:check": "python3 scripts/prep_sprites.py --check",
+    "art:gen": "python3 scripts/gen_art.py"
   },
   "private": true
 }

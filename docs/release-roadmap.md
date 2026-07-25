@@ -33,6 +33,31 @@ Already done and in good shape — no work needed here:
 
 ## P0 — Release blockers
 
+### Art / IP
+
+The shipped art copied *Plants vs. Zombies* character designs (Peashooter,
+Sunflower, Chomper, Cherry Bomb, Garlic) under their trademarked names — which
+were also the ids in `palette.ts` and the card names in `cards.ts`. That risks
+takedown and developer-account termination on both stores, so it outranks
+everything else on this list.
+
+- [x] **Plant sprites replaced.** *Mostly done.* The 17 ids are now the
+  owner's own AI-generated botanical set, normalised to 512² by
+  `scripts/prep_sprites.py`; the infringing files are deleted. Spec, style and
+  prompts: `docs/art-brief.md`.
+- [ ] **Replace the 4 placeholder sprites** — `sunflower`, `daisy`, `cactus`,
+  `aloe` are `PLACEHOLDER` stand-ins. Generate them (prompts are in the brief's
+  appendix), drop into `art/raw/`, re-run prep. **`npm run sprites:check` fails
+  until then** — wire it into the release gate so a build can't ship one.
+- [ ] **Rebuild the app icon + splash** from the new set: `assets/icon.png`,
+  `assets/splash-icon.png`, `assets/android-icon-foreground.png`,
+  `assets/android-icon-monochrome.png`, `assets/favicon.png` still show the
+  copied Sunflower and Cherries. (Also fixes the stray accent in the current
+  wordmark: "PLANTDÓKU".)
+- [ ] **Decide on git history.** The infringing PNGs are gone from the working
+  tree but remain in past commits — scrub with `git filter-repo` if the repo
+  goes public.
+
 ### Meta / store
 
 - [ ] **Start Google Play closed testing immediately** — this is the
@@ -147,7 +172,7 @@ Already done and in good shape — no work needed here:
 
 ### Release gate (mechanical, per build)
 
-- [ ] `npm test` + `npm run typecheck` green.
+- [ ] `npm test` + `npm run typecheck` + `npm run sprites:check` green.
 - [ ] `npx expo export -p android` bundles clean.
 - [ ] Fresh-install run-through on device: tutorial → L1–3 → daily → a fail →
   flush data → tutorial again.
