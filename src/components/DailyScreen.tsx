@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { dailyNumber, todayKey } from "../game/daily";
-import { formatTime } from "../format";
+import { todayKey } from "../game/daily";
+import { formatDateKey, formatTime } from "../format";
 import { radius, theme } from "../theme";
 import { Button } from "./Button";
 
@@ -37,7 +37,7 @@ export function DailyScreen({
     <View style={styles.wrap}>
       <View style={styles.hero}>
         <Ionicons name="sunny" size={40} color={theme.gold} />
-        <Text style={styles.heroTitle}>Daily puzzle #{dailyNumber(tk)}</Text>
+        <Text style={styles.heroTitle}>Daily puzzle {formatDateKey(tk)}</Text>
         <Text style={styles.heroSub}>
           {dailyDone ? (
             <>
@@ -91,9 +91,8 @@ export function DailyScreen({
         <ScrollView style={styles.history}>
           {history.map((key) => (
             <View key={key} style={styles.row}>
-              <Text style={styles.rowNum}>#{dailyNumber(key)}</Text>
               <Text style={styles.rowDate}>
-                {key}
+                {formatDateKey(key)}
                 {key === tk ? "  · today" : ""}
               </Text>
               <Text style={styles.rowTime}>{formatTime(dailyLog[key])}</Text>
@@ -196,16 +195,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.panelLine,
   },
-  rowNum: {
+  rowDate: {
+    flex: 1,
     color: theme.gold,
     fontSize: 14,
     fontWeight: "900",
-    width: 44,
-  },
-  rowDate: {
-    flex: 1,
-    color: theme.textDim,
-    fontSize: 13.5,
   },
   rowTime: {
     color: theme.text,

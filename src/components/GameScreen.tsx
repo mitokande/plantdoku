@@ -17,10 +17,9 @@ import { analytics } from "../analytics";
 import { audio } from "../audio";
 import type { Game } from "../state/useGame";
 import { nextCard } from "../game/cards";
-import { dailyNumber } from "../game/daily";
 import { parSeconds } from "../game/stars";
 import type { Coord } from "../game/types";
-import { formatTime } from "../format";
+import { formatDateKey, formatTime } from "../format";
 import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, theme } from "../theme";
 import { Board, BOARD_FRAME, boardMetrics } from "./Board";
@@ -464,7 +463,7 @@ export function GameScreen({ game, onMenu }: Props) {
             {game.mode === "daily" && game.dailyKey ? (
               <>
                 <Ionicons name="sunny" size={14} color={theme.text} />
-                {` Daily #${dailyNumber(game.dailyKey)}`}
+                {` Daily ${formatDateKey(game.dailyKey)}`}
               </>
             ) : game.mode === "endless" && game.endlessDifficulty ? (
               <>
@@ -638,7 +637,7 @@ export function GameScreen({ game, onMenu }: Props) {
           hasNext={game.hasNextLevel}
           daily={
             game.mode === "daily" && game.dailyKey
-              ? { number: dailyNumber(game.dailyKey), streak: game.dailyStreak }
+              ? { date: formatDateKey(game.dailyKey), streak: game.dailyStreak }
               : null
           }
           stars={
@@ -662,7 +661,7 @@ export function GameScreen({ game, onMenu }: Props) {
             if (game.mode !== "daily" || !game.dailyKey) return;
             const streak = game.dailyStreak;
             const message =
-              `🌻 Plantdoku Daily #${dailyNumber(game.dailyKey)} — ` +
+              `🌻 Plantdoku Daily ${formatDateKey(game.dailyKey)} — ` +
               `⏱ ${formatTime(game.seconds)}` +
               (streak > 1 ? ` · 🔥 ${streak} day streak` : "");
             // Rejects on web when navigator.share is unavailable — ignore.
@@ -682,7 +681,7 @@ export function GameScreen({ game, onMenu }: Props) {
         <FailOverlay
           title={
             game.mode === "daily" && game.dailyKey
-              ? `Daily #${dailyNumber(game.dailyKey)}`
+              ? `Daily ${formatDateKey(game.dailyKey)}`
               : game.mode === "endless" && game.endlessDifficulty
                 ? `${DIFF_LABEL[game.endlessDifficulty]} board`
                 : `Level ${game.level}`

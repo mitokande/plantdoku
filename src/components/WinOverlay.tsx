@@ -14,7 +14,7 @@ interface Props {
   seconds: number;
   hasNext: boolean;
   /** Set when a daily puzzle was solved — switches title/stats/actions. */
-  daily?: { number: number; streak: number } | null;
+  daily?: { date: string; streak: number } | null;
   /** Set in endless mode — "Next level" becomes "New board". */
   endless?: boolean;
   /** Level-mode star rating for this solve (1..3) + the 3-star par time. */
@@ -92,7 +92,7 @@ export function WinOverlay({
         <Ionicons name="leaf" size={46} color={theme.accent} />
         <Text style={styles.title}>
           {daily
-            ? `Daily #${daily.number} solved!`
+            ? `Daily ${daily.date} solved!`
             : endless
               ? "Board solved!"
               : `Level ${level} solved!`}

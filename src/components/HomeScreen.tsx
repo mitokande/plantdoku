@@ -3,11 +3,10 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { CARDS, nextCard, RARITY_COLORS, unlockedCards } from "../game/cards";
-import { dailyNumber } from "../game/daily";
 import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
-import { formatTime } from "../format";
+import { formatDateKey, formatTime } from "../format";
 import { radius, theme } from "../theme";
 
 // The little row of plants over the wordmark. Purely decorative, picked for
@@ -98,7 +97,7 @@ const DIFF_LABEL: Record<Difficulty, string> = {
 /** What the Continue card calls the board it saved. */
 function resumeLabel(r: ResumeInfo): string {
   if (r.mode === "daily") {
-    return r.dailyKey ? `Daily #${dailyNumber(r.dailyKey)}` : "Daily puzzle";
+    return r.dailyKey ? `Daily ${formatDateKey(r.dailyKey)}` : "Daily puzzle";
   }
   if (r.mode === "endless") {
     return `Endless · ${r.difficulty ? DIFF_LABEL[r.difficulty] : ""}`.trim();

@@ -5,3 +5,9 @@ export function formatTime(seconds: number | undefined | null): string {
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+// Format a daily "YYYY-MM-DD" date key as "DD/MM".
+export function formatDateKey(key: string): string {
+  const [, m, d] = key.split("-");
+  return `${d}/${m}`;
+}
