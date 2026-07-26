@@ -1,37 +1,117 @@
-// Shared visual theme — a bright "morning garden" palette: soft sunlit greens
-// with near-white panels, so the botanical region tiles and plant sprites read
-// crisply on a phone screen outdoors.
+// Shared visual system — a bright "morning garden" look: a warm off-white
+// canvas, white cards, dark botanical text, and green reserved for progress
+// and primary actions.
 //
-// Surface hierarchy (light → dark): panel (raised card) > bgAlt (chips, overlay
-// cards) > bg (page + recessed slots inside a panel) > panelEdge (the chunky
-// 3D bottom edge). `frame` stays deliberately dark: it tints locked-card
-// silhouettes and dims ✕-marked tiles, so it must read as a shadow, not a wash.
+// Surface hierarchy (lightest → darkest): panel (raised card / modal) > bg
+// (page canvas) > bgAlt (recessed slots, chips, progress tracks) > panelEdge
+// (the chunky 3D bottom edge). Note bg sits *above* bgAlt: the page is a quiet
+// near-white canvas and anything "sunken" into a card is darker than it, which
+// is what gives a light theme its layers.
+//
+// Colour is assigned by function, not decoration:
+//   accent (green)  primary actions, progress, active selection
+//   text            dark forest green — type and icons
+//   gold            stars, rewards, card rarity — never a plain card border
+//   wood            the board's garden bed only
+//   danger          mistakes and hearts only
+// `frame` stays deliberately dark — it tints locked-card silhouettes, so it
+// must read as a shadow, not a wash. `mark` (the board's ✕ glyph) is the
+// opposite case: a soft mid forest green, because most cells on a solved board
+// end up eliminated and a dark mark would drown out the plants.
 
 export const theme = {
-  bg: "#E4EEDA",
-  bgAlt: "#F3F8EC",
+  bg: "#F3F6EA",
+  bgAlt: "#E8F0DE",
   panel: "#FFFFFF",
-  panelLine: "#D2DFC6",
+  panelLine: "#D5DFC9",
   frame: "#2C4433",
-  text: "#1D3324",
-  textDim: "#5A7560",
-  accent: "#6FBF3A",
-  accentDark: "#4B8F24",
+  text: "#183426",
+  textDim: "#5D7062",
+  accent: "#69C938",
+  accentDark: "#429A27",
+  /** Type/icon colour on top of `accent` — a very dark forest green, not black. */
+  onAccent: "#12300F",
   danger: "#E2675A",
   dangerDark: "#9E3D32",
   dangerTile: "#E9A39B",
-  mark: "#2A3F30",
-  gold: "#F0B429",
+  /** Type/icon colour on top of `danger`. */
+  onDanger: "#33100B",
+  mark: "#42604D",
+  gold: "#F2B224",
+  /** Type/icon colour on top of `gold`. */
+  onGold: "#3D2E08",
   // bottom-edge colours for the chunky "3D" hybrid-casual buttons/cards
-  panelEdge: "#C9D6BE",
-  // wooden board frame
-  wood: "#C79A6A",
-  woodDark: "#A87B4E",
-  woodLight: "#E2BF92",
+  panelEdge: "#CBD8BD",
+  // wooden board frame (the garden bed) — light enough not to overpower the
+  // pale interface it sits in
+  wood: "#C99A6A",
+  woodDark: "#AC7F52",
+  woodLight: "#E4C29A",
+  /** The bed's soil, seen in the gaps between tiles — lighter than the rim. */
+  soil: "#D9B489",
 };
 
 /** Dimming scrim behind modal cards (light theme keeps a soft green shade). */
 export const scrim = "rgba(26,45,32,0.55)";
 
-export const radius = { sm: 8, md: 14, lg: 22 };
+/**
+ * One corner-radius scale for the whole app — pick by component role rather
+ * than eyeballing a number per file. `cell` is a *fraction* of the tile size
+ * (board tiles scale with the grid).
+ */
+export const radius = {
+  sm: 10,
+  chip: 12,
+  md: 16,
+  btn: 20,
+  lg: 24,
+  modal: 32,
+  cell: 0.15,
+};
+
+/**
+ * One soft shadow system. `card` for resting surfaces, `raised` for the
+ * primary button and the tab bar, `modal` for overlay cards. All are soft and
+ * vertical — no dark hard-edged drops.
+ */
+export const shadow = {
+  card: {
+    shadowColor: "#1C3322",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  raised: {
+    shadowColor: "#1C3322",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 7,
+  },
+  modal: {
+    shadowColor: "#0E2114",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 14,
+  },
+} as const;
+
+/**
+ * Type scale. Uppercase + bold + wide tracking all at once reads as shouting,
+ * so `overline` (the only uppercase style) keeps tracking modest and everything
+ * else stays sentence case.
+ */
+export const typography = {
+  screenTitle: { fontSize: 38, fontWeight: "900" },
+  modalTitle: { fontSize: 28, fontWeight: "900" },
+  cardTitle: { fontSize: 21, fontWeight: "800" },
+  button: { fontSize: 19, fontWeight: "800" },
+  body: { fontSize: 16, fontWeight: "500" },
+  caption: { fontSize: 13.5, fontWeight: "600" },
+  overline: { fontSize: 12.5, fontWeight: "800", letterSpacing: 0.6 },
+} as const;
+
+/** 8-point spacing: space(1)=4 · space(2)=8 · space(4)=16 · space(6)=24. */
 export const space = (n: number) => n * 4;

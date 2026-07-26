@@ -9,14 +9,16 @@ import {
 
 import type { CellState, Coord, Puzzle } from "../game/types";
 import { cellKey } from "../game/validator";
-import { radius, theme } from "../theme";
+import { radius, shadow, theme } from "../theme";
 import { Cell } from "./Cell";
 
-// Wooden rim around the grid. FRAME is the full rim width the touch math
-// sees (dark border + padding); locationX/Y are border-box relative on both
-// RN and web, so cells start exactly FRAME px from the view's edge.
-const FRAME = 10;
-const FRAME_BORDER = 3;
+// Wooden rim around the grid — a garden bed, kept deliberately slim so it
+// frames the puzzle instead of competing with it. FRAME is the full rim width
+// the touch math sees (dark border + padding); locationX/Y are border-box
+// relative on both RN and web, so cells start exactly FRAME px from the view's
+// edge.
+const FRAME = 7;
+const FRAME_BORDER = 2;
 // position:absolute children are placed relative to the *padding* edge (i.e.
 // already inset by the border), unlike locationX/Y above which is border-box
 // relative — so absolute overlays over the grid (ring, hintCell) must offset
@@ -300,6 +302,9 @@ export function Board({
       pointerEvents="box-only"
       style={[styles.frame, { width: frameW }]}
     >
+      {/* Soil behind the grid — it's what shows through the tile gaps, and it
+          stays lighter than the rim so the gaps read as mortar, not shadow. */}
+      <View pointerEvents="none" style={styles.soil} />
       <View pointerEvents="none" style={styles.frameGloss} />
       {Array.from({ length: size }, (_, r) => (
         <View key={r} style={styles.row}>
@@ -350,12 +355,22 @@ const styles = StyleSheet.create({
     backgroundColor: theme.wood,
     borderWidth: FRAME_BORDER,
     borderColor: theme.woodDark,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     overflow: "hidden",
+    ...shadow.card,
   },
-  // 1px light ring just inside the dark border — the "carved wood" highlight.
   // Absolute children sit relative to the padding edge, so 0/0/0/0 hugs the
-  // inside of the border.
+  // inside of the border — i.e. exactly the grid's footprint.
+  soil: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: theme.soil,
+    borderRadius: radius.sm,
+  },
+  // 1px light ring just inside the border — the "carved wood" highlight.
   frameGloss: {
     position: "absolute",
     top: 0,
@@ -364,7 +379,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderWidth: 1,
     borderColor: theme.woodLight,
-    borderRadius: radius.lg - FRAME_BORDER,
+    borderRadius: radius.md - FRAME_BORDER,
   },
   row: {
     flexDirection: "row",

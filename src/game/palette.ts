@@ -28,24 +28,28 @@ export const PLANT_IDS: string[] = [
 
 /**
  * Region tints. At least as many as the largest board (9).
- * Botanical tones — garden colours with enough saturation to hold their own
- * against the light "morning garden" ground (a paler set washed out next to
- * the near-white panels). Hues stay evenly spread at matched lightness (light
- * enough for the dark ✕ mark and sprites to read) so no two are near-twins;
- * the generator additionally assigns them so that touching clusters get
- * maximally different colours.
+ *
+ * These are the **available** (untouched) tile colours: light botanical
+ * pastels. Cell.tsx derives the other two tile states from them — a
+ * desaturated wash for ✕-eliminated cells and a brighter one for a planted
+ * cell — so a solved cell is the most vivid thing on the board and the base
+ * tint stays pale enough for the embossed silhouette and the dark ✕ to read.
+ *
+ * Hues stay evenly spread at matched lightness so no two are near-twins; the
+ * generator additionally assigns them so that touching clusters get maximally
+ * different colours.
  */
 export const REGION_COLORS: string[] = [
-  "#E0938B", // dusty rose
-  "#E0AC77", // terracotta clay
-  "#D8C87A", // sand
-  "#B4C775", // pale olive
-  "#8CC181", // sage
-  "#74C39B", // eucalyptus
-  "#71BEB7", // dusty teal
-  "#7CAED4", // rain blue
-  "#9AA0D2", // lavender slate
-  "#B795CC", // wisteria
-  "#CE92C0", // mauve
-  "#DC9AAA", // old rose
+  "#EFB3AB", // dusty rose
+  "#EFC79B", // terracotta clay
+  "#E6DA9E", // sand
+  "#C9DA97", // pale olive
+  "#A7D79C", // sage
+  "#94D8B4", // eucalyptus
+  "#92D6CF", // dusty teal
+  "#9DC8E4", // rain blue
+  "#B3B8E2", // lavender slate
+  "#CBAEDC", // wisteria
+  "#E0AED3", // mauve
+  "#EDB4C1", // old rose
 ];

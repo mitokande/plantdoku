@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { theme } from "../theme";
+import { shadow, theme, typography } from "../theme";
 
 export type Tab = "home" | "cards" | "daily";
 
@@ -32,13 +32,18 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
             <Pressable
               key={key}
               onPress={() => onTab(key)}
-              style={[styles.tab, active && styles.tabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={label}
+              style={styles.tab}
             >
-              <View>
+              {/* The selection marker hugs the icon: a full-width green capsule
+                  pulls attention off the screen's own content. */}
+              <View style={[styles.iconSlot, active && styles.iconSlotActive]}>
                 <Ionicons
                   name={active ? icon : iconOff}
                   size={21}
-                  color={active ? "#0E2110" : theme.textDim}
+                  color={active ? theme.onAccent : theme.textDim}
                 />
                 {key === "daily" && dailyDot && <View style={styles.dot} />}
               </View>
@@ -62,45 +67,46 @@ const styles = StyleSheet.create({
   },
   bar: {
     flexDirection: "row",
-    gap: 6,
     padding: 6,
     borderRadius: 999,
     backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
+    ...shadow.raised,
   },
   tab: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
+    minHeight: 44,
+    paddingVertical: 4,
+  },
+  iconSlot: {
+    width: 52,
+    height: 30,
+    alignItems: "center",
+    justifyContent: "center",
     borderRadius: 999,
   },
-  tabActive: {
+  iconSlotActive: {
     backgroundColor: theme.accent,
   },
   dot: {
     position: "absolute",
-    top: -1,
-    right: -7,
-    width: 10,
-    height: 10,
+    top: 2,
+    right: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
     backgroundColor: theme.gold,
     borderWidth: 1.5,
     borderColor: theme.panel,
   },
   label: {
-    color: theme.textDim,
+    ...typography.overline,
+    color: theme.text,
     fontSize: 11.5,
-    fontWeight: "800",
     marginTop: 2,
   },
   labelActive: {
-    color: "#0E2110",
+    color: theme.accentDark,
+    fontWeight: "900",
   },
 });

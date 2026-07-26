@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
-import { radius, scrim, theme } from "../theme";
+import { radius, scrim, shadow, theme } from "../theme";
 import { Button } from "./Button";
 
 interface Props {
@@ -84,10 +84,9 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 360,
-    backgroundColor: theme.bgAlt,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
+    backgroundColor: theme.panel,
+    borderRadius: radius.modal,
+    ...shadow.modal,
     padding: 24,
     alignItems: "center",
   },

@@ -1,11 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
-import { Animated, Image, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { nextCard, RARITY_COLORS, type PlantCard } from "../game/cards";
+import {
+  CARDS,
+  nextCard,
+  RARITY_COLORS,
+  unlockedCards,
+  type PlantCard,
+} from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
-import { radius, scrim, theme } from "../theme";
+import { radius, scrim, shadow, space, theme, typography } from "../theme";
 import { Button } from "./Button";
 import { Confetti } from "./Confetti";
 
@@ -15,10 +21,14 @@ interface Props {
   hasNext: boolean;
   /** Set when a daily puzzle was solved — switches title/stats/actions. */
   daily?: { date: string; streak: number } | null;
-  /** Set in endless mode — "Next level" becomes "New board". */
+  /** Set in endless mode — "Continue" becomes "New board". */
   endless?: boolean;
-  /** Level-mode star rating for this solve (1..3) + the 3-star par time. */
-  stars?: { earned: number; par: number } | null;
+  /**
+   * Level-mode star rating for this solve. `hintsUsed` is here so the card can
+   * show *which* goals were met rather than a bare count — `starsFor` is
+   * 1 (solved) + no-hints + under-par, so those three lines are the rating.
+   */
+  stars?: { earned: number; par: number; hintsUsed: number } | null;
   /** Plant cards unlocked by this solve (level mode only). */
   newCards?: PlantCard[];
   /** Total stars across all levels — drives the next-card progress bar. */
@@ -27,6 +37,11 @@ interface Props {
   onNext: () => void;
   onMenu: () => void;
 }
+
+// The card-unlock reveal: silhouette holds, flips, full-colour plant lands,
+// then the name. Tapping the backdrop skips straight to the end.
+const REVEAL_DELAY = 320;
+const REVEAL_MS = 620;
 
 export function WinOverlay({
   level,
@@ -46,6 +61,7 @@ export function WinOverlay({
   // one — null once the whole collection is unlocked.
   const upcoming = !wonCard && stars != null ? nextCard(totalStars) : null;
   const progress = upcoming ? Math.min(totalStars / upcoming.stars, 1) : 0;
+  const collected = unlockedCards(totalStars).length;
 
   // Springy entrance: backdrop fades while the card scales up with overshoot.
   const enter = useRef(new Animated.Value(0)).current;
@@ -58,19 +74,28 @@ export function WinOverlay({
     }).start();
   }, [enter]);
 
-  // The won card is the hero — it pops in a beat after the card settles, like
-  // it's being drawn from a pack.
-  const cardPop = useRef(new Animated.Value(0)).current;
+  // The won card is the hero: it flips from face-down silhouette to the plant.
+  const flip = useRef(new Animated.Value(0)).current;
+  const [named, setNamed] = useState(false);
   useEffect(() => {
     if (!wonCard) return;
-    Animated.spring(cardPop, {
+    const anim = Animated.timing(flip, {
       toValue: 1,
-      delay: 400,
-      friction: 5,
-      tension: 80,
+      delay: REVEAL_DELAY,
+      duration: REVEAL_MS,
       useNativeDriver: true,
-    }).start();
-  }, [wonCard, cardPop]);
+    });
+    anim.start(({ finished }) => finished && setNamed(true));
+    return () => anim.stop();
+  }, [wonCard, flip]);
+
+  /** Jump the reveal to its end — the reward beat must never be a wait. */
+  const skipReveal = () => {
+    if (!wonCard || named) return;
+    flip.stopAnimation();
+    flip.setValue(1);
+    setNamed(true);
+  };
 
   const fade = enter.interpolate({
     inputRange: [0, 1],
@@ -82,11 +107,24 @@ export function WinOverlay({
     ? `Daily · ${daily.date}`
     : endless
       ? "Endless"
-      : `Level ${level}`;
+      : `Level ${level} complete`;
+
+  // One headline: the card if this solve earned one, otherwise the solve.
+  const title = wonCard ? `${wonCard.name} unlocked!` : "Solved!";
+
+  const goals = stars
+    ? [
+        { label: "Puzzle solved", done: true },
+        { label: "No hints used", done: stars.hintsUsed === 0 },
+        { label: `Finish under ${formatTime(stars.par)}`, done: seconds <= stars.par },
+      ]
+    : [];
 
   return (
     <Animated.View style={[styles.backdrop, { opacity: fade }]}>
       <Confetti />
+      {/* Tap anywhere to skip ahead to the end of the reveal. */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={skipReveal} />
       <Animated.View
         style={[
           styles.card,
@@ -103,55 +141,87 @@ export function WinOverlay({
         ]}
       >
         <Text style={styles.tag}>{tag}</Text>
-        <Text style={styles.title}>Solved!</Text>
+        <Text style={styles.title}>{title}</Text>
 
         {wonCard ? (
-          <Animated.View
-            style={[
-              styles.hero,
-              {
-                opacity: cardPop,
-                transform: [
-                  {
-                    scale: cardPop.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0.4, 1],
-                    }),
-                  },
-                  {
-                    rotate: cardPop.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ["-8deg", "0deg"],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
+          <View style={styles.hero}>
             <View style={styles.heroFrameWrap}>
-              <View
+              <Animated.View
                 style={[
                   styles.heroGlow,
-                  { backgroundColor: RARITY_COLORS[wonCard.rarity] },
+                  {
+                    backgroundColor: RARITY_COLORS[wonCard.rarity],
+                    opacity: flip.interpolate({
+                      inputRange: [0.5, 1],
+                      outputRange: [0, 0.35],
+                      extrapolate: "clamp",
+                    }),
+                  },
                 ]}
               />
-              <View
+              <Animated.View
                 style={[
                   styles.heroFrame,
-                  { borderColor: RARITY_COLORS[wonCard.rarity] },
+                  {
+                    borderColor: RARITY_COLORS[wonCard.rarity],
+                    transform: [
+                      {
+                        // |cos|-ish flip: the frame squashes to nothing at the
+                        // halfway point, which is where the faces swap.
+                        scaleX: flip.interpolate({
+                          inputRange: [0, 0.5, 1],
+                          outputRange: [1, 0.04, 1],
+                        }),
+                      },
+                      {
+                        scale: flip.interpolate({
+                          inputRange: [0, 0.5, 0.8, 1],
+                          outputRange: [1, 1, 1.1, 1],
+                        }),
+                      },
+                    ],
+                  },
                 ]}
               >
-                <Image
+                <Animated.Image
                   source={PLANT_SOURCES[wonCard.plantId]}
-                  style={styles.heroImg}
+                  style={[
+                    styles.heroImg,
+                    styles.lockedImg,
+                    styles.heroFace,
+                    {
+                      opacity: flip.interpolate({
+                        inputRange: [0, 0.49, 0.5],
+                        outputRange: [1, 1, 0],
+                      }),
+                    },
+                  ]}
                 />
-              </View>
+                <Animated.Image
+                  source={PLANT_SOURCES[wonCard.plantId]}
+                  style={[
+                    styles.heroImg,
+                    styles.heroFace,
+                    {
+                      opacity: flip.interpolate({
+                        inputRange: [0.5, 0.51, 1],
+                        outputRange: [0, 1, 1],
+                      }),
+                    },
+                  ]}
+                />
+              </Animated.View>
             </View>
-            <Text style={[styles.heroTag, { color: RARITY_COLORS[wonCard.rarity] }]}>
-              NEW CARD{newCards.length > 1 ? `  +${newCards.length - 1}` : ""}
-            </Text>
-            <Text style={styles.heroName}>{wonCard.name}</Text>
-          </Animated.View>
+            {named && (
+              <Text style={styles.heroMeta}>
+                <Text style={{ color: RARITY_COLORS[wonCard.rarity] }}>
+                  {wonCard.rarity}
+                </Text>
+                {`  ·  ${collected}/${CARDS.length} collected`}
+                {newCards.length > 1 ? `  ·  +${newCards.length - 1} more` : ""}
+              </Text>
+            )}
+          </View>
         ) : upcoming ? (
           <View style={styles.progressWrap}>
             <View style={styles.heroFrameWrap}>
@@ -163,61 +233,53 @@ export function WinOverlay({
                 <Text style={styles.lockedQ}>?</Text>
               </View>
             </View>
-            <Text style={styles.lockedTag}>NEXT CARD</Text>
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
             </View>
             <Text style={styles.barLabel}>
               <Ionicons name="star" size={12} color={theme.gold} />
-              {`  ${totalStars}/${upcoming.stars} to unlock`}
+              {`  ${totalStars}/${upcoming.stars} to unlock ${upcoming.name}`}
             </Text>
           </View>
-        ) : (
-          <Ionicons
-            name="leaf"
-            size={34}
-            color={theme.accent}
-            style={styles.icon}
-          />
-        )}
+        ) : null}
 
         {stars && (
-          <View style={styles.stars}>
-            {[1, 2, 3].map((i) => (
-              <Ionicons
-                key={i}
-                name={i <= stars.earned ? "star" : "star-outline"}
-                size={30}
-                color={i <= stars.earned ? theme.gold : theme.panelLine}
-              />
-            ))}
-          </View>
-        )}
-        {stars && stars.earned < 3 && (
-          <Text style={styles.starHint}>
-            3★ · no hints · under {formatTime(stars.par)}
-          </Text>
-        )}
-
-        <View style={styles.chips}>
-          <View style={styles.chip}>
-            <Ionicons name="time-outline" size={14} color={theme.textDim} />
-            <Text style={styles.chipTxt}>{formatTime(seconds)}</Text>
-          </View>
-          {daily && (
-            <View style={styles.chip}>
-              <Ionicons name="flame" size={14} color={theme.danger} />
-              <Text style={styles.chipTxt}>{daily.streak}</Text>
+          <>
+            <View style={styles.stars}>
+              {[1, 2, 3].map((i) => (
+                <Ionicons
+                  key={i}
+                  name={i <= stars.earned ? "star" : "star-outline"}
+                  size={28}
+                  color={i <= stars.earned ? theme.gold : theme.panelLine}
+                />
+              ))}
             </View>
-          )}
-        </View>
-
-        {!daily && !endless && !hasNext && (
-          <Text style={styles.comingSoon}>More levels soon</Text>
+            {stars.earned < 3 && (
+              <View style={styles.goals}>
+                {goals.map((g) => (
+                  <View key={g.label} style={styles.goalRow}>
+                    <Ionicons
+                      name={g.done ? "star" : "star-outline"}
+                      size={13}
+                      color={g.done ? theme.gold : theme.panelLine}
+                    />
+                    <Text style={[styles.goalTxt, g.done && styles.goalDone]}>
+                      {g.label}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
         )}
+
+        <Text style={styles.timeLine}>
+          {`Solved in ${formatTime(seconds)}`}
+          {daily ? `  ·  🔥 ${daily.streak}` : ""}
+        </Text>
 
         <View style={styles.actions}>
-          <Button label="Menu" icon="menu" onPress={onMenu} flex />
           {daily ? (
             <Button
               label="Share"
@@ -229,23 +291,28 @@ export function WinOverlay({
           ) : endless ? (
             <Button
               label="New board"
-              icon="play"
               variant="solid"
               onPress={onNext}
               flex
             />
-          ) : (
-            hasNext && (
-              <Button
-                label="Next level"
-                icon="play"
-                variant="solid"
-                onPress={onNext}
-                flex
-              />
-            )
-          )}
+          ) : hasNext ? (
+            <Button label="Continue" variant="solid" onPress={onNext} flex />
+          ) : null}
         </View>
+        {!daily && !endless && (
+          <Text style={styles.nextLine}>
+            {hasNext ? `Next: Level ${level + 1}` : "More levels coming soon"}
+          </Text>
+        )}
+
+        <Pressable
+          onPress={onMenu}
+          hitSlop={8}
+          accessibilityRole="button"
+          style={styles.menuLink}
+        >
+          <Text style={styles.menuTxt}>Menu</Text>
+        </Pressable>
       </Animated.View>
     </Animated.View>
   );
@@ -261,82 +328,73 @@ const styles = StyleSheet.create({
     backgroundColor: scrim,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: space(6),
   },
   card: {
     width: "100%",
-    maxWidth: 340,
-    backgroundColor: theme.bgAlt,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
-    paddingVertical: 22,
-    paddingHorizontal: 22,
+    maxWidth: 330,
+    backgroundColor: theme.panel,
+    borderRadius: radius.modal,
+    paddingVertical: space(5),
+    paddingHorizontal: space(5),
     alignItems: "center",
+    ...shadow.modal,
   },
   tag: {
+    ...typography.overline,
     color: theme.textDim,
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
     textTransform: "uppercase",
   },
   title: {
+    ...typography.modalTitle,
     color: theme.text,
-    fontSize: 28,
-    fontWeight: "900",
+    textAlign: "center",
     marginTop: 2,
-  },
-  icon: {
-    marginTop: 12,
   },
   hero: {
     alignItems: "center",
-    marginTop: 10,
+    marginTop: space(2),
   },
   heroFrameWrap: {
-    width: 128,
-    height: 128,
+    width: 124,
+    height: 124,
     alignItems: "center",
     justifyContent: "center",
   },
   heroGlow: {
     position: "absolute",
-    width: 128,
-    height: 128,
-    borderRadius: 64,
-    opacity: 0.3,
+    width: 124,
+    height: 124,
+    borderRadius: 62,
   },
   heroFrame: {
-    width: 100,
-    height: 100,
+    width: 104,
+    height: 104,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.panel,
+    backgroundColor: theme.bgAlt,
     borderRadius: radius.md,
     borderWidth: 2.5,
   },
   heroImg: {
-    width: 78,
-    height: 78,
+    width: 80,
+    height: 80,
     resizeMode: "contain",
   },
-  heroTag: {
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    marginTop: 10,
+  // Both faces of the flip stack in the same spot.
+  heroFace: {
+    position: "absolute",
   },
-  heroName: {
-    color: theme.text,
-    fontSize: 19,
-    fontWeight: "800",
-    marginTop: 1,
+  heroMeta: {
+    ...typography.caption,
+    color: theme.textDim,
+    marginTop: space(2),
+    textTransform: "capitalize",
   },
   progressWrap: {
     alignSelf: "stretch",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: space(2),
   },
   lockedFrame: {
     borderColor: theme.panelLine,
@@ -351,19 +409,12 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "900",
   },
-  lockedTag: {
-    color: theme.textDim,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    marginTop: 10,
-  },
   barTrack: {
     alignSelf: "stretch",
-    height: 9,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: theme.bg,
-    marginTop: 10,
+    backgroundColor: theme.bgAlt,
+    marginTop: space(3),
     overflow: "hidden",
   },
   barFill: {
@@ -372,55 +423,55 @@ const styles = StyleSheet.create({
     backgroundColor: theme.gold,
   },
   barLabel: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12.5,
-    fontWeight: "700",
-    marginTop: 6,
+    marginTop: space(2),
   },
   stars: {
     flexDirection: "row",
-    gap: 4,
-    marginTop: 14,
+    gap: space(1),
+    marginTop: space(3),
   },
-  starHint: {
-    color: theme.textDim,
-    fontSize: 11.5,
-    fontWeight: "600",
-    marginTop: 4,
+  goals: {
+    marginTop: space(2),
+    gap: 3,
   },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 16,
-  },
-  chip: {
+  goalRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: theme.panel,
-    borderColor: theme.panelLine,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    gap: 6,
   },
-  chipTxt: {
-    color: theme.text,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  comingSoon: {
+  goalTxt: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12.5,
-    fontWeight: "700",
-    marginTop: 12,
+  },
+  goalDone: {
+    color: theme.text,
+  },
+  timeLine: {
+    ...typography.caption,
+    color: theme.textDim,
+    fontVariant: ["tabular-nums"],
+    marginTop: space(3),
   },
   actions: {
     flexDirection: "row",
-    gap: 12,
-    marginTop: 20,
+    marginTop: space(4),
     alignSelf: "stretch",
+  },
+  nextLine: {
+    ...typography.caption,
+    color: theme.textDim,
+    marginTop: space(1),
+  },
+  menuLink: {
+    marginTop: space(3),
+    paddingVertical: space(1),
+    paddingHorizontal: space(4),
+  },
+  menuTxt: {
+    ...typography.caption,
+    color: theme.textDim,
+    textDecorationLine: "underline",
   },
 });

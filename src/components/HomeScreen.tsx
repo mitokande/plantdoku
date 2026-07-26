@@ -7,16 +7,17 @@ import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
 import { formatDateKey, formatTime } from "../format";
-import { radius, theme } from "../theme";
+import { radius, shadow, space, theme, typography } from "../theme";
 
-// The little row of plants over the wordmark. Purely decorative, picked for
-// contrasting silhouettes and hues at 50pt. Filtered through PLANT_SOURCES so a
-// renamed/dropped id (the art rebuild binned three of the originals, which just
-// rendered as gaps) can never silently thin the row out again.
+// The plants in the wordmark's garden bed (and, faded, behind the Endless
+// lock). Purely decorative, picked for contrasting silhouettes and hues at
+// ~50pt. Filtered through PLANT_SOURCES so a renamed/dropped id (the art
+// rebuild binned three of the originals, which just rendered as gaps) can
+// never silently thin the bed out again.
 const DECO_PLANTS = ["sunflower", "toadstool", "tulip", "monstera", "lavender"]
   .filter((id) => PLANT_SOURCES[id]);
 
-/** The saved mid-solve board behind the Continue card (see useGame.resume). */
+/** The saved mid-solve board behind the Continue button (see useGame.resume). */
 export interface ResumeInfo {
   mode: "level" | "daily" | "endless";
   level: number;
@@ -145,42 +146,38 @@ export function HomeScreen({
   return (
     <View style={styles.wrap}>
       <View style={styles.content}>
+        {/* Wordmark on a planted bed: the sprites overlap and sit *in* a mound
+            of soil instead of floating as a detached row of icons. */}
         <Rise delay={0}>
-          <View style={styles.deco}>
-            {DECO_PLANTS.map((id) => (
-              <Image key={id} source={PLANT_SOURCES[id]} style={styles.decoImg} />
-            ))}
+          <View style={styles.logo}>
+            <View style={styles.bed}>
+              {DECO_PLANTS.map((id, i) => (
+                <Image
+                  key={id}
+                  source={PLANT_SOURCES[id]}
+                  style={[
+                    styles.bedPlant,
+                    {
+                      // Staggered heights + slight lean, so the bed reads as
+                      // planted rather than as a row of stamps.
+                      marginBottom: i % 2 === 0 ? 6 : 0,
+                      transform: [{ rotate: `${(i - 2) * 4}deg` }],
+                      zIndex: i % 2 === 0 ? 2 : 1,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <View style={styles.mound} />
           </View>
           <Text style={styles.title}>Plantdoku</Text>
         </Rise>
 
-        {/* An unfinished board is the most valuable thing on this screen —
-            it sits directly above PLAY so it can't be missed. */}
-        {resume && (
-          <Rise delay={80}>
-            <Pressable onPress={onResume} style={styles.resumeEdge}>
-              {({ pressed }) => (
-                <View style={[styles.resume, pressed && styles.resumePressed]}>
-                  <Ionicons name="play-circle" size={30} color={theme.gold} />
-                  <View style={styles.resumeText}>
-                    <Text style={styles.resumeTitle}>
-                      Continue · {resumeLabel(resume)}
-                    </Text>
-                    <Text style={styles.resumeSub}>
-                      {`${resume.placed}/${resume.size} planted · ${formatTime(
-                        resume.seconds,
-                      )} · ${"♥".repeat(resume.hearts)}`}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.textDim} />
-                </View>
-              )}
-            </Pressable>
-          </Rise>
-        )}
-
+        {/* ONE primary action. A saved board is what the player wants next, so
+            it *is* the button — with its progress on the face — rather than a
+            second card competing with PLAY for the same tap. */}
         <Rise delay={120}>
-          {allComplete ? (
+          {allComplete && !resume ? (
             <View style={styles.doneCard}>
               <Ionicons name="trophy" size={36} color={theme.gold} />
               <Text style={styles.doneTitle}>All levels complete!</Text>
@@ -193,18 +190,31 @@ export function HomeScreen({
                   {
                     scale: pulse.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [1, 1.03],
+                      outputRange: [1, 1.02],
                     }),
                   },
                 ],
               }}
             >
-              <Pressable onPress={onPlay} style={styles.playEdge}>
+              <Pressable
+                onPress={resume ? onResume : onPlay}
+                accessibilityRole="button"
+                style={styles.playEdge}
+              >
                 {({ pressed }) => (
                   <View style={[styles.play, pressed && styles.playPressed]}>
-                    <Text style={styles.playLabel}>PLAY</Text>
+                    <View style={styles.playRow}>
+                      <Ionicons name="leaf" size={22} color={theme.onAccent} />
+                      <Text style={styles.playLabel}>
+                        {resume ? "Continue" : "Play"}
+                      </Text>
+                    </View>
                     <Text style={styles.playSub}>
-                      Level {unlockedLevel} / {LEVEL_COUNT}
+                      {resume
+                        ? `${resumeLabel(resume)} · ${resume.placed}/${
+                            resume.size
+                          } planted · ${formatTime(resume.seconds)}`
+                        : `Level ${unlockedLevel} / ${LEVEL_COUNT}`}
                     </Text>
                   </View>
                 )}
@@ -213,21 +223,33 @@ export function HomeScreen({
           )}
         </Rise>
 
+        {/* The one case where a second entry point earns its place: the saved
+            board is a daily or an endless run, so the level ladder would
+            otherwise be unreachable from this screen. Deliberately a quiet
+            link, not a peer of the button above. */}
+        {resume && resume.mode !== "level" && !allComplete && (
+          <Rise delay={180}>
+            <Pressable onPress={onPlay} hitSlop={6} style={styles.altLink}>
+              <Text style={styles.altLinkTxt}>
+                {`Play level ${unlockedLevel} of ${LEVEL_COUNT}`}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={theme.textDim} />
+            </Pressable>
+          </Rise>
+        )}
+
         {/* Card collection showcase — the meta lives front and center. */}
         <Rise delay={220}>
           <Pressable onPress={onCards} style={styles.cardsPanel}>
             <View style={styles.cardsHeader}>
-              <View style={styles.cardsTitleRow}>
-                <Ionicons name="albums" size={15} color={theme.text} />
-                <Text style={styles.cardsTitle}>PLANT CARDS</Text>
-              </View>
-              <View style={styles.cardsBadge}>
-                <Text style={styles.cardsBadgeTxt}>
-                  {collected.length}/{CARDS.length}
-                </Text>
-              </View>
+              <Text style={styles.cardsTitle}>Plant collection</Text>
+              <Text style={styles.cardsCount}>
+                {collected.length} of {CARDS.length}
+              </Text>
             </View>
 
+            {/* The cards themselves are the point — they get the room, and the
+                next one sits among them as a face-down slot. */}
             <View style={styles.cardsRow}>
               {recent.map((c) => (
                 <View
@@ -250,7 +272,7 @@ export function HomeScreen({
                 </View>
               )}
               <View style={styles.topSpacer} />
-              <Ionicons name="chevron-forward" size={22} color={theme.textDim} />
+              <Ionicons name="chevron-forward" size={20} color={theme.textDim} />
             </View>
 
             {upcoming ? (
@@ -262,10 +284,7 @@ export function HomeScreen({
                 </View>
                 <Text style={styles.barLabel}>
                   <Ionicons name="star" size={12} color={theme.gold} />
-                  {` ${totalStars}/${upcoming.stars}`}
-                  {collected.length === 0
-                    ? " — solve levels to collect your first card!"
-                    : " to your next card"}
+                  {`  ${totalStars}/${upcoming.stars} — next up: ${upcoming.name}`}
                 </Text>
               </>
             ) : (
@@ -299,15 +318,43 @@ export function HomeScreen({
               </View>
             </View>
           ) : (
+            // Locked, but still desirable: the garden stays visible behind the
+            // lock and the card shows how close the player is.
             <View style={[styles.endless, styles.endlessLocked]}>
+              <View pointerEvents="none" style={styles.lockedGarden}>
+                {DECO_PLANTS.map((id) => (
+                  <Image
+                    key={id}
+                    source={PLANT_SOURCES[id]}
+                    style={styles.lockedGardenImg}
+                  />
+                ))}
+              </View>
               <View style={styles.endlessLockedRow}>
-                <Ionicons name="lock-closed" size={22} color={theme.textDim} />
-                <View>
-                  <Text style={styles.endlessLockedTitle}>Endless garden</Text>
+                <Ionicons name="lock-closed" size={20} color={theme.textDim} />
+                <View style={styles.topSpacer}>
+                  <Text style={styles.endlessTitle}>Endless garden</Text>
                   <Text style={styles.endlessLockedSub}>
-                    Reach level {ENDLESS_UNLOCK_LEVEL} to unlock
+                    Unlock at level {ENDLESS_UNLOCK_LEVEL}
                   </Text>
                 </View>
+                <Text style={styles.endlessLockedCount}>
+                  {Math.min(unlockedLevel, ENDLESS_UNLOCK_LEVEL)} /{" "}
+                  {ENDLESS_UNLOCK_LEVEL}
+                </Text>
+              </View>
+              <View style={styles.barTrack}>
+                <View
+                  style={[
+                    styles.barFill,
+                    styles.lockedBarFill,
+                    {
+                      width: `${
+                        Math.min(unlockedLevel / ENDLESS_UNLOCK_LEVEL, 1) * 100
+                      }%`,
+                    },
+                  ]}
+                />
               </View>
             </View>
           )}
@@ -327,176 +374,154 @@ const styles = StyleSheet.create({
   topSpacer: {
     flex: 1,
   },
+  // Branding sits high on the screen rather than floating in the middle of a
+  // tall empty column.
   content: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    paddingTop: space(3),
   },
-  deco: {
+  logo: {
+    alignItems: "center",
+    marginBottom: space(1),
+  },
+  bed: {
     flexDirection: "row",
+    alignItems: "flex-end",
     justifyContent: "center",
-    marginBottom: 4,
   },
-  decoImg: {
-    width: 50,
-    height: 50,
-    marginHorizontal: -2,
+  bedPlant: {
+    width: 52,
+    height: 52,
+    marginHorizontal: -6,
     resizeMode: "contain",
   },
+  // The soil the plants stand in — ties the sprites into one object.
+  mound: {
+    width: 176,
+    height: 13,
+    marginTop: -5,
+    borderRadius: 999,
+    backgroundColor: theme.soil,
+    opacity: 0.85,
+  },
   title: {
+    ...typography.screenTitle,
     color: theme.text,
-    fontSize: 42,
-    fontWeight: "900",
     textAlign: "center",
-    letterSpacing: 0.5,
-    marginBottom: 22,
-  },
-  // Continue card: same chunky 3D edge as PLAY, but panel-coloured and
-  // gold-lined so it reads as secondary to the big green button.
-  resumeEdge: {
-    ...CARD_W,
-    borderRadius: radius.md,
-    backgroundColor: theme.panelEdge,
-    marginBottom: 12,
-  },
-  resume: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.gold,
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: EDGE,
-  },
-  resumePressed: {
-    marginTop: EDGE,
-    marginBottom: 0,
-  },
-  resumeText: {
-    flex: 1,
-    gap: 2,
-  },
-  resumeTitle: {
-    color: theme.text,
-    fontSize: 15,
-    fontWeight: "800",
-  },
-  resumeSub: {
-    color: theme.textDim,
-    fontSize: 12,
-    fontWeight: "700",
-    fontVariant: ["tabular-nums"],
+    marginBottom: space(5),
   },
   playEdge: {
     ...CARD_W,
-    borderRadius: radius.lg,
+    borderRadius: radius.btn,
     backgroundColor: theme.accentDark,
+    ...shadow.raised,
   },
   play: {
     alignItems: "center",
     backgroundColor: theme.accent,
-    paddingVertical: 20,
-    borderRadius: radius.lg,
+    paddingVertical: space(4),
+    borderRadius: radius.btn,
     marginBottom: EDGE,
   },
   playPressed: {
     marginTop: EDGE,
     marginBottom: 0,
   },
+  playRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space(2),
+  },
   playLabel: {
-    color: "#0E2110",
-    fontSize: 30,
+    color: theme.onAccent,
+    fontSize: 26,
     fontWeight: "900",
-    letterSpacing: 2,
   },
   playSub: {
-    color: "#0E2110",
-    fontSize: 14,
-    fontWeight: "800",
-    opacity: 0.75,
-    marginTop: 2,
+    ...typography.caption,
+    color: theme.onAccent,
+    opacity: 0.8,
+    marginTop: 3,
+    fontVariant: ["tabular-nums"],
+  },
+  altLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    marginTop: space(2),
+    paddingVertical: space(2),
+  },
+  altLinkTxt: {
+    ...typography.caption,
+    color: theme.textDim,
   },
   doneCard: {
     ...CARD_W,
     alignItems: "center",
     backgroundColor: theme.panel,
-    borderColor: theme.panelLine,
-    borderWidth: 1,
     borderRadius: radius.lg,
-    paddingVertical: 22,
+    paddingVertical: space(6),
+    ...shadow.card,
   },
   doneTitle: {
+    ...typography.cardTitle,
     color: theme.text,
-    fontSize: 20,
-    fontWeight: "800",
-    marginTop: 6,
+    marginTop: space(2),
   },
   doneSub: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 14,
     marginTop: 2,
   },
+  // A plain white card with a soft shadow: gold is for rewards, not for
+  // outlining ordinary panels.
   cardsPanel: {
     ...CARD_W,
-    marginTop: 16,
-    paddingVertical: 13,
-    paddingHorizontal: 15,
+    marginTop: space(6),
+    paddingVertical: space(4),
+    paddingHorizontal: space(4),
     backgroundColor: theme.panel,
-    borderColor: theme.gold,
-    borderWidth: 1.5,
     borderRadius: radius.lg,
+    ...shadow.card,
   },
   cardsHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  cardsTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
+    marginBottom: space(3),
   },
   cardsTitle: {
+    ...typography.cardTitle,
+    fontSize: 17,
     color: theme.text,
-    fontSize: 14,
-    fontWeight: "900",
-    letterSpacing: 1,
   },
-  cardsBadge: {
-    backgroundColor: theme.gold,
-    borderRadius: 999,
-    paddingVertical: 2,
-    paddingHorizontal: 9,
-  },
-  cardsBadgeTxt: {
-    color: "#0E2110",
-    fontSize: 12.5,
-    fontWeight: "900",
+  cardsCount: {
+    ...typography.caption,
+    color: theme.textDim,
   },
   cardsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
+    gap: space(2),
   },
   mini: {
-    width: 46,
-    height: 46,
+    width: 50,
+    height: 50,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.bgAlt,
-    borderRadius: radius.sm,
+    borderRadius: radius.chip,
     borderWidth: 1.5,
   },
   miniLocked: {
     borderColor: theme.panelLine,
-    backgroundColor: theme.bg,
+    borderStyle: "dashed",
   },
   miniImg: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     resizeMode: "contain",
   },
   miniImgLocked: {
@@ -510,10 +535,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   barTrack: {
-    height: 9,
+    height: 8,
     borderRadius: 999,
-    backgroundColor: theme.bg,
-    marginTop: 11,
+    backgroundColor: theme.bgAlt,
+    marginTop: space(3),
     overflow: "hidden",
   },
   barFill: {
@@ -521,61 +546,80 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: theme.gold,
   },
+  lockedBarFill: {
+    backgroundColor: theme.accent,
+  },
   barLabel: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12.5,
-    fontWeight: "700",
-    marginTop: 6,
+    marginTop: space(2),
   },
   endless: {
     ...CARD_W,
-    marginTop: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 15,
+    marginTop: space(3),
+    paddingVertical: space(3),
+    paddingHorizontal: space(4),
     backgroundColor: theme.panel,
-    borderColor: theme.panelLine,
-    borderWidth: 1,
     borderRadius: radius.lg,
+    overflow: "hidden",
+    ...shadow.card,
   },
   endlessTitleRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    marginBottom: 9,
+    marginBottom: space(2),
   },
   endlessTitle: {
+    ...typography.cardTitle,
+    fontSize: 16,
     color: theme.text,
-    fontSize: 15.5,
-    fontWeight: "800",
   },
   endlessChips: {
     flexDirection: "row",
-    gap: 8,
+    gap: space(2),
   },
   endlessLocked: {
     backgroundColor: theme.bgAlt,
-    opacity: 0.75,
+  },
+  // The garden behind the lock: visible enough to want, faint enough to read
+  // as not-yet-yours.
+  lockedGarden: {
+    position: "absolute",
+    right: -6,
+    bottom: -10,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    opacity: 0.3,
+  },
+  lockedGardenImg: {
+    width: 54,
+    height: 54,
+    marginHorizontal: -8,
+    resizeMode: "contain",
   },
   endlessLockedRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-  },
-  endlessLockedTitle: {
-    color: theme.textDim,
-    fontSize: 15.5,
-    fontWeight: "800",
+    gap: space(3),
   },
   endlessLockedSub: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12.5,
     marginTop: 1,
+  },
+  endlessLockedCount: {
+    ...typography.caption,
+    color: theme.textDim,
+    fontVariant: ["tabular-nums"],
   },
   chip: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
-    borderRadius: radius.md,
+    justifyContent: "center",
+    minHeight: 44,
+    paddingVertical: space(2),
+    borderRadius: radius.chip,
     backgroundColor: theme.bgAlt,
     borderWidth: 1,
     borderColor: theme.panelLine,
@@ -584,8 +628,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.panelLine,
   },
   chipTxt: {
+    ...typography.caption,
+    fontSize: 14.5,
     color: theme.text,
-    fontSize: 14,
-    fontWeight: "800",
   },
 });

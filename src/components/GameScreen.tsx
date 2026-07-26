@@ -20,7 +20,7 @@ import { parSeconds } from "../game/stars";
 import type { Coord } from "../game/types";
 import { formatDateKey, formatTime } from "../format";
 import { useBackHandler } from "../hooks/useBackHandler";
-import { radius, theme } from "../theme";
+import { radius, space, theme, typography } from "../theme";
 import { Board, BOARD_FRAME, boardMetrics } from "./Board";
 import { Button } from "./Button";
 import { FailOverlay } from "./FailOverlay";
@@ -83,20 +83,65 @@ function bbox(cells: Coord[]) {
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
-// Morning-garden depth: sunlit glade behind the board, slightly deeper
-// foliage at the top and bottom edges.
-const BG_GRADIENT = ["#DDEBCC", "#F6FBEF", "#D8E7C6"] as const;
+// Morning-garden depth on a warm near-white canvas: the faintest glade behind
+// the board, a touch deeper at the top and bottom edges.
+const BG_GRADIENT = ["#EAF2DE", "#F7FAF0", "#E7F0DA"] as const;
 
-// The three core rules — the prominent card above the board, one per column.
+// The three core rules. During the tutorial these get the full card (that's
+// when the player is actually reading); afterwards they collapse to a row of
+// three chips — `label` alone — that expand to `detail` on tap, because a
+// solver doesn't need to re-read the rules every level.
 const RULES = [
-  { icon: "leaf", text: "One per\nrow & column" },
-  { icon: "color-palette", text: "One per\ncolour" },
-  { icon: "close-circle", text: "No two\ntouching" },
-] as const satisfies { icon: React.ComponentProps<typeof Ionicons>["name"]; text: string }[];
+  {
+    icon: "leaf",
+    label: "One per line",
+    detail: "Exactly one plant in every row and every column.",
+  },
+  {
+    icon: "color-palette",
+    label: "One per color",
+    detail: "Exactly one plant in each coloured patch.",
+  },
+  {
+    icon: "close-circle",
+    label: "No touching",
+    detail: "No two plants may touch — not even diagonally.",
+  },
+] as const satisfies {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  detail: string;
+}[];
 
 export function GameScreen({ game, onMenu }: Props) {
   const { size } = game.puzzle;
   const [showHelp, setShowHelp] = useState(false);
+  // Which collapsed rule chip is showing its explanation (null = none).
+  const [openRule, setOpenRule] = useState<number | null>(null);
+  // Reset throws away real work, so it asks once when there is any to throw
+  // away. The armed state falls back to idle after a few seconds.
+  const [resetArmed, setResetArmed] = useState(false);
+  const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+    },
+    [],
+  );
+  const armReset = () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setResetArmed(true);
+    resetTimer.current = setTimeout(() => setResetArmed(false), 3500);
+  };
+  const onReset = () => {
+    if (resetArmed || game.placedCount === 0) {
+      if (resetTimer.current) clearTimeout(resetTimer.current);
+      setResetArmed(false);
+      game.reset();
+    } else {
+      armReset();
+    }
+  };
 
   // Every way out of the board goes through here: an unfinished board is
   // saved to the resume slot (so Home can offer Continue) and reported as
@@ -447,6 +492,23 @@ export function GameScreen({ game, onMenu }: Props) {
     }).start();
   }, [game.placedCount, size, progress]);
 
+  // The progress leaf gives a little kick on every plant, so the counter
+  // registers as a reward and not just a number changing.
+  const leafPop = useRef(new Animated.Value(1)).current;
+  const prevPlaced = useRef(game.placedCount);
+  useEffect(() => {
+    if (game.placedCount > prevPlaced.current) {
+      leafPop.setValue(1.5);
+      Animated.spring(leafPop, {
+        toValue: 1,
+        friction: 4,
+        tension: 180,
+        useNativeDriver: true,
+      }).start();
+    }
+    prevPlaced.current = game.placedCount;
+  }, [game.placedCount, leafPop]);
+
   return (
     <LinearGradient
       colors={BG_GRADIENT}
@@ -454,60 +516,103 @@ export function GameScreen({ game, onMenu }: Props) {
       style={styles.wrap}
     >
       <View style={styles.header}>
-        <Pressable hitSlop={10} onPress={leave} style={styles.iconBtn}>
-          <Text style={styles.iconTxt}>‹ Menu</Text>
-        </Pressable>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>
-            {game.mode === "daily" && game.dailyKey ? (
-              <>
-                <Ionicons name="sunny" size={14} color={theme.text} />
-                {` Daily ${formatDateKey(game.dailyKey)}`}
-              </>
-            ) : game.mode === "endless" && game.endlessDifficulty ? (
-              <>
-                <Ionicons name="leaf" size={14} color={theme.text} />
-                {` ${DIFF_LABEL[game.endlessDifficulty]}`}
-              </>
-            ) : (
-              `Level ${game.level}`
-            )}
-          </Text>
-        </View>
         <Pressable
-          hitSlop={10}
-          onPress={() => setShowHelp(true)}
-          style={[styles.iconBtn, styles.iconBtnRight]}
+          hitSlop={12}
+          onPress={leave}
+          accessibilityRole="button"
+          accessibilityLabel="Back to menu"
+          style={styles.headerBtn}
         >
-          <Text style={styles.iconTxt}>Help ?</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.text} />
+        </Pressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {game.mode === "daily" && game.dailyKey ? (
+            <>
+              <Ionicons name="sunny" size={16} color={theme.text} />
+              {` Daily ${formatDateKey(game.dailyKey)}`}
+            </>
+          ) : game.mode === "endless" && game.endlessDifficulty ? (
+            <>
+              <Ionicons name="leaf" size={16} color={theme.text} />
+              {` ${DIFF_LABEL[game.endlessDifficulty]}`}
+            </>
+          ) : (
+            `Level ${game.level}`
+          )}
+        </Text>
+        <Pressable
+          hitSlop={12}
+          onPress={() => setShowHelp(true)}
+          accessibilityRole="button"
+          accessibilityLabel="How to play"
+          style={styles.headerBtn}
+        >
+          <View style={styles.helpBtn}>
+            <Ionicons name="help" size={18} color={theme.text} />
+          </View>
         </Pressable>
       </View>
 
-      <View style={styles.rulesCard}>
-        {RULES.map((rule, i) => (
-          <React.Fragment key={rule.text}>
-            {i > 0 && <View style={styles.ruleDivider} />}
-            <View style={styles.ruleCol}>
-              <Ionicons name={rule.icon} size={22} color={theme.accent} />
-              <Text style={styles.ruleTxt}>{rule.text}</Text>
-            </View>
-          </React.Fragment>
-        ))}
-      </View>
+      {/* The rules get a full card only while the tutorial is teaching them;
+          after that they're three chips that explain themselves on tap, and
+          the space goes to the board. */}
+      {tutorial ? (
+        <View style={styles.rulesCard}>
+          {RULES.map((rule, i) => (
+            <React.Fragment key={rule.label}>
+              {i > 0 && <View style={styles.ruleDivider} />}
+              <View style={styles.ruleCol}>
+                <Ionicons name={rule.icon} size={22} color={theme.accent} />
+                <Text style={styles.ruleTxt}>{rule.label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.ruleChipsWrap}>
+          <View style={styles.ruleChips}>
+            {RULES.map((rule, i) => (
+              <Pressable
+                key={rule.label}
+                onPress={() => setOpenRule(openRule === i ? null : i)}
+                accessibilityRole="button"
+                accessibilityLabel={rule.detail}
+                style={[styles.ruleChip, openRule === i && styles.ruleChipOpen]}
+              >
+                <Ionicons name={rule.icon} size={15} color={theme.accent} />
+                <Text style={styles.ruleChipTxt}>{rule.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {openRule != null && (
+            <Text style={styles.ruleDetail}>{RULES[openRule].detail}</Text>
+          )}
+        </View>
+      )}
 
+      {/* The clock is the headline number; hearts and best time support it. */}
       <View style={styles.statusRow}>
+        <Text style={styles.clock}>{formatTime(game.seconds)}</Text>
         <View style={styles.statusItem}>
-          <Text style={styles.statusLabel}>TIME</Text>
-          <Text style={styles.statusVal}>{formatTime(game.seconds)}</Text>
+          <Hearts hearts={game.hearts} max={game.maxHearts} />
+          {!game.onboarded && (
+            <Text style={styles.statusLabel}>mistakes left</Text>
+          )}
         </View>
-        <Hearts hearts={game.hearts} max={game.maxHearts} />
-        <View style={styles.statusItem}>
-          <Text style={styles.statusLabel}>BEST</Text>
-          <Text style={styles.statusVal}>{formatTime(game.bestSeconds)}</Text>
-        </View>
+        {game.bestSeconds != null && (
+          <Text style={styles.best}>Best {formatTime(game.bestSeconds)}</Text>
+        )}
       </View>
 
       <View style={styles.progressRow}>
+        <View style={styles.progressLabel}>
+          <Animated.View style={{ transform: [{ scale: leafPop }] }}>
+            <Ionicons name="leaf" size={14} color={theme.accent} />
+          </Animated.View>
+          <Text style={styles.progressTxt}>
+            {`${game.placedCount} of ${size} planted`}
+          </Text>
+        </View>
         <View style={styles.progressTrack}>
           <Animated.View
             style={[
@@ -516,10 +621,6 @@ export function GameScreen({ game, onMenu }: Props) {
             ]}
           />
         </View>
-        <Text style={styles.progressTxt}>
-          <Ionicons name="leaf" size={13} color={theme.accent} />
-          {` ${game.placedCount}/${size}`}
-        </Text>
       </View>
 
       <Animated.View
@@ -564,12 +665,20 @@ export function GameScreen({ game, onMenu }: Props) {
         />
       </Animated.View>
 
+      {/* The gesture reminder is onboarding copy, not a control: it's here for
+          the first board only, and lives in Help from then on. The row keeps
+          its height either way, so finishing the tutorial doesn't jolt the
+          board up the screen. */}
       <View style={styles.hintRow}>
-        <View style={[styles.hintPill, styles.hintFlex]}>
-          <Text style={styles.hintLine}>Mark ✕ · double-tap or hold to plant</Text>
-        </View>
+        {!game.onboarded && (
+          <View style={styles.hintPill}>
+            <Text style={styles.hintLine}>Mark ✕ · double-tap or hold to plant</Text>
+          </View>
+        )}
       </View>
 
+      {/* Undo and Hint are the everyday controls; Reset is rarely wanted and
+          destructive, so it drops to an icon and asks before wiping work. */}
       <View style={styles.controls}>
         <Button
           label="Undo"
@@ -588,13 +697,24 @@ export function GameScreen({ game, onMenu }: Props) {
           badge={game.hintsUsed}
           flex
         />
-        <Button
-          label="Reset"
-          icon="refresh"
-          onPress={game.reset}
-          disabled={tutorial}
-          flex
-        />
+        {resetArmed ? (
+          <Button
+            label="Reset?"
+            icon="refresh"
+            variant="danger"
+            onPress={onReset}
+            disabled={tutorial}
+          />
+        ) : (
+          <Button
+            label="Reset board"
+            icon="refresh"
+            variant="quiet"
+            onPress={onReset}
+            disabled={tutorial}
+            iconOnly
+          />
+        )}
       </View>
 
       {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
@@ -644,6 +764,7 @@ export function GameScreen({ game, onMenu }: Props) {
               ? {
                   earned: game.solveStars,
                   par: parSeconds(game.puzzle.size, game.puzzle.tier),
+                  hintsUsed: game.hintsUsed,
                 }
               : null
           }
@@ -695,34 +816,64 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: space(1),
   },
-  iconBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    minWidth: 72,
+  headerBtn: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  iconBtnRight: {
-    alignItems: "flex-end",
+  headerTitle: {
+    ...typography.cardTitle,
+    color: theme.text,
+    flexShrink: 1,
   },
-  iconTxt: {
-    color: theme.textDim,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  pill: {
-    backgroundColor: theme.panel,
+  helpBtn: {
+    width: 32,
+    height: 32,
     borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.panel,
     borderWidth: 1,
     borderColor: theme.panelLine,
   },
-  pillTxt: {
-    color: theme.accent,
-    fontWeight: "800",
-    fontSize: 14,
-    letterSpacing: 0.5,
+  ruleChipsWrap: {
+    alignSelf: "center",
+    width: "92%",
+    maxWidth: 440,
+    marginTop: space(1),
+  },
+  ruleChips: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: space(2),
+  },
+  ruleChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: radius.chip,
+    backgroundColor: theme.panel,
+    borderWidth: 1,
+    borderColor: theme.panelLine,
+  },
+  ruleChipOpen: {
+    backgroundColor: theme.bgAlt,
+    borderColor: theme.accent,
+  },
+  ruleChipTxt: {
+    ...typography.caption,
+    color: theme.text,
+  },
+  ruleDetail: {
+    ...typography.caption,
+    color: theme.textDim,
+    textAlign: "center",
+    marginTop: space(2),
   },
   rulesCard: {
     flexDirection: "row",
@@ -764,42 +915,48 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
-    gap: 24,
-    marginTop: 12,
+    gap: space(5),
+    marginTop: space(3),
   },
+  // Fixed height: the "mistakes left" caption below the hearts only shows on
+  // a first-time player's board, and its arrival/departure must not move the
+  // board underneath it.
   statusItem: {
     alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
     gap: 2,
   },
   statusLabel: {
     color: theme.textDim,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1,
+    fontSize: 10.5,
+    fontWeight: "700",
   },
-  statusVal: {
+  clock: {
     color: theme.text,
-    fontSize: 18,
-    fontWeight: "800",
+    fontSize: 26,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+  },
+  best: {
+    ...typography.caption,
+    color: theme.textDim,
     fontVariant: ["tabular-nums"],
   },
   progressRow: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: space(1),
     alignSelf: "center",
     width: "92%",
     maxWidth: 440,
-    marginTop: 12,
-    marginBottom: 10,
+    marginTop: space(3),
+    marginBottom: space(2),
   },
   progressTrack: {
-    flex: 1,
-    height: 9,
+    alignSelf: "stretch",
+    height: 8,
     borderRadius: 999,
-    backgroundColor: theme.bg,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
+    backgroundColor: theme.bgAlt,
     overflow: "hidden",
   },
   progressFill: {
@@ -808,10 +965,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     transformOrigin: "left",
   },
+  progressLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   progressTxt: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12,
-    fontWeight: "800",
     fontVariant: ["tabular-nums"],
   },
   boardWrap: {
@@ -824,15 +985,11 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "94%",
     maxWidth: 460,
-    gap: 8,
-    marginTop: 14,
-    marginBottom: 14,
-  },
-  hintFlex: {
-    flexShrink: 1,
-    flexGrow: 1,
+    minHeight: 32,
+    marginVertical: space(4),
   },
   hintPill: {
+    flexShrink: 1,
     backgroundColor: theme.bgAlt,
     borderRadius: 999,
     paddingHorizontal: 16,
@@ -840,12 +997,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   hintLine: {
+    ...typography.caption,
     color: theme.textDim,
-    fontSize: 12.5,
     textAlign: "center",
   },
   controls: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    gap: space(2),
   },
 });

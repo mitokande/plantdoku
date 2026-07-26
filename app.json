@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#E4EEDA",
+    "backgroundColor": "#F3F6EA",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mithatcanturan.plantdoku",
@@ -34,7 +34,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#E4EEDA"
+          "backgroundColor": "#F3F6EA"
         }
       ],
       "expo-localization",
@@ -42,7 +42,7 @@
       [
         "expo-notifications",
         {
-          "color": "#7FB069"
+          "color": "#69C938"
         }
       ],
       "expo-font",

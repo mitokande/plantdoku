@@ -22,7 +22,7 @@ import { SettingsOverlay } from "./src/components/SettingsOverlay";
 import { LEVEL_COUNT } from "./src/game/levels";
 import { useBackHandler } from "./src/hooks/useBackHandler";
 import { useGame } from "./src/state/useGame";
-import { theme } from "./src/theme";
+import { shadow, theme } from "./src/theme";
 
 export default function App() {
   const game = useGame();
@@ -117,8 +117,14 @@ export default function App() {
               </View>
             )}
             <View style={styles.hudSpacer} />
-            <Pressable hitSlop={10} onPress={() => setShowSettings(true)}>
-              <Ionicons name="settings-sharp" size={24} color={theme.textDim} />
+            <Pressable
+              hitSlop={10}
+              onPress={() => setShowSettings(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              style={styles.settingsBtn}
+            >
+              <Ionicons name="settings-sharp" size={22} color={theme.textDim} />
             </Pressable>
           </View>
 
@@ -183,16 +189,21 @@ const styles = StyleSheet.create({
   hudSpacer: {
     flex: 1,
   },
+  settingsBtn: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   pill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
     backgroundColor: theme.panel,
-    borderColor: theme.panelLine,
-    borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 6,
     paddingHorizontal: 13,
+    ...shadow.card,
   },
   pillTxt: {
     color: theme.text,

@@ -7,10 +7,12 @@ import { theme } from "../theme";
 interface Props {
   hearts: number; // remaining
   max: number;
+  /** Glyph size — the board header keeps these smaller than the clock. */
+  size?: number;
 }
 
 /** A single heart that pops as it breaks (fills -> empties). */
-function Heart({ filled }: { filled: boolean }) {
+function Heart({ filled, size }: { filled: boolean; size: number }) {
   const scale = useRef(new Animated.Value(1)).current;
   const prev = useRef(filled);
   useEffect(() => {
@@ -31,7 +33,7 @@ function Heart({ filled }: { filled: boolean }) {
     <Animated.View style={{ transform: [{ scale }] }}>
       <Ionicons
         name={filled ? "heart" : "heart-outline"}
-        size={22}
+        size={size}
         color={filled ? theme.danger : theme.panelLine}
       />
     </Animated.View>
@@ -39,11 +41,11 @@ function Heart({ filled }: { filled: boolean }) {
 }
 
 /** Row of hearts showing lives left on the current board. */
-export function Hearts({ hearts, max }: Props) {
+export function Hearts({ hearts, max, size = 19 }: Props) {
   return (
     <View style={styles.row}>
       {Array.from({ length: max }, (_, i) => (
-        <Heart key={i} filled={i < hearts} />
+        <Heart key={i} filled={i < hearts} size={size} />
       ))}
     </View>
   );

@@ -19,7 +19,7 @@ Every generated board has exactly **one** solution.
 on a cell that isn't its `solution[r]` cell costs a heart and the board shakes —
 and the plant **is not kept**: the cell becomes a **red ✕** instead (state
 `"marked"` + membership in the board's `mistakes` set, which `Cell.tsx` draws as
-a steady red wash + an oversized `dangerDark` ✕). So a wrong guess reads as
+a steady red wash + a `dangerDark` ✕). So a wrong guess reads as
 "eliminated", not as a plant sitting in a bad spot, and only correct plants are
 ever on the board. Consequences: `mistakes` is now **explicit reducer state**
 (not derived from the grid) and travels with each undo `Snapshot`; it is pruned
@@ -52,7 +52,9 @@ LEVELS literal; diff L1–N against the shipped table before pasting).
 board (`useGame.newEndless(difficulty)`, mode "endless"); win overlay offers
 "New board"; per-difficulty best times persist (`plantdoku:best:endless:*`).
 Locked until the player reaches level 15 (`ENDLESS_UNLOCK_LEVEL` in
-`HomeScreen.tsx` — the card renders dimmed with a 🔒 until then).
+`HomeScreen.tsx` — until then the card shows a lock, a faded garden behind it
+and an `N / 15` progress bar, so it reads as something to work toward rather
+than as dead UI).
 
 **Hint**: one tap places the next plant — the reducer's `HINT` action
 (`useGame.ts`) scans rows for the first one whose `solution[r]` cell isn't
@@ -82,10 +84,11 @@ unlocked at total-star milestones (first at 1★, last legendary at 152★ of th
 currency or storage: the collection is derived from `plantdoku:stars`, so
 flushData resets it for free. `useGame` exposes `newCards` (milestones crossed
 by the solve on screen — computed on the rising edge of solved when a level's
-best stars improve); win overlay pops a "NEW CARD" reveal (or shows "N★ more
-until your next card"). The meta is foregrounded hybrid-casual style: Home
-has a gold-bordered showcase panel under Play (latest unlocks + next card as
-a "?" silhouette + progress bar to its milestone) and the Cards tab
+best stars improve); the win overlay makes the unlock its headline and flips the
+card face-up (see Win sequence), or shows progress to the next one. The meta is
+foregrounded hybrid-casual style: Home has a white showcase panel under the
+primary button (latest unlocks + next card as a dashed "?" slot + progress bar
+to its milestone) and the Cards tab
 (`CardsScreen.tsx`) shows the full grid (locked cards are tinted silhouettes
 with their ★ requirement; tapping any tile opens a trading-card inspect modal
 — big sprite, rarity, flavor text, or the ★-to-go for locked cards).
@@ -116,10 +119,12 @@ backgrounds (`App.tsx` `AppState` listener), which is what keeps the saved
 clock honest. A slot is dropped when its board is solved, failed, or wiped
 blank by Reset; `parseSlots`/`validSnapshot` also drop anything stale on load
 (old `v`, wrong board shape, a *complete* board — which would re-fire the win
-path — or yesterday's daily). Home shows a **Continue card** above PLAY for the
-most recently touched slot (`newestSlot`, hence `updatedAt`); PLAY itself
-resumes the level slot when it matches the level it would start, and the Daily
-tab's CTA becomes "Continue today's puzzle" — so no primary button is a trap.
+path — or yesterday's daily). Home's single primary button **becomes**
+`Continue` for the most recently touched slot (`newestSlot`, hence `updatedAt`)
+— see Home under Visual decisions — and `startLevel` still resumes the level
+slot when it matches the level it would start, so the button is never a trap
+even when the saved slot belongs to another mode. The Daily tab's CTA likewise
+becomes "Continue today's puzzle".
 Endless chips always start a fresh board (the Continue card is the way back
 into a saved endless run). Resuming mid-tutorial is safe: the stage machine
 re-derives from the board and cascades to the furthest completed stage.
@@ -310,48 +315,147 @@ walkthrough can't cost the L1 under-par star. Completion persists
 
 ## Visual decisions
 
-- Cells are **rounded "stone" tiles** with a small gap between them (the
-  board's wooden frame shows through), a faint static bevel (top highlight /
-  bottom shade) echoing the chunky 3D buttons, and a **faint embossed glyph**
-  of the cluster's plant (the sprite tinted to a darker shade of the cell
-  colour at low opacity). The full-colour sprite still renders **only when
-  `state === "placed"`** (no gold ring anymore); ✕-marked cells get a light
-  dim scrim so eliminated cells recede.
+### Design system (`src/theme.ts`)
+
+One place owns colour, radius, shadow, type and spacing — **use the tokens, do
+not eyeball per-file values**, or the screens drift apart again (the reason this
+section exists).
+
+- **Colour by function, not decoration**: `accent` green = primary actions,
+  progress, active selection · `text` dark forest green = type/icons · `gold` =
+  stars, rewards, rarity (**never** a plain card border) · `wood`/`soil` = the
+  board's garden bed only · `danger` = mistakes and hearts only. `onAccent` /
+  `onGold` / `onDanger` are the type colours on those fills (very dark greens
+  and browns — never pure black).
+- Surface hierarchy, lightest first: `panel` (white — cards *and* modal cards) >
+  `bg` (the warm off-white page canvas) > `bgAlt` (things sunken *into* a card:
+  chips, progress tracks, recessed slots) > `panelEdge` (the chunky 3D bottom
+  edge). Note `bg` sits **above** `bgAlt`: a light theme gets its layers from a
+  quiet near-white page with darker recesses, not from tinting everything green.
+  `frame` stays deliberately dark and must not be lightened (it tints
+  locked-card silhouettes — a shadow, not a wash). `mark`, the board's ✕ glyph,
+  is the opposite: a **soft mid forest green**, deliberately not near-black —
+  see the ✕ note under Board for why.
+- `radius` is picked by role (`chip` 12 · `md` 16 · `btn` 20 · `lg` 24 card ·
+  `modal` 32; `cell` is a *fraction* of tile size). `shadow` has exactly three
+  presets — `card`, `raised` (primary button, tab bar), `modal` — all soft and
+  vertical; no hard dark drops. `typography` is the type scale; `overline` is
+  the only uppercase style and keeps its tracking modest, because uppercase +
+  bold + wide tracking at once reads as shouting. `space(n)` is 8-point-ish
+  (`space(2)`=8, `space(4)`=16, `space(6)`=24).
+- Modal backdrops use the exported `scrim` (a soft green shade) rather than
+  per-file `rgba(...)` literals; the tutorial's blackout scrim stays near-opaque
+  dark on purpose. `app.json`
+  (`userInterfaceStyle`/`backgroundColor`/splash/notification colour) and
+  `App.tsx`'s `<StatusBar style="dark" />` are part of the theme — keep in sync.
+
+### Board
+
+- Cells are **rounded tiles** with a small gap between them (the bed's `soil`
+  shows through), a faint static bevel echoing the chunky 3D buttons, and a
+  **faint embossed glyph** of the cluster's plant. Each region colour carries
+  **three states**, derived in `Cell.tsx` from the one base tint in
+  `REGION_COLORS` (which is the *available* colour): `available` · `excluded`
+  (only *softened* — ~0.82 saturation and a touch paler, replacing the old dark
+  scrim) · `planted` (saturation boosted, bright inner rim, small drop shadow,
+  full-colour sprite). **Do not drain `excluded`**: which cluster a ✕'d cell
+  belongs to is information the player is still reasoning with, so the hue must
+  survive the mark — the ✕ carries the eliminated state, the tile only steps
+  back. A solved cell should be the most vivid, most physically
+  raised thing on the board — that's the player's payoff.
 - **No bold cluster borders.** Clusters read by colour + glyph; tile gaps are
   uniform everywhere.
-- The board sits in a **wooden frame** (`theme.wood*` browns: dark border,
-  light inner "carved" ring — no texture assets), and `GameScreen` lays the
-  whole screen on a vertical `expo-linear-gradient` (lighter glade behind the
-  board, slightly deeper foliage top/bottom). Undo/Hint buttons carry gold info
-  badges (undoable-move count / hints used).
-- Region tints (`palette.ts` `REGION_COLORS`) are **botanical** garden tones —
-  saturated enough to hold up against the light ground, still light enough for
-  the dark ✕ mark and sprites to stay readable.
-- A rejected guess is a **red ✕ cell**: steady `theme.danger` wash + a larger
-  `theme.dangerDark` ✕ (no pulse — these persist, so a breathing tile would be
-  noise). Nothing else on the board is ever tinted red.
-- Win: a **flourish beat first**, then the modal. `WinFlourish.tsx` dims the
-  solved board (not fully — the finished grid should still read behind it) and
-  blooms one plant huge in the middle with a gold halo and a 12-spark burst for
+- The ✕ is **quiet on purpose, and must stay that way.** Most cells on a solved
+  board end up eliminated, so anything heavier turns the board into a field of
+  dark crosses and the player's own placements stop being what you see first.
+  Its quietness comes from the **thin stroke, soft colour and opacity, not from
+  being small** — Ionicons' thinnest round-capped `close-outline` at ~0.55 of
+  the tile, `theme.mark` soft green at 0.62 opacity, stamping on with a short
+  scale from 0.8 plus a few degrees of rotation. Ranked loudness on a tile, and the
+  ordering any future change has to preserve: **placed plant > embossed
+  silhouette-plus-tile-colour > ✕**. A *mistake* ✕ is the one exception — solid
+  `close`, larger, near-opaque, `dangerDark` — because there are only ever a
+  few of them and they mean something different.
+- The board sits in a **slim garden bed** (`theme.wood*` + `soil`: a light rim
+  with a lighter carved inner ring and lighter soil in the tile gaps, no texture
+  assets). The rim is kept thin (`FRAME`/`FRAME_BORDER` in `Board.tsx`) on
+  purpose — it frames the puzzle rather than competing with it. `GameScreen`
+  lays the whole screen on a very faint vertical `expo-linear-gradient`.
+- A rejected guess is a **red ✕ cell**: the tile becomes opaque
+  `theme.dangerTile` (silhouette and ✕ both `dangerDark`) rather than taking a
+  translucent red wash — red over a botanical green blends to muddy tan, not to
+  "wrong". This is the one place a cluster's hue is sacrificed, and it's worth it
+  because at most two mistake cells are ever on the board at once. No pulse:
+  these persist, so a breathing tile would be noise. Nothing else on the board
+  is ever tinted red.
+
+### Board screen chrome
+
+Each screen answers one question, and the board screen's is "where do I plant?"
+— so everything else is compressed:
+
+- Header is **back chevron · level name · round `?` button**. No capsule around
+  the level (it isn't interactive) and no "Help ?" text.
+- The three rules get the **full card only during the tutorial**; afterwards
+  they're three chips (`One per line` / `One per color` / `No touching`) that
+  expand to a one-line explanation on tap. The reclaimed vertical space goes to
+  the board.
+- The **clock is the headline number**; hearts are smaller, and `Best` only
+  renders when there is one. A "mistakes left" caption sits under the hearts for
+  a not-yet-onboarded player only — and the row has a fixed height so its
+  arrival/departure never shifts the board.
+- The gesture reminder pill is **onboarding copy, not a control**: it shows on a
+  first-time player's board and lives in Help from then on. Its row keeps its
+  height either way, so finishing the tutorial can't jolt the board up-screen.
+- Controls are ranked, not equal: **Undo** and **Hint** (gold info badges:
+  undoable-move count / hints used, sitting inside their own button's width) are
+  full buttons; **Reset** is an icon-only `quiet` button that **arms on first
+  press** (turning into a red "Reset?" for 3.5s) whenever there is progress to
+  destroy.
+
+### Win sequence
+
+- A **flourish beat first**, then the modal. `WinFlourish.tsx` dims the solved
+  board (not fully — the finished grid should still read behind it) and blooms
+  one plant huge in the middle with a gold halo and a 12-spark burst for
   `FLOURISH_MS` (1250ms); `GameScreen`'s `flourish` state gates `WinOverlay`
   until it ends, with a `setTimeout` backstopping the animation callback so a
   dropped callback can't strand the result card. The plant is the freshly
-  unlocked card's if the solve earned one (the win card reveals it seconds
-  later), else the last one planted — tracked in `lastPlanted` by both `place`
-  and the `hint` wrapper, since a hint can be the finishing move. Then the
-  custom `Confetti` (Animated, dependency-free) + result card with time / best /
-  "New best".
-- Theme: **light** — "morning garden" (`src/theme.ts`): sunlit green ground,
-  near-white panels, dark green text. Surface hierarchy, lightest first:
-  `panel` (raised card) > `bgAlt` (chips, overlay cards) > `bg` (page +
-  recessed slots inside a panel) > `panelEdge` (the chunky 3D bottom edge).
-  Two tokens stay deliberately dark and must not be lightened: `frame` (tints
-  locked-card silhouettes and dims ✕-marked tiles — it's a shadow, not a wash)
-  and `mark` (the ✕ glyph). Modal backdrops use the exported `scrim` (a soft
-  green shade) rather than per-file `rgba(...)` literals; the tutorial's
-  blackout scrim stays near-opaque dark on purpose. `app.json`
-  (`userInterfaceStyle`/`backgroundColor`/splash) and `App.tsx`'s
-  `<StatusBar style="dark" />` are part of the theme — keep them in sync.
+  unlocked card's if the solve earned one, else the last one planted — tracked
+  in `lastPlanted` by both `place` and the `hint` wrapper, since a hint can be
+  the finishing move.
+- `WinOverlay` has **one headline**: `"<Card> unlocked!"` when the solve earned
+  a card, else `"Solved!"` (the `Level N complete` tag is a small overline above
+  it — it is not news to the player). Then the hero, which **flips** from
+  face-down silhouette to the full-colour plant (a scaleX squash swaps the two
+  stacked faces at the midpoint) with a rarity glow, and only *after* the flip
+  the rarity + `N/17 collected` line. **Tapping the backdrop skips the reveal to
+  its end** — a reward beat must never become a wait.
+- Stars show as three glyphs, and when fewer than 3 were earned as an explicit
+  goal list (`Puzzle solved` / `No hints used` / `Finish under M:SS`) so the
+  rating reads as feedback, not as fine print. That list mirrors `starsFor`
+  exactly (1 + no-hints + under-par), which is why `WinOverlay` takes
+  `hintsUsed` rather than only the star count.
+- One primary action (`Continue` / `New board` / `Share`) with a quiet
+  `Next: Level N` line under it; **Menu** is a small text link, not a peer.
+
+### Home
+
+- **One primary action.** A saved board *is* the big green button (`Continue`,
+  with `mode · N/M planted · time` on its face) — there is no separate Continue
+  card competing with `Play` for the same tap. The single exception, and the
+  only place a second entry point is allowed: when the saved board is a *daily
+  or endless* run, a quiet text link below offers the level ladder, which would
+  otherwise be unreachable from this screen.
+- Branding sits **high** on the screen (not floating mid-column), and the
+  wordmark's plants are a **planted bed** — overlapping sprites at staggered
+  heights with a slight lean, standing in a `soil` mound — rather than a
+  detached row of icons.
+- The card-collection panel is a **plain white card with a soft shadow** (gold
+  is for rewards, not for outlining ordinary panels) and gives its room to the
+  card tiles themselves, with the next card as a dashed face-down slot.
+- Locked Endless is **desirable, not just disabled**: the garden stays visible
+  behind the lock and the card shows `N / 15` progress with a bar.
 
 ## Architecture / file map
 
@@ -382,11 +486,13 @@ src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —
                  RN ONLY, no-op on web (do not import in core)
 src/components/
   Board.tsx      n×n grid + PanResponder gestures (the gesture brain) + highlight ring
-  Cell.tsx       display-only cell (colour, ✕, placed plant + ring)
-  GameScreen.tsx header (Level N, Help ?), stats, board, controls, win overlay;
-                 haptics; first-play tutorial state machine
-  HomeScreen.tsx Home tab: Continue card (resume slot), pulsing PLAY,
-                 card-collection showcase panel, endless card (level-15 lock)
+  Cell.tsx       display-only cell; derives the available/excluded/planted
+                 tile tints from the one region colour
+  GameScreen.tsx header (back · Level N · ?), collapsible rules, stats, board,
+                 ranked controls, win overlay; haptics; first-play tutorial
+  HomeScreen.tsx Home tab: planted-bed wordmark, ONE pulsing primary button
+                 (Play or Continue), card-collection showcase panel, endless
+                 card (level-15 lock)
   CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
@@ -395,11 +501,12 @@ src/components/
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
-  Button.tsx (solid/ghost/danger), WinFlourish.tsx (big plant bloom before the
-  win modal), WinOverlay.tsx (Next level / coming soon),
+  Button.tsx (solid/ghost/quiet/danger + iconOnly), WinFlourish.tsx (big plant
+  bloom before the win modal), WinOverlay.tsx (card-flip reveal + Continue),
   FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
-src/theme.ts, src/format.ts
+src/theme.ts     design tokens: colour · radius · shadow · typography · space
+src/format.ts
 App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) +
                  Home/Cards/Daily pages + BottomNav; `playing` swaps in a
                  full-screen GameScreen (no HUD/nav); Android back returns

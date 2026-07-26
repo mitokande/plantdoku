@@ -13,7 +13,7 @@ import {
 import { CARDS, nextCard, RARITY_COLORS, type PlantCard } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { useBackHandler } from "../hooks/useBackHandler";
-import { radius, scrim, theme } from "../theme";
+import { radius, scrim, shadow, theme } from "../theme";
 import { Button } from "./Button";
 
 interface Props {
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   tileLocked: {
-    backgroundColor: theme.bg,
+    backgroundColor: theme.bgAlt,
     borderColor: theme.panelLine,
   },
   tileImg: {
@@ -330,9 +330,10 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 280,
     alignItems: "center",
-    backgroundColor: theme.bgAlt,
-    borderRadius: radius.lg,
+    backgroundColor: theme.panel,
+    borderRadius: radius.modal,
     borderWidth: 2.5,
+    ...shadow.modal,
     paddingVertical: 20,
     paddingHorizontal: 18,
   },
