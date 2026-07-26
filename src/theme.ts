@@ -12,7 +12,8 @@
 //   accent (green)  primary actions, progress, active selection
 //   text            dark forest green — type and icons
 //   gold            stars, rewards, card rarity — never a plain card border
-//   wood            the board's garden bed only
+//   bed*            the board's tray only
+//   soil            the Home wordmark's planted mound only
 //   danger          mistakes and hearts only
 // `frame` stays deliberately dark — it tints locked-card silhouettes, so it
 // must read as a shadow, not a wash. `mark` (the board's ✕ glyph) is the
@@ -42,12 +43,21 @@ export const theme = {
   onGold: "#3D2E08",
   // bottom-edge colours for the chunky "3D" hybrid-casual buttons/cards
   panelEdge: "#CBD8BD",
-  // wooden board frame (the garden bed) — light enough not to overpower the
-  // pale interface it sits in
-  wood: "#C99A6A",
-  woodDark: "#AC7F52",
-  woodLight: "#E4C29A",
-  /** The bed's soil, seen in the gaps between tiles — lighter than the rim. */
+  // The board's bed: a soft sage-grey planter tray. Deliberately low-chroma and
+  // a clear step DARKER than every region tile (which are all light pastels), so
+  // it frames the grid instead of reading as one more cluster colour. The old
+  // warm-wood bed sat only ~58 redmean units from the nearest pastel — closer
+  // than two *touching* clusters ever get (55–85, median 76) — which is what
+  // made peach and sand tiles bleed into the frame. These clear that bar:
+  // bed 88 · bedGap 117 · bedEdge 150 · bedRim 65.
+  bed: "#A6B4A4",
+  /** Outer border of the tray — its darkest line. */
+  bedEdge: "#8FA08D",
+  /** Seen in the gaps between tiles: a soft shadow line that separates them. */
+  bedGap: "#9CAA9A",
+  /** The carved highlight just inside the border. */
+  bedRim: "#AEBCAC",
+  /** Warm soil — the mound under the Home wordmark's planted bed. */
   soil: "#D9B489",
 };
 

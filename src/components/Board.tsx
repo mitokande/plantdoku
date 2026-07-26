@@ -12,8 +12,8 @@ import { cellKey } from "../game/validator";
 import { radius, shadow, theme } from "../theme";
 import { Cell } from "./Cell";
 
-// Wooden rim around the grid — a garden bed, kept deliberately slim so it
-// frames the puzzle instead of competing with it. FRAME is the full rim width
+// The tray rim around the grid, kept deliberately slim so it frames the puzzle
+// instead of competing with it. FRAME is the full rim width
 // the touch math sees (dark border + padding); locationX/Y are border-box
 // relative on both RN and web, so cells start exactly FRAME px from the view's
 // edge.
@@ -125,6 +125,13 @@ export function Board({
   const { size, regions, plants, colors } = puzzle;
 
   const { cellPx, frameW } = boardMetrics(width, size);
+
+  // Identity of the board on screen, used to key the grid below. Two boards of
+  // the same size otherwise reconcile cell-for-cell: React keeps every `Cell`
+  // instance (and its native views) and just feeds it new props, so any
+  // per-cell rendering state from the previous board rides along into the next
+  // one. Keying by the solution forces a clean grid per puzzle instead.
+  const boardKey = `${size}:${puzzle.solution.join(",")}`;
 
   // Refs so the once-created PanResponder always sees current geometry/handlers.
   const geom = useRef({ cellPx, size });
@@ -302,17 +309,18 @@ export function Board({
       pointerEvents="box-only"
       style={[styles.frame, { width: frameW }]}
     >
-      {/* Soil behind the grid — it's what shows through the tile gaps, and it
-          stays lighter than the rim so the gaps read as mortar, not shadow. */}
-      <View pointerEvents="none" style={styles.soil} />
+      {/* Shows through the tile gaps: a step darker than the tray face, so each
+          light pastel tile gets a soft separating line and reads as its own
+          raised object. */}
+      <View pointerEvents="none" style={styles.bedGap} />
       <View pointerEvents="none" style={styles.frameGloss} />
       {Array.from({ length: size }, (_, r) => (
-        <View key={r} style={styles.row}>
+        <View key={`${boardKey}-${r}`} style={styles.row}>
           {Array.from({ length: size }, (_, c) => {
             const region = regions[r][c];
             return (
               <Cell
-                key={c}
+                key={`${boardKey}-${c}`}
                 px={cellPx}
                 state={states[r][c]}
                 plantId={plants[region]}
@@ -352,25 +360,25 @@ export function Board({
 const styles = StyleSheet.create({
   frame: {
     padding: FRAME - FRAME_BORDER,
-    backgroundColor: theme.wood,
+    backgroundColor: theme.bed,
     borderWidth: FRAME_BORDER,
-    borderColor: theme.woodDark,
+    borderColor: theme.bedEdge,
     borderRadius: radius.md,
     overflow: "hidden",
     ...shadow.card,
   },
   // Absolute children sit relative to the padding edge, so 0/0/0/0 hugs the
   // inside of the border — i.e. exactly the grid's footprint.
-  soil: {
+  bedGap: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: theme.soil,
+    backgroundColor: theme.bedGap,
     borderRadius: radius.sm,
   },
-  // 1px light ring just inside the border — the "carved wood" highlight.
+  // 1px light ring just inside the border — the tray's carved highlight.
   frameGloss: {
     position: "absolute",
     top: 0,
@@ -378,7 +386,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderWidth: 1,
-    borderColor: theme.woodLight,
+    borderColor: theme.bedRim,
     borderRadius: radius.md - FRAME_BORDER,
   },
   row: {

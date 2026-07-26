@@ -133,14 +133,15 @@ export function GameScreen({ game, onMenu }: Props) {
     setResetArmed(true);
     resetTimer.current = setTimeout(() => setResetArmed(false), 3500);
   };
+  const resetNow = () => {
+    if (resetTimer.current) clearTimeout(resetTimer.current);
+    setResetArmed(false);
+    game.reset();
+  };
+  // A blank board has nothing to confirm; otherwise the first press only arms.
   const onReset = () => {
-    if (resetArmed || game.placedCount === 0) {
-      if (resetTimer.current) clearTimeout(resetTimer.current);
-      setResetArmed(false);
-      game.reset();
-    } else {
-      armReset();
-    }
+    if (resetArmed || game.placedCount === 0) resetNow();
+    else armReset();
   };
 
   // Every way out of the board goes through here: an unfinished board is
@@ -677,8 +678,13 @@ export function GameScreen({ game, onMenu }: Props) {
         )}
       </View>
 
-      {/* Undo and Hint are the everyday controls; Reset is rarely wanted and
-          destructive, so it drops to an icon and asks before wiping work. */}
+      {/* Undo and Hint are the everyday controls and share the row as equal,
+          medium white buttons. Reset is ranked down by *footprint* — a smaller
+          round button — rather than by being drained of contrast, which is what
+          made it read as disabled. It stays in the same white-button family,
+          keeps a full-strength icon, and is captioned, so it never looks like
+          dead UI. Destroying real work needs a second tap (or a long press to
+          skip the confirmation once you know the control). */}
       <View style={styles.controls}>
         <Button
           label="Undo"
@@ -697,24 +703,20 @@ export function GameScreen({ game, onMenu }: Props) {
           badge={game.hintsUsed}
           flex
         />
-        {resetArmed ? (
+        <View style={styles.resetCol}>
           <Button
-            label="Reset?"
-            icon="refresh"
-            variant="danger"
+            label={resetArmed ? "Confirm reset" : "Reset board"}
+            icon={resetArmed ? "alert" : "refresh"}
+            variant={resetArmed ? "danger" : "ghost"}
             onPress={onReset}
+            onLongPress={game.placedCount > 0 ? resetNow : undefined}
             disabled={tutorial}
+            circle
           />
-        ) : (
-          <Button
-            label="Reset board"
-            icon="refresh"
-            variant="quiet"
-            onPress={onReset}
-            disabled={tutorial}
-            iconOnly
-          />
-        )}
+          <Text style={[styles.resetTxt, resetArmed && styles.resetTxtArmed]}>
+            {resetArmed ? "Tap again" : "Reset"}
+          </Text>
+        </View>
       </View>
 
       {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
@@ -1003,7 +1005,22 @@ const styles = StyleSheet.create({
   },
   controls: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: space(2),
+  },
+  resetCol: {
+    alignItems: "center",
+  },
+  // Always captioned: a bare icon is what left this control ambiguous, and a
+  // caption that comes and goes with the level would move the row instead.
+  resetTxt: {
+    color: theme.textDim,
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  resetTxtArmed: {
+    color: theme.dangerDark,
+    fontWeight: "900",
   },
 });

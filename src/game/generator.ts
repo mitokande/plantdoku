@@ -23,9 +23,17 @@ import { rateBoard } from "./logicSolver";
 import { PLANT_IDS, REGION_COLORS } from "./palette";
 
 /**
- * All generator randomness flows through `rand` so `generatePuzzle` can swap in
- * a seeded PRNG: same seed (and code version) → byte-identical puzzle,
- * including colours and plant skins. Defaults to Math.random when unseeded.
+ * All *structural* generator randomness flows through `rand` so `generatePuzzle`
+ * can swap in a seeded PRNG: same seed (and code version) → byte-identical
+ * puzzle. Defaults to Math.random when unseeded.
+ *
+ * Cosmetics (region colours, plant skins) deliberately do NOT draw from `rand`
+ * — see `assemble`. They used to, which coupled the level table to the palette:
+ * `shuffle(REGION_COLORS)` consumed `length - 1` draws, so adding a colour
+ * shifted the stream for every later generation attempt and silently rewrote
+ * boards for existing seeds. Cosmetics are now derived from the finished
+ * board's own content, so editing the palette or the plant list can never move
+ * a puzzle again.
  */
 let rand: () => number = Math.random;
 
@@ -41,13 +49,34 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-function shuffle<T>(arr: T[]): T[] {
+function shuffleWith<T>(arr: T[], r: () => number): T[] {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
+    const j = Math.floor(r() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
   return a;
+}
+
+/** Structural shuffle — draws from the (possibly seeded) generator stream. */
+function shuffle<T>(arr: T[]): T[] {
+  return shuffleWith(arr, rand);
+}
+
+/**
+ * FNV-1a over the finished board, used to pick cosmetics deterministically
+ * without touching `rand`. Same board content → same colours and skins, so a
+ * seeded level looks identical every time it is opened.
+ */
+function boardHash(regions: number[][], solution: number[]): number {
+  let h = 0x811c9dc5;
+  const feed = (n: number) => {
+    h ^= n & 0xff;
+    h = Math.imul(h, 0x01000193);
+  };
+  for (const row of regions) for (const id of row) feed(id + 1);
+  for (const col of solution) feed(col + 97);
+  return h >>> 0;
 }
 
 const DIRS = [
@@ -292,11 +321,15 @@ function colorDistance(a: string, b: string): number {
 /**
  * Assign palette colours so *touching* clusters are maximally distinguishable:
  * most-bordered regions are coloured first, each taking the free colour whose
- * minimum distance to its already-coloured neighbours is largest. A random
- * shuffle keeps boards varied; non-adjacent regions may still get similar
- * colours, which is harmless.
+ * minimum distance to its already-coloured neighbours is largest. The shuffle
+ * keeps boards varied; non-adjacent regions may still get similar colours,
+ * which is harmless. `r` is the cosmetic PRNG (see `assemble`), never `rand`.
  */
-function assignRegionColors(regions: number[][], size: number): string[] {
+function assignRegionColors(
+  regions: number[][],
+  size: number,
+  r: () => number,
+): string[] {
   const adj: Set<number>[] = Array.from({ length: size }, () => new Set());
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -315,7 +348,7 @@ function assignRegionColors(regions: number[][], size: number): string[] {
     }
   }
 
-  const pool = shuffle(REGION_COLORS);
+  const pool = shuffleWith(REGION_COLORS, r);
   const order = [...Array(size).keys()].sort(
     (x, y) => adj[y].size - adj[x].size,
   );
@@ -350,12 +383,17 @@ function assemble(
   difficulty: Difficulty,
   tier: 1 | 2 | 3,
 ): Puzzle {
+  // Cosmetics come off a PRNG seeded by the board itself, NOT off `rand`: this
+  // is what keeps the palette and the plant list from perturbing generation
+  // (see the note on `rand`). It also means `assemble` is free to run on the
+  // fallback path without shifting later attempts.
+  const skin = mulberry32(boardHash(regions, solution));
   return {
     size,
     regions,
     solution,
-    plants: shuffle(PLANT_IDS).slice(0, size),
-    colors: assignRegionColors(regions, size),
+    plants: shuffleWith(PLANT_IDS, skin).slice(0, size),
+    colors: assignRegionColors(regions, size, skin),
     difficulty,
     tier,
   };

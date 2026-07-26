@@ -9,19 +9,29 @@ interface Props {
   label: string;
   icon?: React.ComponentProps<typeof Ionicons>["name"];
   onPress: () => void;
+  /** Optional shortcut past a two-press confirmation (see GameScreen's Reset). */
+  onLongPress?: () => void;
   disabled?: boolean;
   /**
    * Emphasis, high → low: `solid` (the primary action) · `ghost` (a normal
-   * white card button) · `quiet` (outline only — for rarely-wanted or
-   * destructive actions that shouldn't read as peers of the main controls) ·
-   * `danger` (a confirmed destructive step).
+   * white card button) · `danger` (a destructive step, or one awaiting
+   * confirmation). To rank an action *down*, shrink its footprint with
+   * `circle` rather than draining its contrast — a low-contrast button reads
+   * as disabled, not as secondary.
    */
-  variant?: "solid" | "ghost" | "quiet" | "danger";
+  variant?: "solid" | "ghost" | "danger";
   flex?: boolean;
   badge?: number; // info count in a gold corner bubble; hidden when 0/undefined
   small?: boolean; // compact pill
   /** Drop the label and show just the icon (the label becomes the a11y name). */
   iconOnly?: boolean;
+  /**
+   * Icon in a fixed round face, the same height as a normal button so it sits
+   * on the baseline of a control row. Use it to rank a secondary action *down*
+   * by footprint while keeping it in the same white-button family — which is
+   * what stops it reading as disabled the way an outline-only button does.
+   */
+  circle?: boolean;
 }
 
 // Height of the darker bottom edge that gives buttons their "pressable" depth.
@@ -31,41 +41,39 @@ export function Button({
   label,
   icon,
   onPress,
+  onLongPress,
   disabled,
   variant = "ghost",
   flex,
   badge,
   small,
   iconOnly,
+  circle,
 }: Props) {
+  const bare = iconOnly || circle;
   const solid = variant === "solid";
   const danger = variant === "danger";
-  const quiet = variant === "quiet";
-  const fg = solid
-    ? theme.onAccent
-    : danger
-      ? theme.onDanger
-      : quiet
-        ? theme.textDim
-        : theme.text;
+  const fg = solid ? theme.onAccent : danger ? theme.onDanger : theme.text;
   return (
     <Pressable
       onPress={() => {
         audio.play("button");
         onPress();
       }}
+      onLongPress={
+        onLongPress &&
+        (() => {
+          audio.play("button");
+          onLongPress();
+        })
+      }
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       style={[
         styles.edge,
-        solid
-          ? styles.edgeSolid
-          : danger
-            ? styles.edgeDanger
-            : quiet
-              ? styles.edgeQuiet
-              : styles.edgeGhost,
+        solid ? styles.edgeSolid : danger ? styles.edgeDanger : styles.edgeGhost,
+        circle && styles.edgeCircle,
         flex && { flex: 1 },
         disabled && styles.disabled,
       ]}
@@ -75,27 +83,21 @@ export function Button({
           <View
             style={[
               styles.face,
-              solid
-                ? styles.faceSolid
-                : danger
-                  ? styles.faceDanger
-                  : quiet
-                    ? styles.faceQuiet
-                    : styles.faceGhost,
+              solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
               small && styles.faceSmall,
               iconOnly && styles.faceIconOnly,
-              pressed && !disabled && !quiet && styles.facePressed,
-              pressed && !disabled && quiet && styles.faceQuietPressed,
+              circle && styles.faceCircle,
+              pressed && !disabled && styles.facePressed,
             ]}
           >
             {icon ? (
               <Ionicons
                 name={icon}
-                size={iconOnly ? 22 : small ? 15 : 18}
+                size={bare ? 22 : small ? 15 : 18}
                 color={fg}
               />
             ) : null}
-            {!iconOnly && (
+            {!bare && (
               <Text
                 style={[
                   styles.label,
@@ -133,10 +135,8 @@ const styles = StyleSheet.create({
   edgeDanger: {
     backgroundColor: theme.dangerDark,
   },
-  // No 3D edge on the quiet variant — that depth is what makes a button look
-  // important, and this one deliberately doesn't.
-  edgeQuiet: {
-    backgroundColor: "transparent",
+  edgeCircle: {
+    borderRadius: 999,
   },
   face: {
     flexDirection: "row",
@@ -159,23 +159,25 @@ const styles = StyleSheet.create({
     minWidth: 44,
     paddingHorizontal: 10,
   },
+  // 44 + EDGE matches a normal button's 44 face + EDGE, so a circle and a
+  // full-size button in the same row share a baseline.
+  faceCircle: {
+    width: 44,
+    height: 44,
+    minHeight: 44,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    borderRadius: 999,
+  },
   facePressed: {
     marginTop: EDGE,
     marginBottom: 0,
-  },
-  faceQuietPressed: {
-    backgroundColor: theme.bgAlt,
   },
   faceSolid: {
     backgroundColor: theme.accent,
   },
   faceGhost: {
     backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
-  },
-  faceQuiet: {
-    backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: theme.panelLine,
   },

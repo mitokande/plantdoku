@@ -27,29 +27,35 @@ export const PLANT_IDS: string[] = [
 ];
 
 /**
- * Region tints. At least as many as the largest board (9).
+ * Region tints — 15 soft pastels walking the hue wheel (blues → teals → greens
+ * → yellows → warm → pinks → purples), plus a warm neutral. Only `size` of them
+ * are used per board (6–9), so the set is deliberately larger than the biggest
+ * grid: `assignRegionColors` picks from all of them by maximum perceptual
+ * distance, and the extra slack is what lets it keep *touching* clusters far
+ * apart. Order here is presentational only — the generator shuffles the pool.
  *
- * These are the **available** (untouched) tile colours: light botanical
- * pastels. Cell.tsx derives the other two tile states from them — a
- * desaturated wash for ✕-eliminated cells and a brighter one for a planted
- * cell — so a solved cell is the most vivid thing on the board and the base
- * tint stays pale enough for the embossed silhouette and the dark ✕ to read.
+ * These are the **available** (untouched) tile colours. `Cell.tsx` derives the
+ * other two states from each one: a softened tint for ✕-eliminated cells (the
+ * hue must survive — see that file) and a more saturated one for a planted
+ * cell, so a solved cell is the most vivid thing on the board.
  *
- * Hues stay evenly spread at matched lightness so no two are near-twins; the
- * generator additionally assigns them so that touching clusters get maximally
- * different colours.
+ * Editing this list is free: cosmetics no longer draw from the generator's
+ * seeded RNG, so no existing board changes (see `assemble` in generator.ts).
  */
 export const REGION_COLORS: string[] = [
-  "#EFB3AB", // dusty rose
-  "#EFC79B", // terracotta clay
-  "#E6DA9E", // sand
-  "#C9DA97", // pale olive
-  "#A7D79C", // sage
-  "#94D8B4", // eucalyptus
-  "#92D6CF", // dusty teal
-  "#9DC8E4", // rain blue
-  "#B3B8E2", // lavender slate
-  "#CBAEDC", // wisteria
-  "#E0AED3", // mauve
-  "#EDB4C1", // old rose
+  "#C7DDE8", // powder blue
+  "#AFCFE2", // soft sky
+  "#B5D8D2", // misty teal
+  "#B8D9BC", // mint green
+  "#C9DDB0", // fresh sage
+  "#DCE5A9", // soft lime
+  "#E9DFA3", // butter yellow
+  "#E8CFA5", // warm sand
+  "#E8BEAA", // soft peach
+  "#E7B8BB", // blush pink
+  "#DDB5CB", // dusty rose
+  "#D5B9DC", // soft lilac
+  "#C7BCE0", // lavender
+  "#B9C6E1", // periwinkle
+  "#D7D2C2", // warm stone
 ];

@@ -75,7 +75,13 @@ event; don't re-add without asking).
 button shows the total. Every Hint press counts as a hint used (`hintsUsed`
 in reducer state; survives RESET, cleared on new boards).
 NOTE: changing the generator algorithm changes what every seed produces;
-re-pick seeds if generator behaviour changes.
+re-pick seeds if generator behaviour changes. **Cosmetics are exempt**: region
+colours and plant skins are drawn from a PRNG seeded by the finished board
+(`boardHash` in `generator.ts`), not from the generator stream, so editing
+`REGION_COLORS` or `PLANT_IDS` cannot move a puzzle. That coupling was real —
+`shuffle(REGION_COLORS)` used to consume `length - 1` draws from the seeded
+stream, so growing the palette from 12 to 15 colours silently rewrote 18 of the
+60 curated levels — and it is what the exemption exists to prevent.
 
 **Plant cards** (`src/game/cards.ts`, pure/headless-safe): collection meta on
 top of stars — all 17 plants are collectible cards (name, rarity, flavor)
@@ -323,8 +329,8 @@ section exists).
 
 - **Colour by function, not decoration**: `accent` green = primary actions,
   progress, active selection · `text` dark forest green = type/icons · `gold` =
-  stars, rewards, rarity (**never** a plain card border) · `wood`/`soil` = the
-  board's garden bed only · `danger` = mistakes and hearts only. `onAccent` /
+  stars, rewards, rarity (**never** a plain card border) · `bed*` = the
+  board's tray only, `soil` = the Home wordmark's mound only · `danger` = mistakes and hearts only. `onAccent` /
   `onGold` / `onDanger` are the type colours on those fills (very dark greens
   and browns — never pure black).
 - Surface hierarchy, lightest first: `panel` (white — cards *and* modal cards) >
@@ -351,7 +357,7 @@ section exists).
 
 ### Board
 
-- Cells are **rounded tiles** with a small gap between them (the bed's `soil`
+- Cells are **rounded tiles** with a small gap between them (the bed's `bedGap`
   shows through), a faint static bevel echoing the chunky 3D buttons, and a
   **faint embossed glyph** of the cluster's plant. Each region colour carries
   **three states**, derived in `Cell.tsx` from the one base tint in
@@ -376,11 +382,18 @@ section exists).
   silhouette-plus-tile-colour > ✕**. A *mistake* ✕ is the one exception — solid
   `close`, larger, near-opaque, `dangerDark` — because there are only ever a
   few of them and they mean something different.
-- The board sits in a **slim garden bed** (`theme.wood*` + `soil`: a light rim
-  with a lighter carved inner ring and lighter soil in the tile gaps, no texture
-  assets). The rim is kept thin (`FRAME`/`FRAME_BORDER` in `Board.tsx`) on
-  purpose — it frames the puzzle rather than competing with it. `GameScreen`
-  lays the whole screen on a very faint vertical `expo-linear-gradient`.
+- The board sits in a **slim tray** (`theme.bed` face · `bedEdge` outer border ·
+  `bedGap` in the tile gaps · `bedRim` carved highlight — no texture assets),
+  kept thin (`FRAME`/`FRAME_BORDER` in `Board.tsx`) so it frames the puzzle
+  rather than competing with it. The tray is a **low-chroma sage grey, a clear
+  step darker than every tile**: the region palette is entirely light pastels, so
+  a warm or saturated bed reads as one more cluster colour. The bar to clear is
+  measurable — touching clusters are 55–85 redmean units apart (median 76), and
+  the old warm-wood bed was only 58 from the nearest pastel, which is why peach
+  and sand tiles bled into the frame. Current margins: `bed` 88 · `bedGap` 117 ·
+  `bedEdge` 150 · `bedRim` 65. **Re-check these if the palette changes.**
+  `GameScreen` lays the whole screen on a very faint vertical
+  `expo-linear-gradient`.
 - A rejected guess is a **red ✕ cell**: the tile becomes opaque
   `theme.dangerTile` (silhouette and ✕ both `dangerDark`) rather than taking a
   translucent red wash — red over a botanical green blends to muddy tan, not to
@@ -407,11 +420,16 @@ Each screen answers one question, and the board screen's is "where do I plant?"
 - The gesture reminder pill is **onboarding copy, not a control**: it shows on a
   first-time player's board and lives in Help from then on. Its row keeps its
   height either way, so finishing the tutorial can't jolt the board up-screen.
-- Controls are ranked, not equal: **Undo** and **Hint** (gold info badges:
-  undoable-move count / hints used, sitting inside their own button's width) are
-  full buttons; **Reset** is an icon-only `quiet` button that **arms on first
-  press** (turning into a red "Reset?" for 3.5s) whenever there is progress to
-  destroy.
+- Controls are ranked **by footprint, not by contrast**: **Undo** and **Hint**
+  are equal medium white buttons (gold info badges — undoable-move count / hints
+  used — sitting inside their own button's width), and **Reset** is a smaller
+  round white button *of the same family*, captioned "Reset". An earlier pass
+  ranked it down by draining it to a borderless outline, which just made it look
+  disabled — don't do that again; shrink the target, keep the contrast.
+  Reset **arms on first press** (circle turns red, caption becomes "Tap again",
+  falling back after 3.5s) whenever there is progress to destroy; a **long
+  press** skips straight to the reset for players who already know the control,
+  and a blank board needs no confirmation at all.
 
 ### Win sequence
 
@@ -501,7 +519,7 @@ src/components/
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
-  Button.tsx (solid/ghost/quiet/danger + iconOnly), WinFlourish.tsx (big plant
+  Button.tsx (solid/ghost/danger + iconOnly/circle, optional long-press), WinFlourish.tsx (big plant
   bloom before the win modal), WinOverlay.tsx (card-flip reveal + Continue),
   FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
@@ -613,6 +631,17 @@ interactive tutorial + Help overlay. Runs on iOS/Android (Expo Go) and web.
 ## Conventions / gotchas
 
 - Touch math: **locationX/locationY only** (see Interaction model).
+- **Never mount a cell's sprite conditionally, and keep the grid keyed by
+  board.** Two boards of the same size reconcile cell-for-cell, so React keeps
+  every `Cell` instance and its native views across a level change. Combined with
+  a `{!placed && <Image …>}` glyph that produced a real Android bug: a tinted
+  `Image` unmounted (cell planted) and later remounted into the recycled view
+  never drew again, so every cell planted earlier in the session showed as a
+  blank tile on later boards — accumulating level after level. The fix is both
+  halves: `Cell` keeps the glyph mounted and only animates its opacity, and
+  `Board` keys rows/cells with `boardKey` (size + solution) so each puzzle gets a
+  fresh grid. `retry()`/`RESET`/resume reuse the same puzzle, hence the same key,
+  and correctly do *not* remount.
 - Keep `src/game/*` (except `plants.ts`) free of RN/asset imports so `npm test`
   works under Node.
 - After editing `palette.ts` plant ids, keep `plants.ts` and the slicer in sync.

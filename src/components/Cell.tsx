@@ -141,22 +141,29 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
         ]}
       >
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bevel]} />
-        {!placed && (
-          // Embossed watermark of the cluster's plant, replaced by the
-          // full-colour sprite on placement.
-          <Image
-            source={PLANT_SOURCES[plantId]}
-            resizeMode="contain"
-            style={[
-              styles.glyph,
+        {/* Embossed watermark of the cluster's plant, hidden under the
+            full-colour sprite once the cell is planted.
+
+            This Image is **always mounted** and only fades — do NOT put it
+            behind `{!placed && …}`. Conditionally mounting it meant that on
+            Android a cell which had ever held a plant lost its silhouette
+            permanently: the tinted Image never drew again once it had been
+            unmounted and remounted into a recycled native view. It showed up
+            as blank tiles at every position planted earlier in the session. */}
+        <Image
+          source={PLANT_SOURCES[plantId]}
+          resizeMode="contain"
+          style={[
+            styles.glyph,
+            {
               // On a mistake tile the silhouette follows the red, or the
               // region's green would read as a smudge on the pink.
-              { tintColor: mistake ? theme.dangerDark : tint.glyph },
-              // Recede further under an ✕ so the mark reads unobstructed.
-              state === "marked" && styles.glyphMarked,
-            ]}
-          />
-        )}
+              tintColor: mistake ? theme.dangerDark : tint.glyph,
+              // Recede under an ✕ so the mark reads unobstructed.
+              opacity: placed ? 0 : state === "marked" ? 0.2 : 0.34,
+            },
+          ]}
+        />
       </View>
       {/* Plant + ✕ live outside the tile so the spring overshoot / scale
           animations aren't clipped by its rounded overflow:hidden box. */}
@@ -254,15 +261,13 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 4,
   },
+  // Opacity is set inline per state (see the render): 0.34 available · 0.2
+  // under an ✕ — still readable, because the cluster's colour and shape is
+  // what the player reasons with and an eliminated cell is not out of the
+  // puzzle — · 0 when planted.
   glyph: {
     width: "60%",
     height: "60%",
-    opacity: 0.34,
-  },
-  // Still readable under the ✕: the cluster's colour + shape is what the
-  // player reasons with, and an eliminated cell is not out of the puzzle.
-  glyphMarked: {
-    opacity: 0.2,
   },
   plantWrap: {
     position: "absolute",
