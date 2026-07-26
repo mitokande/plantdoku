@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as NativeSplash from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -19,13 +20,21 @@ import { DailyScreen } from "./src/components/DailyScreen";
 import { GameScreen } from "./src/components/GameScreen";
 import { HomeScreen } from "./src/components/HomeScreen";
 import { SettingsOverlay } from "./src/components/SettingsOverlay";
+import { SplashScreen } from "./src/components/SplashScreen";
 import { LEVEL_COUNT } from "./src/game/levels";
 import { useBackHandler } from "./src/hooks/useBackHandler";
 import { useGame } from "./src/state/useGame";
 import { shadow, theme } from "./src/theme";
 
+// Hold the static native splash until the animated one has painted, so the
+// launch reads as one continuous shot instead of a flash of empty canvas.
+// (Failures are ignored — the splash auto-hiding early is cosmetic.)
+NativeSplash.preventAutoHideAsync().catch(() => {});
+
 export default function App() {
   const game = useGame();
+  // The animated launch splash covers the shell until its beat finishes.
+  const [splash, setSplash] = useState(true);
   const [tab, setTab] = useState<Tab>("home");
   // A board fills the screen while playing — HUD and tab bar are hidden.
   const [playing, setPlaying] = useState(false);
@@ -57,6 +66,12 @@ export default function App() {
       else saveResume.current();
     });
     return () => sub.remove();
+  }, []);
+
+  // First paint has happened by the time this runs, so the animated splash is
+  // already on screen behind the native one — hand over.
+  useEffect(() => {
+    NativeSplash.hideAsync().catch(() => {});
   }, []);
 
   // Record the active screen (game board, or the current tab when in the shell).
@@ -98,82 +113,92 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
-      {playing ? (
-        <GameScreen game={game} onMenu={() => setPlaying(false)} />
-      ) : (
-        <>
-          {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}
-          <View style={styles.hud}>
-            <Pressable onPress={() => setTab("cards")} style={styles.pill}>
-              <Ionicons name="star" size={15} color={theme.gold} />
-              <Text style={styles.pillTxt}>{game.totalStars}</Text>
-            </Pressable>
-            {game.dailyStreak > 0 && (
-              <View style={styles.pill}>
-                <Ionicons name="flame" size={15} color={theme.danger} />
-                <Text style={styles.pillTxt}>{game.dailyStreak}</Text>
-              </View>
-            )}
-            <View style={styles.hudSpacer} />
-            <Pressable
-              hitSlop={10}
-              onPress={() => setShowSettings(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Settings"
-              style={styles.settingsBtn}
-            >
-              <Ionicons name="settings-sharp" size={22} color={theme.textDim} />
-            </Pressable>
-          </View>
+    // The splash sits outside the SafeAreaView so it covers the status-bar
+    // inset too — a launch animation letterboxed by a strip of page canvas
+    // would give away the seam it exists to hide.
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safe}>
+        <StatusBar style="dark" />
+        {playing ? (
+          <GameScreen game={game} onMenu={() => setPlaying(false)} />
+        ) : (
+          <>
+            {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}
+            <View style={styles.hud}>
+              <Pressable onPress={() => setTab("cards")} style={styles.pill}>
+                <Ionicons name="star" size={15} color={theme.gold} />
+                <Text style={styles.pillTxt}>{game.totalStars}</Text>
+              </Pressable>
+              {game.dailyStreak > 0 && (
+                <View style={styles.pill}>
+                  <Ionicons name="flame" size={15} color={theme.danger} />
+                  <Text style={styles.pillTxt}>{game.dailyStreak}</Text>
+                </View>
+              )}
+              <View style={styles.hudSpacer} />
+              <Pressable
+                hitSlop={10}
+                onPress={() => setShowSettings(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                style={styles.settingsBtn}
+              >
+                <Ionicons name="settings-sharp" size={22} color={theme.textDim} />
+              </Pressable>
+            </View>
 
-          <View style={styles.page}>
-            {tab === "home" && (
-              <HomeScreen
-                unlockedLevel={game.unlockedLevel}
-                allComplete={game.allComplete}
-                totalStars={game.totalStars}
-                resume={game.resume}
-                onResume={continueBoard}
-                onPlay={startLevel}
-                onEndless={(difficulty) => {
-                  game.newEndless(difficulty);
-                  setPlaying(true);
-                }}
-                onCards={() => setTab("cards")}
-              />
-            )}
-            {tab === "cards" && <CardsScreen totalStars={game.totalStars} />}
-            {tab === "daily" && (
-              <DailyScreen
-                dailyDone={game.dailyDoneToday}
-                dailyStreak={game.dailyStreak}
-                dailyLog={game.dailyLog}
-                hasSaved={game.resumeSlots.daily != null}
-                onPlay={startDaily}
-              />
-            )}
-          </View>
+            <View style={styles.page}>
+              {tab === "home" && (
+                <HomeScreen
+                  unlockedLevel={game.unlockedLevel}
+                  allComplete={game.allComplete}
+                  totalStars={game.totalStars}
+                  resume={game.resume}
+                  onResume={continueBoard}
+                  onPlay={startLevel}
+                  onEndless={(difficulty) => {
+                    game.newEndless(difficulty);
+                    setPlaying(true);
+                  }}
+                  onCards={() => setTab("cards")}
+                />
+              )}
+              {tab === "cards" && <CardsScreen totalStars={game.totalStars} />}
+              {tab === "daily" && (
+                <DailyScreen
+                  dailyDone={game.dailyDoneToday}
+                  dailyStreak={game.dailyStreak}
+                  dailyLog={game.dailyLog}
+                  hasSaved={game.resumeSlots.daily != null}
+                  onPlay={startDaily}
+                />
+              )}
+            </View>
 
-          <BottomNav tab={tab} onTab={setTab} dailyDot={!game.dailyDoneToday} />
-        </>
-      )}
-      {showSettings && (
-        <SettingsOverlay
-          soundOn={game.soundOn}
-          onToggleSound={game.setSoundOn}
-          notifsOn={game.notifsOn}
-          onToggleNotifs={game.setNotifsOn}
-          onFlush={game.flushData}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
-    </SafeAreaView>
+            <BottomNav tab={tab} onTab={setTab} dailyDot={!game.dailyDoneToday} />
+          </>
+        )}
+        {showSettings && (
+          <SettingsOverlay
+            soundOn={game.soundOn}
+            onToggleSound={game.setSoundOn}
+            notifsOn={game.notifsOn}
+            onToggleNotifs={game.setNotifsOn}
+            onFlush={game.flushData}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </SafeAreaView>
+      {splash && <SplashScreen onDone={() => setSplash(false)} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: theme.bg,
+  },
   safe: {
     flex: 1,
     backgroundColor: theme.bg,

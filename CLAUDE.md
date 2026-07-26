@@ -431,6 +431,19 @@ Each screen answers one question, and the board screen's is "where do I plant?"
   press** skips straight to the reset for players who already know the control,
   and a blank board needs no confirmation at all.
 
+### Launch splash
+
+The static native splash (`expo-splash-screen`, `assets/splash-icon.png` on
+`bg`) is only the first frame: `App.tsx` calls `preventAutoHideAsync()` at
+module load and `hideAsync()` after first paint, so the animated
+`SplashScreen.tsx` is already on screen when the native one lifts — no flash of
+empty canvas. It renders **outside** the `SafeAreaView` so it covers the
+status-bar inset too. The beat (`SPLASH_MS` 2.9s, incl. a 320ms fade-out):
+planter tray drops in → six pastel tiles pop in sequence → the `sprout` sprite
+rises with drifting leaf sparks → wordmark → tagline → loading bar. It is
+**never a gate** — a tap anywhere skips to the end, `onDone` is fired at most
+once, and it holds no game state (the app is fully live behind it).
+
 ### Win sequence
 
 - A **flourish beat first**, then the modal. `WinFlourish.tsx` dims the solved
@@ -516,6 +529,8 @@ src/components/
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
   TutorialOverlay.tsx  spotlight blackout + coach card (first-play tutorial)
   HelpOverlay.tsx  "How to play" card
+  SplashScreen.tsx animated launch splash (tray + tiles pop in, sprout rises,
+                 wordmark, loading bar) — cosmetic only, tap to skip
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
