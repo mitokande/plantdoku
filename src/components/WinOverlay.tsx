@@ -41,6 +41,8 @@ export function WinOverlay({
   onNext,
   onMenu,
 }: Props) {
+  const wonCard = newCards[0] ?? null;
+
   // Springy entrance: backdrop fades while the card scales up with overshoot.
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -52,24 +54,31 @@ export function WinOverlay({
     }).start();
   }, [enter]);
 
-  // New-card reveal pops in after the main card settles.
+  // The won card is the hero — it pops in a beat after the card settles, like
+  // it's being drawn from a pack.
   const cardPop = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (newCards.length === 0) return;
+    if (!wonCard) return;
     Animated.spring(cardPop, {
       toValue: 1,
-      delay: 450,
+      delay: 400,
       friction: 5,
       tension: 80,
       useNativeDriver: true,
     }).start();
-  }, [newCards.length, cardPop]);
+  }, [wonCard, cardPop]);
 
   const fade = enter.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
     extrapolate: "clamp",
   });
+
+  const tag = daily
+    ? `Daily · ${daily.date}`
+    : endless
+      ? "Endless"
+      : `Level ${level}`;
 
   return (
     <Animated.View style={[styles.backdrop, { opacity: fade }]}>
@@ -89,101 +98,104 @@ export function WinOverlay({
           },
         ]}
       >
-        <Ionicons name="leaf" size={46} color={theme.accent} />
-        <Text style={styles.title}>
-          {daily
-            ? `Daily ${daily.date} solved!`
-            : endless
-              ? "Board solved!"
-              : `Level ${level} solved!`}
-        </Text>
+        <Text style={styles.tag}>{tag}</Text>
+        <Text style={styles.title}>Solved!</Text>
 
-        {stars && (
-          <>
-            <View style={styles.stars}>
-              {[1, 2, 3].map((i) => (
-                <Ionicons
-                  key={i}
-                  name={i <= stars.earned ? "star" : "star-outline"}
-                  size={34}
-                  color={i <= stars.earned ? theme.gold : theme.panelLine}
-                />
-              ))}
-            </View>
-            {stars.earned < 3 && (
-              <Text style={styles.starHint}>
-                3
-                <Ionicons name="star" size={11} color={theme.gold} />
-                {` = no hints & under ${formatTime(stars.par)}`}
-              </Text>
-            )}
-          </>
-        )}
-
-        {newCards.length > 0 ? (
+        {wonCard ? (
           <Animated.View
             style={[
-              styles.newCard,
-              { borderColor: RARITY_COLORS[newCards[0].rarity] },
+              styles.hero,
               {
                 opacity: cardPop,
                 transform: [
                   {
                     scale: cardPop.interpolate({
                       inputRange: [0, 1],
-                      outputRange: [0.3, 1],
+                      outputRange: [0.4, 1],
+                    }),
+                  },
+                  {
+                    rotate: cardPop.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ["-8deg", "0deg"],
                     }),
                   },
                 ],
               },
             ]}
           >
-            <Image
-              source={PLANT_SOURCES[newCards[0].plantId]}
-              style={styles.newCardImg}
-            />
-            <View>
-              <Text
+            <View style={styles.heroFrameWrap}>
+              <View
                 style={[
-                  styles.newCardTag,
-                  { color: RARITY_COLORS[newCards[0].rarity] },
+                  styles.heroGlow,
+                  { backgroundColor: RARITY_COLORS[wonCard.rarity] },
+                ]}
+              />
+              <View
+                style={[
+                  styles.heroFrame,
+                  { borderColor: RARITY_COLORS[wonCard.rarity] },
                 ]}
               >
-                NEW CARD{newCards.length > 1 ? ` +${newCards.length - 1}` : ""}
-              </Text>
-              <Text style={styles.newCardName}>{newCards[0].name}</Text>
+                <Image
+                  source={PLANT_SOURCES[wonCard.plantId]}
+                  style={styles.heroImg}
+                />
+              </View>
             </View>
+            <Text style={[styles.heroTag, { color: RARITY_COLORS[wonCard.rarity] }]}>
+              NEW CARD{newCards.length > 1 ? `  +${newCards.length - 1}` : ""}
+            </Text>
+            <Text style={styles.heroName}>{wonCard.name}</Text>
           </Animated.View>
         ) : (
-          stars != null &&
-          nextCardIn != null && (
-            <Text style={styles.nextCard}>
-              <Ionicons name="albums" size={13} color={theme.textDim} />
-              {`  ${nextCardIn} `}
-              <Ionicons name="star" size={12} color={theme.textDim} />
-              {" more until your next plant card"}
-            </Text>
-          )
+          <Ionicons
+            name="leaf"
+            size={34}
+            color={theme.accent}
+            style={styles.icon}
+          />
         )}
 
-        <View style={styles.stats}>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>TIME</Text>
-            <Text style={styles.statVal}>{formatTime(seconds)}</Text>
+        {stars && (
+          <View style={styles.stars}>
+            {[1, 2, 3].map((i) => (
+              <Ionicons
+                key={i}
+                name={i <= stars.earned ? "star" : "star-outline"}
+                size={30}
+                color={i <= stars.earned ? theme.gold : theme.panelLine}
+              />
+            ))}
+          </View>
+        )}
+        {stars && stars.earned < 3 && (
+          <Text style={styles.starHint}>
+            3★ · no hints · under {formatTime(stars.par)}
+          </Text>
+        )}
+
+        <View style={styles.chips}>
+          <View style={styles.chip}>
+            <Ionicons name="time-outline" size={14} color={theme.textDim} />
+            <Text style={styles.chipTxt}>{formatTime(seconds)}</Text>
           </View>
           {daily && (
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>STREAK</Text>
-              <Text style={styles.statVal}>
-                <Ionicons name="flame" size={22} color={theme.danger} />
-                {` ${daily.streak}`}
-              </Text>
+            <View style={styles.chip}>
+              <Ionicons name="flame" size={14} color={theme.danger} />
+              <Text style={styles.chipTxt}>{daily.streak}</Text>
+            </View>
+          )}
+          {!wonCard && stars != null && nextCardIn != null && (
+            <View style={styles.chip}>
+              <Ionicons name="albums-outline" size={13} color={theme.textDim} />
+              <Text style={styles.chipTxt}>{nextCardIn}★ to card</Text>
             </View>
           )}
         </View>
 
         {!daily && !endless && !hasNext && (
-          <Text style={styles.comingSoon}>More levels coming soon</Text>
+          <Text style={styles.comingSoon}>More levels soon</Text>
         )}
 
         <View style={styles.actions}>
@@ -235,91 +247,118 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    maxWidth: 360,
+    maxWidth: 340,
     backgroundColor: theme.bgAlt,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: theme.panelLine,
-    padding: 24,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
     alignItems: "center",
   },
-  title: {
-    color: theme.text,
-    fontSize: 32,
-    fontWeight: "900",
-    marginTop: 6,
-  },
-  stars: {
-    flexDirection: "row",
-    gap: 6,
-    marginTop: 8,
-  },
-  starHint: {
-    color: theme.textDim,
-    fontSize: 12.5,
-    marginTop: 2,
-  },
-  newCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 14,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    backgroundColor: theme.panel,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-  },
-  newCardImg: {
-    width: 40,
-    height: 40,
-    resizeMode: "contain",
-  },
-  newCardTag: {
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-  },
-  newCardName: {
-    color: theme.text,
-    fontSize: 17,
-    fontWeight: "800",
-  },
-  nextCard: {
-    color: theme.textDim,
-    fontSize: 12.5,
-    marginTop: 10,
-  },
-  stats: {
-    flexDirection: "row",
-    gap: 32,
-    marginTop: 18,
-  },
-  stat: {
-    alignItems: "center",
-  },
-  statLabel: {
+  tag: {
     color: theme.textDim,
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 1,
+    textTransform: "uppercase",
   },
-  statVal: {
+  title: {
     color: theme.text,
-    fontSize: 26,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "900",
     marginTop: 2,
+  },
+  icon: {
+    marginTop: 12,
+  },
+  hero: {
+    alignItems: "center",
+    marginTop: 10,
+  },
+  heroFrameWrap: {
+    width: 128,
+    height: 128,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroGlow: {
+    position: "absolute",
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    opacity: 0.3,
+  },
+  heroFrame: {
+    width: 100,
+    height: 100,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.panel,
+    borderRadius: radius.md,
+    borderWidth: 2.5,
+  },
+  heroImg: {
+    width: 78,
+    height: 78,
+    resizeMode: "contain",
+  },
+  heroTag: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    marginTop: 10,
+  },
+  heroName: {
+    color: theme.text,
+    fontSize: 19,
+    fontWeight: "800",
+    marginTop: 1,
+  },
+  stars: {
+    flexDirection: "row",
+    gap: 4,
+    marginTop: 14,
+  },
+  starHint: {
+    color: theme.textDim,
+    fontSize: 11.5,
+    fontWeight: "600",
+    marginTop: 4,
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: theme.panel,
+    borderColor: theme.panelLine,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  chipTxt: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: "800",
   },
   comingSoon: {
     color: theme.textDim,
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: "700",
-    marginTop: 14,
+    marginTop: 12,
   },
   actions: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 22,
+    marginTop: 20,
     alignSelf: "stretch",
   },
 });
