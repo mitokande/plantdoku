@@ -409,8 +409,17 @@ export function GameScreen({ game, onMenu }: Props) {
   // Juice: shake the board (+ error haptic) when a plant is rejected by a
   // wrong cell (which turns it into a red ✕).
   const shake = useRef(new Animated.Value(0)).current;
-  const prevMistakes = useRef(0);
+  const prevMistakes = useRef(game.mistakes.size);
+  // Whose ✕s those are: a resumed board arrives with its red ✕s already in
+  // place, and re-playing the rejection beat for a mistake made last session
+  // would be a lie. Adopt a new/restored board's count silently.
+  const shakeBoard = useRef(game.puzzle);
   useEffect(() => {
+    if (shakeBoard.current !== game.puzzle) {
+      shakeBoard.current = game.puzzle;
+      prevMistakes.current = game.mistakes.size;
+      return;
+    }
     if (game.mistakes.size > prevMistakes.current) {
       Haptics?.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
         () => {},
@@ -427,7 +436,7 @@ export function GameScreen({ game, onMenu }: Props) {
       ).start();
     }
     prevMistakes.current = game.mistakes.size;
-  }, [game.mistakes, shake]);
+  }, [game.mistakes, game.puzzle, shake]);
 
   // Progress bar fill (plants placed / board size), springy.
   const progress = useRef(new Animated.Value(0)).current;
@@ -626,8 +635,6 @@ export function GameScreen({ game, onMenu }: Props) {
         <WinOverlay
           level={game.level}
           seconds={game.seconds}
-          bestSeconds={game.bestSeconds}
-          isNewBest={game.newBest}
           hasNext={game.hasNextLevel}
           daily={
             game.mode === "daily" && game.dailyKey

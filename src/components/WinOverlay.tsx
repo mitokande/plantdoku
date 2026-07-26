@@ -12,8 +12,6 @@ import { Confetti } from "./Confetti";
 interface Props {
   level: number;
   seconds: number;
-  bestSeconds?: number;
-  isNewBest: boolean;
   hasNext: boolean;
   /** Set when a daily puzzle was solved — switches title/stats/actions. */
   daily?: { number: number; streak: number } | null;
@@ -33,8 +31,6 @@ interface Props {
 export function WinOverlay({
   level,
   seconds,
-  bestSeconds,
-  isNewBest,
   hasNext,
   daily,
   endless,
@@ -55,28 +51,6 @@ export function WinOverlay({
       useNativeDriver: true,
     }).start();
   }, [enter]);
-
-  // "New best" badge pulses for that arcade-y reward feel.
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (!isNewBest) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 550,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 550,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [isNewBest, pulse]);
 
   // New-card reveal pops in after the main card settles.
   const cardPop = useRef(new Animated.Value(0)).current;
@@ -115,11 +89,7 @@ export function WinOverlay({
           },
         ]}
       >
-        <Ionicons
-          name={isNewBest ? "trophy" : "leaf"}
-          size={46}
-          color={isNewBest ? theme.gold : theme.accent}
-        />
+        <Ionicons name="leaf" size={46} color={theme.accent} />
         <Text style={styles.title}>
           {daily
             ? `Daily #${daily.number} solved!`
@@ -201,44 +171,16 @@ export function WinOverlay({
             <Text style={styles.statLabel}>TIME</Text>
             <Text style={styles.statVal}>{formatTime(seconds)}</Text>
           </View>
-          <View style={styles.stat}>
-            {daily ? (
-              <>
-                <Text style={styles.statLabel}>STREAK</Text>
-                <Text style={styles.statVal}>
-                  <Ionicons name="flame" size={22} color={theme.danger} />
-                  {` ${daily.streak}`}
-                </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.statLabel}>BEST</Text>
-                <Text style={styles.statVal}>{formatTime(bestSeconds)}</Text>
-              </>
-            )}
-          </View>
+          {daily && (
+            <View style={styles.stat}>
+              <Text style={styles.statLabel}>STREAK</Text>
+              <Text style={styles.statVal}>
+                <Ionicons name="flame" size={22} color={theme.danger} />
+                {` ${daily.streak}`}
+              </Text>
+            </View>
+          )}
         </View>
-
-        {isNewBest && (
-          <Animated.Text
-            style={[
-              styles.newBest,
-              {
-                transform: [
-                  {
-                    scale: pulse.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <Ionicons name="star" size={15} color={theme.gold} />
-            {"  New best time!"}
-          </Animated.Text>
-        )}
 
         {!daily && !endless && !hasNext && (
           <Text style={styles.comingSoon}>More levels coming soon</Text>
@@ -367,12 +309,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "800",
     marginTop: 2,
-  },
-  newBest: {
-    color: theme.gold,
-    fontSize: 16,
-    fontWeight: "800",
-    marginTop: 14,
   },
   comingSoon: {
     color: theme.textDim,
