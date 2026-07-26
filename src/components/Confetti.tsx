@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, StyleSheet, useWindowDimensions } from "react-native";
 
+// Saturated enough to read against the light theme as well as the win scrim.
 const COLORS = [
-  "#F7C5CC",
-  "#FBE0A2",
-  "#8BD24F",
-  "#A9D8EF",
-  "#D7BDE2",
-  "#F5B7A6",
-  "#FFD66B",
+  "#F09AA6",
+  "#F5C65E",
+  "#77C93F",
+  "#6FB6E0",
+  "#B98FD6",
+  "#F09070",
+  "#F0B429",
 ];
 
 interface PieceCfg {

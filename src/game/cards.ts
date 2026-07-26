@@ -20,9 +20,9 @@ export interface PlantCard {
 
 /** Display tint per rarity (plain data so this module stays headless-safe). */
 export const RARITY_COLORS: Record<CardRarity, string> = {
-  common: "#A7C3A8",
-  rare: "#88C4F0",
-  legendary: "#FFD66B",
+  common: "#6E8B73",
+  rare: "#3E92D0",
+  legendary: "#E0A21B",
 };
 
 /** All 17 cards in unlock order (stars strictly increasing). */

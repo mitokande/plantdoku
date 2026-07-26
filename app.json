@@ -5,8 +5,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
-    "backgroundColor": "#13251A",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#E4EEDA",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mithatcanturan.plantdoku",
@@ -34,7 +34,7 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#13251A"
+          "backgroundColor": "#E4EEDA"
         }
       ],
       "expo-localization",

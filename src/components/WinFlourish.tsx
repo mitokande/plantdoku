@@ -8,7 +8,7 @@ import { theme } from "../theme";
 export const FLOURISH_MS = 1250;
 
 const SPARKS = 12;
-const SPARK_COLORS = [theme.gold, "#FBE0A2", "#8BD24F", "#FFFFFF"];
+const SPARK_COLORS = [theme.gold, "#FBE0A2", theme.accent, "#FFFFFF"];
 
 interface Props {
   /** Which plant takes the spotlight (the last one planted, or a new card). */
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     // Lighter than the win card's backdrop: the solved board should still read
     // behind the plant, since that is what the player just built.
-    backgroundColor: "rgba(8,18,12,0.55)",
+    backgroundColor: "rgba(26,45,32,0.42)",
     zIndex: 20,
   },
   glow: {

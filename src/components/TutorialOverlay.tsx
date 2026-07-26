@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: theme.bgAlt,
     borderWidth: 1,
     borderColor: theme.panelLine,
   },

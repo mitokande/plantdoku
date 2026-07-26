@@ -5,7 +5,7 @@ import { Animated, Image, StyleSheet, Text, View } from "react-native";
 import { nextCard, RARITY_COLORS, type PlantCard } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
-import { radius, theme } from "../theme";
+import { radius, scrim, theme } from "../theme";
 import { Button } from "./Button";
 import { Confetti } from "./Confetti";
 
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(8,16,11,0.74)",
+    backgroundColor: scrim,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,

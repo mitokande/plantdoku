@@ -322,11 +322,11 @@ walkthrough can't cost the L1 under-par star. Completion persists
 - The board sits in a **wooden frame** (`theme.wood*` browns: dark border,
   light inner "carved" ring — no texture assets), and `GameScreen` lays the
   whole screen on a vertical `expo-linear-gradient` (lighter glade behind the
-  board, darker top/bottom). Undo/Hint buttons carry gold info badges
-  (undoable-move count / hints used).
-- Region tints (`palette.ts` `REGION_COLORS`) are **muted botanical** tones —
-  earthy, low-saturation garden colours, light enough for the dark ✕ mark and
-  sprites to stay readable.
+  board, slightly deeper foliage top/bottom). Undo/Hint buttons carry gold info
+  badges (undoable-move count / hints used).
+- Region tints (`palette.ts` `REGION_COLORS`) are **botanical** garden tones —
+  saturated enough to hold up against the light ground, still light enough for
+  the dark ✕ mark and sprites to stay readable.
 - A rejected guess is a **red ✕ cell**: steady `theme.danger` wash + a larger
   `theme.dangerDark` ✕ (no pulse — these persist, so a breathing tile would be
   noise). Nothing else on the board is ever tinted red.
@@ -341,8 +341,17 @@ walkthrough can't cost the L1 under-par star. Completion persists
   and the `hint` wrapper, since a hint can be the finishing move. Then the
   custom `Confetti` (Animated, dependency-free) + result card with time / best /
   "New best".
-- Theme: "garden at dusk" — deep green ground so pastel clusters pop
-  (`src/theme.ts`).
+- Theme: **light** — "morning garden" (`src/theme.ts`): sunlit green ground,
+  near-white panels, dark green text. Surface hierarchy, lightest first:
+  `panel` (raised card) > `bgAlt` (chips, overlay cards) > `bg` (page +
+  recessed slots inside a panel) > `panelEdge` (the chunky 3D bottom edge).
+  Two tokens stay deliberately dark and must not be lightened: `frame` (tints
+  locked-card silhouettes and dims ✕-marked tiles — it's a shadow, not a wash)
+  and `mark` (the ✕ glyph). Modal backdrops use the exported `scrim` (a soft
+  green shade) rather than per-file `rgba(...)` literals; the tutorial's
+  blackout scrim stays near-opaque dark on purpose. `app.json`
+  (`userInterfaceStyle`/`backgroundColor`/splash) and `App.tsx`'s
+  `<StatusBar style="dark" />` are part of the theme — keep them in sync.
 
 ## Architecture / file map
 

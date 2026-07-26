@@ -380,6 +380,6 @@ const styles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: theme.gold,
     borderRadius: radius.sm,
-    backgroundColor: "rgba(255, 214, 90, 0.14)",
+    backgroundColor: "rgba(240, 180, 41, 0.20)",
   },
 });

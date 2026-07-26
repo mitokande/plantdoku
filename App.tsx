@@ -99,7 +99,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       {playing ? (
         <GameScreen game={game} onMenu={() => setPlaying(false)} />
       ) : (

@@ -83,9 +83,9 @@ function bbox(cells: Coord[]) {
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
-// Garden-at-dusk depth: slightly lighter glade behind the board, darker
-// canopy at the top and bottom edges.
-const BG_GRADIENT = ["#0E1F14", "#1D3826", "#0B1710"] as const;
+// Morning-garden depth: sunlit glade behind the board, slightly deeper
+// foliage at the top and bottom edges.
+const BG_GRADIENT = ["#DDEBCC", "#F6FBEF", "#D8E7C6"] as const;
 
 // The three core rules — the prominent card above the board, one per column.
 const RULES = [

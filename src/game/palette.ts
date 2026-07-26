@@ -28,23 +28,24 @@ export const PLANT_IDS: string[] = [
 
 /**
  * Region tints. At least as many as the largest board (9).
- * Muted botanical tones — earthy, low-saturation garden colours that sit
- * calmly against the dark "dusk" board. Hues stay evenly spread at matched
- * lightness (light enough for the dark ✕ mark and sprites to read) so no two
- * are near-twins; the generator additionally assigns them so that touching
- * clusters get maximally different colours.
+ * Botanical tones — garden colours with enough saturation to hold their own
+ * against the light "morning garden" ground (a paler set washed out next to
+ * the near-white panels). Hues stay evenly spread at matched lightness (light
+ * enough for the dark ✕ mark and sprites to read) so no two are near-twins;
+ * the generator additionally assigns them so that touching clusters get
+ * maximally different colours.
  */
 export const REGION_COLORS: string[] = [
-  "#D9A49E", // dusty rose
-  "#DBB28A", // terracotta clay
-  "#D6C98E", // sand
-  "#BCC98B", // pale olive
-  "#9DC795", // sage
-  "#86C9A8", // eucalyptus
-  "#84C4BE", // dusty teal
-  "#8FB6D6", // rain blue
-  "#A3A8D4", // lavender slate
-  "#BFA3D1", // wisteria
-  "#D2A0C6", // mauve
-  "#DBA8B4", // old rose
+  "#E0938B", // dusty rose
+  "#E0AC77", // terracotta clay
+  "#D8C87A", // sand
+  "#B4C775", // pale olive
+  "#8CC181", // sage
+  "#74C39B", // eucalyptus
+  "#71BEB7", // dusty teal
+  "#7CAED4", // rain blue
+  "#9AA0D2", // lavender slate
+  "#B795CC", // wisteria
+  "#CE92C0", // mauve
+  "#DC9AAA", // old rose
 ];
