@@ -602,7 +602,14 @@ keeps a closest-to-band solvable board as a fallback so it never throws.
 > `emberbud` · `nightspire`), ordered to match `CARDS`. All 17 are now real
 > art — the last four placeholders (`sunflower`, `daisy`, `cactus`, `aloe`)
 > were generated with `scripts/gen_art.py` and `npm run sprites:check` passes.
-> **The app icon and splash are still the old infringing art.** Full plan,
+> **The app icon and splash have been replaced too**: the master logo lives at
+> `art/logo.png` (owner-supplied) and `python3 scripts/build_icons.py`
+> regenerates the whole launcher set from it — `assets/icon.png` (opaque,
+> 1024², art at 94% on `#F3F6EA`), `splash-icon.png` + `favicon.png`
+> (transparent), the Android adaptive `android-icon-foreground.png` (66% safe
+> zone), a flat `android-icon-background.png`, and a themed
+> `android-icon-monochrome.png` derived from the artwork's linework. Rerun the
+> script after any logo change instead of hand-editing the PNGs. Full plan,
 > style spec and generation prompts: `docs/art-brief.md`.
 
 Raw source art lives in `art/raw/<plant-id>.png` (the master files);

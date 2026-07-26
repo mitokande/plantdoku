@@ -10,7 +10,8 @@ Everything an artist, an asset pack, or an image model needs to produce the
 **The plant set has been rebuilt** — 13 real sprites + **4 placeholders**
 (`sunflower`, `daisy`, `cactus`, `aloe`) that must be replaced before release.
 See the appendix for how to generate them. `npm run sprites:check` fails until
-they land. **The app icon and splash are still the old infringing art.**
+they land. **The app icon and splash have been replaced** with the owner's own
+logo (`art/logo.png` → `python3 scripts/build_icons.py`).
 
 ## Why the set was remade
 
