@@ -160,7 +160,7 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
               // region's green would read as a smudge on the pink.
               tintColor: mistake ? theme.dangerDark : tint.glyph,
               // Recede under an ✕ so the mark reads unobstructed.
-              opacity: placed ? 0 : state === "marked" ? 0.2 : 0.34,
+              opacity: placed ? 0 : state === "marked" ? 0.14 : 0.34,
             },
           ]}
         />
@@ -186,7 +186,7 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
             {
               opacity: markPop.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, mistake ? 0.95 : 0.62],
+                outputRange: [0, mistake ? 0.95 : 0.85],
               }),
               transform: [
                 { scale: markPop },
@@ -211,7 +211,7 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
             // thing you see first. A mistake keeps the stronger treatment:
             // there are only ever a few of them.
             name={mistake ? "close" : "close-outline"}
-            size={px * (mistake ? 0.64 : 0.55)}
+            size={px * (mistake ? 0.7 : 0.66)}
             color={mistake ? theme.dangerDark : theme.mark}
             // Unselectable: on web, drag-selecting the glyph starts a text
             // selection, and react-native-web force-terminates the board's

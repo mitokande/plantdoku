@@ -27,12 +27,18 @@ export const PLANT_IDS: string[] = [
 ];
 
 /**
- * Region tints — 15 soft pastels walking the hue wheel (blues → teals → greens
- * → yellows → warm → pinks → purples), plus a warm neutral. Only `size` of them
- * are used per board (6–9), so the set is deliberately larger than the biggest
- * grid: `assignRegionColors` picks from all of them by maximum perceptual
- * distance, and the extra slack is what lets it keep *touching* clusters far
- * apart. Order here is presentational only — the generator shuffles the pool.
+ * Region tints — 15 candy-bright hues walking the wheel (blues → teals →
+ * greens → yellows → warm → pinks → purples), plus a warm tan. Only `size` of
+ * them are used per board (6–9), so the set is deliberately larger than the
+ * biggest grid: `assignRegionColors` picks from all of them by maximum
+ * perceptual distance, and the extra slack is what lets it keep *touching*
+ * clusters far apart. Order here is presentational only — the generator
+ * shuffles the pool.
+ *
+ * These were pastels; they were saturated up and dropped out of the near-white
+ * lightness band (a pastel is as much high lightness as low chroma, so
+ * saturation alone just made the warm tints milky). Every margin improved or
+ * held: nearest pair 24 → 52 redmean units, nearest tile-to-tray 88 → 97.
  *
  * These are the **available** (untouched) tile colours. `Cell.tsx` derives the
  * other two states from each one: a softened tint for ✕-eliminated cells (the
@@ -43,19 +49,19 @@ export const PLANT_IDS: string[] = [
  * seeded RNG, so no existing board changes (see `assemble` in generator.ts).
  */
 export const REGION_COLORS: string[] = [
-  "#C7DDE8", // powder blue
-  "#AFCFE2", // soft sky
-  "#B5D8D2", // misty teal
-  "#B8D9BC", // mint green
-  "#C9DDB0", // fresh sage
-  "#DCE5A9", // soft lime
-  "#E9DFA3", // butter yellow
-  "#E8CFA5", // warm sand
-  "#E8BEAA", // soft peach
-  "#E7B8BB", // blush pink
-  "#DDB5CB", // dusty rose
-  "#D5B9DC", // soft lilac
-  "#C7BCE0", // lavender
-  "#B9C6E1", // periwinkle
-  "#D7D2C2", // warm stone
+  "#9ED0E9", // sky blue
+  "#80C1E9", // azure
+  "#8ED6CA", // turquoise
+  "#84D88E", // spring green
+  "#B7E084", // apple green
+  "#DEF075", // lime
+  "#F9E56A", // butter yellow
+  "#F6C36E", // marigold
+  "#F59E75", // coral
+  "#ED898F", // salmon pink
+  "#DE8BB9", // bubblegum
+  "#CC92DB", // orchid
+  "#AB93E0", // violet
+  "#8EAAE3", // cornflower
+  "#D2BD7A", // warm tan
 ];

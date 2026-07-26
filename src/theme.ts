@@ -17,8 +17,10 @@
 //   danger          mistakes and hearts only
 // `frame` stays deliberately dark — it tints locked-card silhouettes, so it
 // must read as a shadow, not a wash. `mark` (the board's ✕ glyph) is the
-// opposite case: a soft mid forest green, because most cells on a solved board
-// end up eliminated and a dark mark would drown out the plants.
+// opposite case: a mid forest green, deliberately not near-black, because most
+// cells on a solved board end up eliminated and a dark mark would drown out the
+// plants. It still has to be legible at a glance on every region tint, so its
+// restraint comes from the thin stroke, not from washing the colour out.
 
 export const theme = {
   bg: "#F3F6EA",
@@ -37,7 +39,7 @@ export const theme = {
   dangerTile: "#E9A39B",
   /** Type/icon colour on top of `danger`. */
   onDanger: "#33100B",
-  mark: "#42604D",
+  mark: "#2E4A38",
   gold: "#F2B224",
   /** Type/icon colour on top of `gold`. */
   onGold: "#3D2E08",

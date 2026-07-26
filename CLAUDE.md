@@ -340,8 +340,9 @@ section exists).
   quiet near-white page with darker recesses, not from tinting everything green.
   `frame` stays deliberately dark and must not be lightened (it tints
   locked-card silhouettes — a shadow, not a wash). `mark`, the board's ✕ glyph,
-  is the opposite: a **soft mid forest green**, deliberately not near-black —
-  see the ✕ note under Board for why.
+  is the opposite: a **mid forest green**, deliberately not near-black — but it
+  still has to be legible at a glance on every region tint; see the ✕ note under
+  Board for how that balance is struck.
 - `radius` is picked by role (`chip` 12 · `md` 16 · `btn` 20 · `lg` 24 card ·
   `modal` 32; `cell` is a *fraction* of tile size). `shadow` has exactly three
   presets — `card`, `raised` (primary button, tab bar), `modal` — all soft and
@@ -371,13 +372,16 @@ section exists).
   raised thing on the board — that's the player's payoff.
 - **No bold cluster borders.** Clusters read by colour + glyph; tile gaps are
   uniform everywhere.
-- The ✕ is **quiet on purpose, and must stay that way.** Most cells on a solved
-  board end up eliminated, so anything heavier turns the board into a field of
-  dark crosses and the player's own placements stop being what you see first.
-  Its quietness comes from the **thin stroke, soft colour and opacity, not from
-  being small** — Ionicons' thinnest round-capped `close-outline` at ~0.55 of
-  the tile, `theme.mark` soft green at 0.62 opacity, stamping on with a short
-  scale from 0.8 plus a few degrees of rotation. Ranked loudness on a tile, and the
+- The ✕ must be **legible at a glance but never louder than a plant.** Most
+  cells on a solved board end up eliminated, so a heavy mark turns the board
+  into a field of dark crosses and the player's own placements stop being what
+  you see first — but a mark the player has to squint at is worse, since ✕s are
+  the working notes the whole deduction runs on. The restraint therefore comes
+  from the **thin stroke, not from being small or washed out** — Ionicons'
+  thinnest round-capped `close-outline` at ~0.66 of the tile, `theme.mark`
+  forest green at 0.85 opacity, over a silhouette that recedes to 0.14 under a
+  mark so the glyph reads on a clean field, stamping on with a short scale from
+  0.8 plus a few degrees of rotation. Ranked loudness on a tile, and the
   ordering any future change has to preserve: **placed plant > embossed
   silhouette-plus-tile-colour > ✕**. A *mistake* ✕ is the one exception — solid
   `close`, larger, near-opaque, `dangerDark` — because there are only ever a
@@ -386,12 +390,15 @@ section exists).
   `bedGap` in the tile gaps · `bedRim` carved highlight — no texture assets),
   kept thin (`FRAME`/`FRAME_BORDER` in `Board.tsx`) so it frames the puzzle
   rather than competing with it. The tray is a **low-chroma sage grey, a clear
-  step darker than every tile**: the region palette is entirely light pastels, so
+  step darker than every tile**: the region palette is entirely bright tints, so
   a warm or saturated bed reads as one more cluster colour. The bar to clear is
   measurable — touching clusters are 55–85 redmean units apart (median 76), and
-  the old warm-wood bed was only 58 from the nearest pastel, which is why peach
-  and sand tiles bled into the frame. Current margins: `bed` 88 · `bedGap` 117 ·
-  `bedEdge` 150 · `bedRim` 65. **Re-check these if the palette changes.**
+  the old warm-wood bed was only 58 from the nearest tile, which is why peach
+  and sand tiles bled into the frame. Current margins (nearest tile to each
+  tray colour): `bed` 97 · `bedGap` 101 · `bedEdge` 113 · `bedRim` 87.
+  **Re-check these if the palette changes** — the un-pastel pass did, and the
+  two tints that came out closest to the tray (mint, warm stone) were pushed
+  further until they cleared 95.
   `GameScreen` lays the whole screen on a very faint vertical
   `expo-linear-gradient`.
 - A rejected guess is a **red ✕ cell**: the tile becomes opaque
@@ -439,8 +446,9 @@ module load and `hideAsync()` after first paint, so the animated
 `SplashScreen.tsx` is already on screen when the native one lifts — no flash of
 empty canvas. It renders **outside** the `SafeAreaView` so it covers the
 status-bar inset too. The beat (`SPLASH_MS` 2.9s, incl. a 320ms fade-out):
-planter tray drops in → six pastel tiles pop in sequence → the `sprout` sprite
-rises with drifting leaf sparks → wordmark → tagline → loading bar. It is
+planter tray drops in → nine palette tiles pop in sequence (3×3) → the `sprout`
+sprite rises out of the centre tile with drifting leaf sparks → wordmark →
+tagline → loading bar. It is
 **never a gate** — a tap anywhere skips to the end, `onDone` is fired at most
 once, and it holds no game state (the app is fully live behind it).
 
