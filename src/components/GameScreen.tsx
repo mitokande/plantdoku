@@ -16,7 +16,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { analytics } from "../analytics";
 import { audio } from "../audio";
 import type { Game } from "../state/useGame";
-import { nextCard } from "../game/cards";
 import { parSeconds } from "../game/stars";
 import type { Coord } from "../game/types";
 import { formatDateKey, formatTime } from "../format";
@@ -649,14 +648,7 @@ export function GameScreen({ game, onMenu }: Props) {
               : null
           }
           newCards={game.mode === "level" ? game.newCards : []}
-          nextCardIn={
-            game.mode === "level"
-              ? (() => {
-                  const upcoming = nextCard(game.totalStars);
-                  return upcoming ? upcoming.stars - game.totalStars : null;
-                })()
-              : null
-          }
+          totalStars={game.totalStars}
           onShare={() => {
             if (game.mode !== "daily" || !game.dailyKey) return;
             const streak = game.dailyStreak;

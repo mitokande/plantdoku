@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
-import { RARITY_COLORS, type PlantCard } from "../game/cards";
+import { nextCard, RARITY_COLORS, type PlantCard } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
 import { radius, theme } from "../theme";
@@ -21,8 +21,8 @@ interface Props {
   stars?: { earned: number; par: number } | null;
   /** Plant cards unlocked by this solve (level mode only). */
   newCards?: PlantCard[];
-  /** Stars still needed for the next card, or null when all are collected. */
-  nextCardIn?: number | null;
+  /** Total stars across all levels — drives the next-card progress bar. */
+  totalStars?: number;
   onShare?: () => void;
   onNext: () => void;
   onMenu: () => void;
@@ -36,12 +36,16 @@ export function WinOverlay({
   endless,
   stars,
   newCards = [],
-  nextCardIn,
+  totalStars = 0,
   onShare,
   onNext,
   onMenu,
 }: Props) {
   const wonCard = newCards[0] ?? null;
+  // No card this solve, but level mode still tracks progress toward the next
+  // one — null once the whole collection is unlocked.
+  const upcoming = !wonCard && stars != null ? nextCard(totalStars) : null;
+  const progress = upcoming ? Math.min(totalStars / upcoming.stars, 1) : 0;
 
   // Springy entrance: backdrop fades while the card scales up with overshoot.
   const enter = useRef(new Animated.Value(0)).current;
@@ -148,6 +152,26 @@ export function WinOverlay({
             </Text>
             <Text style={styles.heroName}>{wonCard.name}</Text>
           </Animated.View>
+        ) : upcoming ? (
+          <View style={styles.progressWrap}>
+            <View style={styles.heroFrameWrap}>
+              <View style={[styles.heroFrame, styles.lockedFrame]}>
+                <Image
+                  source={PLANT_SOURCES[upcoming.plantId]}
+                  style={[styles.heroImg, styles.lockedImg]}
+                />
+                <Text style={styles.lockedQ}>?</Text>
+              </View>
+            </View>
+            <Text style={styles.lockedTag}>NEXT CARD</Text>
+            <View style={styles.barTrack}>
+              <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
+            </View>
+            <Text style={styles.barLabel}>
+              <Ionicons name="star" size={12} color={theme.gold} />
+              {`  ${totalStars}/${upcoming.stars} to unlock`}
+            </Text>
+          </View>
         ) : (
           <Ionicons
             name="leaf"
@@ -184,12 +208,6 @@ export function WinOverlay({
             <View style={styles.chip}>
               <Ionicons name="flame" size={14} color={theme.danger} />
               <Text style={styles.chipTxt}>{daily.streak}</Text>
-            </View>
-          )}
-          {!wonCard && stars != null && nextCardIn != null && (
-            <View style={styles.chip}>
-              <Ionicons name="albums-outline" size={13} color={theme.textDim} />
-              <Text style={styles.chipTxt}>{nextCardIn}★ to card</Text>
             </View>
           )}
         </View>
@@ -314,6 +332,50 @@ const styles = StyleSheet.create({
     fontSize: 19,
     fontWeight: "800",
     marginTop: 1,
+  },
+  progressWrap: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  lockedFrame: {
+    borderColor: theme.panelLine,
+  },
+  lockedImg: {
+    tintColor: theme.frame,
+    opacity: 0.9,
+  },
+  lockedQ: {
+    position: "absolute",
+    color: theme.gold,
+    fontSize: 30,
+    fontWeight: "900",
+  },
+  lockedTag: {
+    color: theme.textDim,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    marginTop: 10,
+  },
+  barTrack: {
+    alignSelf: "stretch",
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: theme.bg,
+    marginTop: 10,
+    overflow: "hidden",
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 999,
+    backgroundColor: theme.gold,
+  },
+  barLabel: {
+    color: theme.textDim,
+    fontSize: 12.5,
+    fontWeight: "700",
+    marginTop: 6,
   },
   stars: {
     flexDirection: "row",
