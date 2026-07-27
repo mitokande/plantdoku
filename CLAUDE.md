@@ -198,8 +198,60 @@ haptics pattern. Call `audio.play(name)`; never import `expo-audio` elsewhere.
 before init, or when muted, every call is a safe no-op** (so the headless web
 smoke-test runs without audio), and all failures are swallowed — audio can
 never break gameplay. Clips are bundled from `assets/audio/*.wav` via static
-`require`s; regenerate them with `python3 scripts/make_sfx.py` (stdlib-only
-synthesis — swap in designed clips anytime, just keep the filenames).
+`require`s.
+
+**The clips are built, not hand-picked** (`npm run sfx` = `scripts/prep_sfx.py`,
+the audio counterpart to `prep_sprites.py`). Masters live in `art/sfx/` — CC0
+library recordings from four Kenney packs, see `art/sfx/CREDITS.md` — and are
+never bundled; the script renders the six shipped WAVs from a `RECIPES` table.
+The programmatic-synthesis era (`scripts/make_sfx.py`) is over; that script is
+deleted, don't bring it back.
+
+The pipeline exists because dropping six clips from six sources into a folder is
+what makes an SFX set sound amateur — the giveaway is mismatched loudness, not
+bad clips. So every cue is trimmed, resampled to mono 44.1k, de-clicked with
+short fades, **level-matched to a per-cue RMS target** and peak-limited to
+−1dBFS. `LEVELS` is the actual mix and its *ordering* is the design: `win` is
+the loudest thing in the game, `place` sits under it, and `button` is a
+near-subliminal −27dB. `npm run sfx:check` audits the shipped set (rate,
+channels, peak, RMS-vs-target, length) and exits non-zero, so it can gate a
+release like `sprites:check`. It tolerates a cue that lands *under* its target
+only when the clip is already peak-limited (a sharp transient can hit the
+−1dBFS ceiling before it reaches its RMS target — `mistake` does, by ~4dB);
+that is the limiter, not a mis-level, and there is no headroom left to give it.
+
+**`mark` is deliberately louder than the "quiet cue" logic implies** (−21dB, not
+the −26 it started at). A cue that is both soft *and* very brief reads as
+nothing at all — the first pass was inaudible in play. If it ever needs
+retuning, move it before assuming the source is wrong.
+
+Two composition decisions worth keeping:
+
+- **`place` is layered**, not a single clip: a low soil thud with a leaf rustle
+  12ms behind it at only -5dB, i.e. deliberately leafy rather than heavy. No
+  library clip is "a plant being planted" — the layer is what makes it read as
+  one, and this is the cue the player hears hundreds of times a session, so it's
+  where the effort belongs.
+- **`win` and `fail` are the same instrument** (Kenney steel-drum jingles), one
+  resolving upward and one downward. Picking them as a pair is what stops a win
+  and a loss sounding like they came from two different games.
+
+To re-cut a cue, edit its `Recipe` (sources, per-layer gain/delay, target,
+length cap) and re-run — the filenames in `SOURCES` are the contract, so no app
+code changes. `soundfile`/`numpy` are dev-only deps of the script, not the app.
+
+**The clips are preloaded to local files at module load** (`preload()`, via
+`expo-asset`), and this is not an optimisation. expo-audio resolves a `require`d
+clip as `asset.localUri ?? asset.uri`: in a release build the wav is bundled so
+`localUri` is a `file://` path, but in **Expo Go / a dev client nothing is
+bundled** — `localUri` is null until downloaded, so the player gets Metro's http
+asset URL and has to stream each one-shot over the LAN. On Android that load
+never completes, the player stays `isLoaded === false`, and `play()` is a
+silent no-op: **audio works in the APK and is dead in Expo Go, with no error
+anywhere**. `downloadAsync()` is a no-op once local, so production pays nothing.
+`play()` also only `seekTo(0)`s a loaded voice (seeking an unprepared player
+rejects on Android), and `diagnose()` prints each cue's resolved `uri` —
+`file://` = local, `http://…:8081/assets/…` = the failure above.
 
 Mute is owned by `useGame` (single source of truth, like the other prefs): it
 persists `plantdoku:sound` ("0" = muted, default on), pushes the flag to
@@ -219,10 +271,11 @@ npm run web          # run in a browser
 npm test             # headless game-core tests (tsx src/game/runTests.ts)
 npm run typecheck    # tsc --noEmit
 npm run sprites:check          # audit assets/plants against the sprite spec
+npm run sfx                    # render assets/audio/*.wav from the art/sfx masters
+npm run sfx:check              # audit the shipped SFX (level, length, format)
 # Rebuild the plant sprites from the raw art (see Sprite assets):
 python3 scripts/prep_sprites.py --in art/raw --fit area
 SHEET=/path/to/sheet.png python3 scripts/slice_sprites.py   # sheet -> raw cuts
-python3 scripts/make_sfx.py    # regenerate the placeholder SFX (assets/audio/)
 ```
 
 ## Interaction model (current)
@@ -583,7 +636,8 @@ App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) 
 scripts/gen_art.py           Gemini image-gen for the raw art (prompts + CLI)
 scripts/slice_sprites.py     sprite-sheet slicer (PIL + SciPy)
 scripts/pick_level_seeds.ts  offline seed picker for the level table
-scripts/make_sfx.py          stdlib-only SFX synth -> assets/audio/*.wav
+scripts/prep_sfx.py          CC0 masters (art/sfx) -> assets/audio/*.wav:
+                             layer, trim, level-match per cue, --check audit
 ```
 
 ### Generator (the crux — guarantees a *logic-solvable* board)

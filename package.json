@@ -39,6 +39,8 @@
     "test": "tsx src/game/runTests.ts",
     "typecheck": "tsc --noEmit",
     "sprites:check": "python3 scripts/prep_sprites.py --check",
+    "sfx": "python3 scripts/prep_sfx.py",
+    "sfx:check": "python3 scripts/prep_sfx.py --check",
     "art:gen": "python3 scripts/gen_art.py"
   },
   "private": true

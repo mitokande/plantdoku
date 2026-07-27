@@ -137,11 +137,13 @@ everything else on this list.
   at a high point — e.g. first 3★ solve past level 8, or a 3-day daily
   streak; once per install, never after a fail. Cheap, and early ratings
   decide store ranking.
-- [ ] **Replace the placeholder SFX.** Current clips are stdlib-synthesized
-  (`scripts/make_sfx.py`). Swap in designed sounds (freelance sound pack or a
-  library like Kenney/ZapSplat — check licenses) keeping the same filenames;
-  the facade needs no code change. Audio is the #1 "feels cheap" tell in
-  hybrid-casual.
+- [x] **Replace the placeholder SFX.** *Done.* The stdlib-synthesized clips and
+  `scripts/make_sfx.py` are gone. All six cues are now rendered by
+  `scripts/prep_sfx.py` (`npm run sfx`) from CC0 Kenney recordings mastered in
+  `art/sfx/` — layered (`place` = soil thud + leaf rustle), level-matched to
+  per-cue RMS targets, `win`/`fail` a matched rising/falling pair. Filenames
+  unchanged, so the facade needed no code change. Audio is the #1 "feels cheap"
+  tell in hybrid-casual.
 - [x] **Drop-off analytics.** *Done.* `tutorial_step` (one per stage reached,
   stable names) makes first-play drop-off visible, and `board_abandoned`
   (progress %, seconds, hints, hearts left) separates rage-quits from
