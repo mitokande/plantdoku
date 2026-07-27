@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { Animated, Easing, Image, StyleSheet, useWindowDimensions } from "react-native";
 
 import { PLANT_SOURCES } from "../game/plants";
-import { theme } from "../theme";
+import { overlayZ, theme } from "../theme";
 
 /** How long the whole beat runs before the result card takes over. */
 export const FLOURISH_MS = 1250;
@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
     // Lighter than the win card's backdrop: the solved board should still read
     // behind the plant, since that is what the player just built.
     backgroundColor: "rgba(26,45,32,0.42)",
-    zIndex: 20,
+    ...overlayZ,
   },
   glow: {
     position: "absolute",

@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     width: 176,
     height: 13,
     marginTop: -5,
-    borderRadius: 999,
+    borderRadius: 6.5,
     backgroundColor: theme.soil,
     opacity: 0.85,
   },
@@ -536,14 +536,14 @@ const styles = StyleSheet.create({
   },
   barTrack: {
     height: 8,
-    borderRadius: 999,
+    borderRadius: 4,
     backgroundColor: theme.bgAlt,
     marginTop: space(3),
     overflow: "hidden",
   },
   barFill: {
     height: "100%",
-    borderRadius: 999,
+    borderRadius: 4,
     backgroundColor: theme.gold,
   },
   lockedBarFill: {

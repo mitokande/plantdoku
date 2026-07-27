@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
   headerCircle: {
     width: 38,
     height: 38,
-    borderRadius: 999,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: theme.panelWarm,
@@ -997,14 +997,14 @@ const styles = StyleSheet.create({
   progressTrack: {
     alignSelf: "stretch",
     height: 10,
-    borderRadius: 999,
+    borderRadius: 5,
     backgroundColor: theme.bgWarmAlt,
     overflow: "hidden",
   },
   progressFill: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: theme.accent,
-    borderRadius: 999,
+    borderRadius: 5,
     transformOrigin: "left",
   },
   progressLabel: {

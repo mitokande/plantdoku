@@ -14,6 +14,22 @@ const TABS: { key: Tab; icon: IoniconName; iconOff: IoniconName; label: string }
   { key: "daily", icon: "sunny", iconOff: "sunny-outline", label: "Daily" },
 ];
 
+// The bar and the selection pill are **capsules with exact radii**, not
+// `borderRadius: 999`. A radius larger than half the view's own height is
+// out-of-spec, and both platforms are free to fall back to square corners when
+// they clamp it (which is what made the active pill render as a rectangle on
+// some devices). So every dimension here is fixed and the radius is literally
+// half the height — including `LABEL_LINE`, which pins the label's line box so
+// font metrics can't push the bar taller than the radius it was given.
+const SLOT_W = 52;
+const SLOT_H = 30;
+const LABEL_LINE = 14;
+const LABEL_GAP = 2;
+const TAB_PAD_V = 4;
+const BAR_PAD = 6;
+const TAB_H = TAB_PAD_V * 2 + SLOT_H + LABEL_GAP + LABEL_LINE;
+const BAR_H = BAR_PAD * 2 + TAB_H;
+
 interface Props {
   tab: Tab;
   onTab: (tab: Tab) => void;
@@ -38,8 +54,14 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
               style={styles.tab}
             >
               {/* The selection marker hugs the icon: a full-width green capsule
-                  pulls attention off the screen's own content. */}
-              <View style={[styles.iconSlot, active && styles.iconSlotActive]}>
+                  pulls attention off the screen's own content. It is always
+                  mounted, carrying its colour AND its radius from the first
+                  render, and only its opacity changes — see `pill`. */}
+              <View style={styles.iconSlot}>
+                <View
+                  pointerEvents="none"
+                  style={[styles.pill, { opacity: active ? 1 : 0 }]}
+                />
                 <Ionicons
                   name={active ? icon : iconOff}
                   size={21}
@@ -67,25 +89,36 @@ const styles = StyleSheet.create({
   },
   bar: {
     flexDirection: "row",
-    padding: 6,
-    borderRadius: 999,
+    padding: BAR_PAD,
+    height: BAR_H,
+    borderRadius: BAR_H / 2,
     backgroundColor: theme.panel,
     ...shadow.raised,
   },
   tab: {
     flex: 1,
     alignItems: "center",
-    minHeight: 44,
-    paddingVertical: 4,
+    height: TAB_H,
+    paddingVertical: TAB_PAD_V,
   },
   iconSlot: {
-    width: 52,
-    height: 30,
+    width: SLOT_W,
+    height: SLOT_H,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 999,
   },
-  iconSlotActive: {
+  // The selection capsule. Two rules here, both learned the hard way on Android
+  // (same family as the Cell sprite bug in CLAUDE.md — a native view restyled
+  // after mount doesn't always redraw):
+  //  1. Colour and radius arrive TOGETHER on first render, and never change.
+  //     Toggling `backgroundColor` on a bare rounded view is what made this pill
+  //     draw as a hard rectangle — the radius was dropped outright, not clamped.
+  //  2. The radius is half the height, not `999`; an out-of-spec radius is at
+  //     the platform's mercy when it clamps.
+  // Selection is therefore pure opacity on a view that is always mounted.
+  pill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: SLOT_H / 2,
     backgroundColor: theme.accent,
   },
   dot: {
@@ -103,7 +136,8 @@ const styles = StyleSheet.create({
     ...typography.overline,
     color: theme.text,
     fontSize: 11.5,
-    marginTop: 2,
+    lineHeight: LABEL_LINE,
+    marginTop: LABEL_GAP,
   },
   labelActive: {
     color: theme.accentDark,

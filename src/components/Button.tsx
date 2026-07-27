@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     minWidth: 19,
     height: 19,
     paddingHorizontal: 4,
-    borderRadius: 999,
+    borderRadius: 9.5,
     backgroundColor: theme.gold,
     alignItems: "center",
     justifyContent: "center",

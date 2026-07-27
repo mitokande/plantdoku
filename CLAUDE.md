@@ -433,7 +433,15 @@ section exists).
   and the plain one everywhere else** — mixing them in one screen is the drift
   this section exists to prevent.
 - `radius` is picked by role (`chip` 12 · `md` 16 · `btn` 20 · `lg` 24 card ·
-  `modal` 32; `cell` is a *fraction* of tile size). `shadow` has exactly three
+  `modal` 32; `cell` is a *fraction* of tile size). **A capsule on a
+  fixed-height view uses `height / 2`, not `borderRadius: 999`** — an
+  out-of-spec radius is clamped by the platform and both iOS and Android can
+  land on square corners instead (this is what made the bottom nav's selected
+  pill render as a rectangle on some devices; `BottomNav.tsx` now derives every
+  dimension, including the label's `lineHeight`, so the bar and the pill have
+  exact radii). `999` survives only on content-sized views — pill buttons, the
+  rule chips, the hint pill — where the height isn't known up front.
+  `shadow` has exactly three
   presets — `card`, `raised` (primary button, tab bar), `modal` — all soft and
   vertical; no hard dark drops. `typography` is the type scale; `overline` is
   the only uppercase style and keeps its tracking modest, because uppercase +
@@ -441,7 +449,18 @@ section exists).
   (`space(2)`=8, `space(4)`=16, `space(6)`=24).
 - Modal backdrops use the exported `scrim` (a soft green shade) rather than
   per-file `rgba(...)` literals; the tutorial's blackout scrim stays near-opaque
-  dark on purpose. `app.json`
+  dark on purpose. **Every full-screen cover also spreads `overlayZ`**
+  (`zIndex`+`elevation` 24) — `WinOverlay` · `FailOverlay` · `HelpOverlay` ·
+  `SettingsOverlay` · `TutorialOverlay` · `WinFlourish`, plus the splash's own
+  higher `root`. On Android a scrim does *not* cover an earlier sibling that has
+  a shadow: elevation beats document order, and RN flattens layout-only Views
+  away, which promotes shadowed leaves into siblings of the scrim. That is
+  exactly how the board screen's three rule chips (`shadow.card`, elevation 3)
+  used to sit lit up on top of the win card's dimming. The token also carries
+  `shadowColor: "transparent"`, because elevation buys a *shadow* along with the
+  z-order and a screen-sized translucent view casts a big dark one — that is
+  what put mismatched grey rectangles behind the modals on the first pass.
+  Anything new that covers the screen needs the token. `app.json`
   (`userInterfaceStyle`/`backgroundColor`/splash/notification colour) and
   `App.tsx`'s `<StatusBar style="dark" />` are part of the theme — keep in sync.
 

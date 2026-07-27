@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 
-import { radius, theme } from "../theme";
+import { overlayZ, radius, theme } from "../theme";
 import { Button } from "./Button";
 
 // Spotlight rect in GameScreen-root coordinates. null = full blackout.
@@ -189,7 +189,7 @@ export function TutorialOverlay({
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[StyleSheet.absoluteFill, { opacity: fade }]}
+      style={[StyleSheet.absoluteFill, overlayZ, { opacity: fade }]}
     >
       {hole ? (
         <>

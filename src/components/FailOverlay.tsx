@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
-import { radius, scrim, shadow, theme } from "../theme";
+import { overlayZ, radius, scrim, shadow, theme } from "../theme";
 import { Button } from "./Button";
 
 interface Props {
@@ -76,6 +76,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    ...overlayZ,
     backgroundColor: scrim,
     alignItems: "center",
     justifyContent: "center",

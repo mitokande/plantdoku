@@ -95,6 +95,28 @@ export const theme = {
 export const scrim = "rgba(26,45,32,0.55)";
 
 /**
+ * Stacking for anything that covers the screen — every scrim, overlay and the
+ * splash. **Android z-orders siblings by elevation before document order**, so
+ * a later-mounted scrim does NOT cover an earlier sibling that has a shadow:
+ * RN flattens layout-only Views away, which promotes shadowed leaves (the
+ * board screen's rule chips, `shadow.card` = elevation 3) into siblings of the
+ * scrim, and they then draw straight through it. Comfortably above `shadow`'s
+ * highest preset (`modal`, 14), and `zIndex` keeps iOS/web in step.
+ *
+ * `shadowColor: transparent` is **not optional**: elevation buys a shadow along
+ * with the z-order, and a screen-sized translucent view casts a big dark one —
+ * on a scrim that is inset (the board screen's page padding) or split into
+ * several rects (the tutorial's four) those shadows show up *inside* the screen
+ * as grey rectangles in mismatched shades. A cover needs the stacking, never
+ * the shadow.
+ */
+export const overlayZ = {
+  zIndex: 24,
+  elevation: 24,
+  shadowColor: "transparent",
+} as const;
+
+/**
  * One corner-radius scale for the whole app — pick by component role rather
  * than eyeballing a number per file. `cell` is a *fraction* of the tile size
  * (board tiles scale with the grid).

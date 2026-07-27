@@ -11,7 +11,7 @@ import {
 } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
-import { radius, scrim, shadow, space, theme, typography } from "../theme";
+import { overlayZ, radius, scrim, shadow, space, theme, typography } from "../theme";
 import { Button } from "./Button";
 import { Confetti } from "./Confetti";
 
@@ -325,6 +325,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    ...overlayZ,
     backgroundColor: scrim,
     alignItems: "center",
     justifyContent: "center",
@@ -412,14 +413,14 @@ const styles = StyleSheet.create({
   barTrack: {
     alignSelf: "stretch",
     height: 8,
-    borderRadius: 999,
+    borderRadius: 4,
     backgroundColor: theme.bgAlt,
     marginTop: space(3),
     overflow: "hidden",
   },
   barFill: {
     height: "100%",
-    borderRadius: 999,
+    borderRadius: 4,
     backgroundColor: theme.gold,
   },
   barLabel: {
