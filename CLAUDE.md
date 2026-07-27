@@ -6,7 +6,7 @@ LinkedIn **"Queens"** (a Star Battle variant) reskinned with plant sprites.
 ## What the game is
 
 An _n×n_ grid is partitioned into _n_ connected **clusters**, each owned by one
-plant type / colour. The player places one plant marker so there is:
+**colour**. The player places one plant marker so there is:
 
 - exactly **one per row**,
 - exactly **one per column**,
@@ -14,6 +14,30 @@ plant type / colour. The player places one plant marker so there is:
 - **no two markers touching** — including diagonally.
 
 Every generated board has exactly **one** solution.
+
+**One plant per board, and it's the card you're chasing.** A board's clusters
+used to be *n* different species, one per colour; now the whole board is a
+single species. Clusters are told apart by **colour alone** — which is why the
+palette's touching-cluster separation floor now carries that job by itself (see
+`palette.ts`), and why the embossed silhouette is texture rather than identity.
+
+Which species is **player state, not board data**: `boardPlant` in `useGame.ts`
+picks `nextCard(totalStars).plantId` — the card the ★ progress bar points at —
+so the board being solved, the `WinFlourish` bloom and the "<Card> unlocked!"
+hero are all one plant on the solve that crosses the milestone. It is **frozen
+into `GameState.plant` at board creation** (passed on the `NEW_GAME`/`NEW_DAILY`/
+`NEW_ENDLESS` actions, carried by `RETRY` and the resume snapshot, hence
+`RESUME_VERSION` 2) and deliberately *not* re-derived per render: the finishing
+move can cross that very milestone while the grid is still on screen behind the
+flourish, and the plants must not change under the player. `Board` therefore
+takes a `plant` prop and ignores `puzzle.plant`.
+
+`Puzzle.plant` survives as the **fallback**: a seeded pick from `PLANT_IDS` off
+the cosmetic `skin` PRNG (deterministic per seed, can't perturb generation),
+used once the collection is complete and there is no next card — which keeps
+some variety instead of pinning every post-152★ board to one legendary. Every
+seed keeps its old region colours: `assemble` draws the colours *before* the
+plant so the added draw can't shift them.
 
 **Hearts / fail**: the player gets **3 hearts** per board (all modes). Planting
 on a cell that isn't its `solution[r]` cell costs a heart and the board shakes —
@@ -88,7 +112,10 @@ top of stars — all 17 plants are collectible cards (name, rarity, flavor)
 unlocked at total-star milestones (first at 1★, last legendary at 152★ of the
 180★ max; thresholds strictly increasing, covered by runTests). No new
 currency or storage: the collection is derived from `plantdoku:stars`, so
-flushData resets it for free. `useGame` exposes `newCards` (milestones crossed
+flushData resets it for free. The card being chased is also **what you plant**:
+every board is a single species and that species is `nextCard`'s (see One plant
+per board), so the grid, the flourish and the unlock hero agree. `useGame`
+exposes `newCards` (milestones crossed
 by the solve on screen — computed on the rising edge of solved when a level's
 best stars improve); the win overlay makes the unlock its headline and flips the
 card face-up (see Win sequence), or shows progress to the next one. The meta is
@@ -286,8 +313,8 @@ Handled by a single board-level `PanResponder` in `src/components/Board.tsx`:
 - **Swipe / drag** across cells → paint **✕** marks quickly. If the drag
   **starts on an ✕-marked cell**, the whole drag **erases** ✕ marks instead
   (mode is fixed at drag start; plants are never affected either way).
-- **Double-tap** a cell → try to place a **plant** (the cluster's plant,
-  revealed on placement). On a wrong cell nothing is planted — it becomes a red
+- **Double-tap** a cell → try to place a **plant** (the board's plant, revealed
+  on placement). On a wrong cell nothing is planted — it becomes a red
   ✕ and costs a heart (see Hearts / fail).
   A placement **never auto-✕s anything** else — no cluster remainder, no touching
   cells. Every elimination is the player's to mark (a `markDeadCells` helper
@@ -422,8 +449,8 @@ section exists).
 
 - Cells are **rounded tiles** (radius = 0.2 × tile) with a 1px gap between them
   (the bed's `bedGap` shows through), a **1px rim in a deeper shade of the
-  tile's own colour**, and a **full-strength embossed glyph** of the cluster's
-  plant. Everything a tile needs is derived in `Cell.tsx` from the one base tint
+  tile's own colour**, and a **full-strength embossed glyph** of the board's
+  plant (the same species on every tile — see One plant per board). Everything a tile needs is derived in `Cell.tsx` from the one base tint
   in `REGION_COLORS` (which is the *available* colour): `available` · `excluded`
   (only *softened* — ~0.8 saturation and a touch paler) · `planted` (saturation
   boosted, bright white rim, small drop shadow, full-colour sprite) · `rim` and
@@ -581,14 +608,16 @@ Game core is **pure TypeScript, framework-free**, so it runs under plain Node
 
 ```
 src/game/
-  types.ts       Difficulty, CellState, Puzzle, DIFFICULTIES (6/8/9)
+  types.ts       Difficulty, CellState, Puzzle (one `plant` per board),
+                 DIFFICULTIES (6/8/9)
   levels.ts      LEVELS: 30 curated {difficulty, seed} + getLevel — pure data
   daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
                  date math — pure data, headless-safe
   stars.ts       par times (size+tier) + starsFor — headless-safe
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
-  palette.ts     PLANT_IDS (17) + REGION_COLORS (11 pastels) — pure data,
+  palette.ts     PLANT_IDS (17, one picked per board) + REGION_COLORS
+                 (11 pastels) — pure data,
                  headless-safe
   plants.ts      id -> require(png) sprite map — RN ONLY (do not import in core)
   generator.ts   generatePuzzle(difficulty, seed?) -> logic-solvable, tier-gated
@@ -598,6 +627,7 @@ src/game/
   validator.ts   findConflicts (row/col/cluster/adjacency) + isSolved
   runTests.ts    headless correctness tests (npm test)
 src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
+                 boardPlant (board species = the card being chased),
                  RESTORE (resume), timer, unlocked level + per-level best +
                  onboarded + soundOn + resume slots (AsyncStorage)
 src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —

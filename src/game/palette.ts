@@ -2,8 +2,8 @@
 // No react-native / asset imports here so this module runs under plain Node.
 
 /** Plant ids — must exactly match the PNG filenames in assets/plants/. */
-// Ordered to match CARDS in cards.ts (commons → rares → legendaries); the
-// board only ever maps region id → PLANT_IDS[i], so the order is free.
+// Ordered to match CARDS in cards.ts (commons → rares → legendaries); a board
+// just picks one of these as its single species, so the order is free.
 // Every id must have a file in assets/plants and a require in plants.ts —
 // see docs/art-brief.md for the concept + style each id stands for.
 export const PLANT_IDS: string[] = [
@@ -49,7 +49,9 @@ export const PLANT_IDS: string[] = [
  * 82 on every size (the old 15-colour palette managed a median of 76). Only a
  * 9×9, which uses 9 of the 11 and so has almost no slack, ever dips — 3 boards
  * in 400 put a pair under 55, worst case 38 — and even there the two tiles keep
- * different rims and different plant silhouettes.
+ * different rims. Note the silhouette no longer helps: one board = one plant
+ * species (see `Puzzle.plant`), so colour is the *only* thing telling two
+ * touching clusters apart, and this separation floor now carries that alone.
  *
  * These are the **available** (untouched) tile colours. `Cell.tsx` derives the
  * rest from each one: a rim and an embossed glyph in deeper shades of the same

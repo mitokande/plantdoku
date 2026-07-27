@@ -40,8 +40,12 @@ export interface Puzzle {
   regions: number[][];
   /** solution[r] = column of the marker in row r (the unique solution). */
   solution: number[];
-  /** plants[regionId] = plant id string (matches a file in assets/plants). */
-  plants: string[];
+  /**
+   * The board's single plant (matches a file in assets/plants). One species per
+   * board, not one per region: clusters are told apart by `colors` alone, so
+   * every marker on a board is the same plant.
+   */
+  plant: string;
   /** colors[regionId] = hex tint for that region's cells. */
   colors: string[];
   /** The difficulty this board was generated for. */

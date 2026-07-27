@@ -27,7 +27,7 @@ import { PLANT_IDS, REGION_COLORS } from "./palette";
  * can swap in a seeded PRNG: same seed (and code version) → byte-identical
  * puzzle. Defaults to Math.random when unseeded.
  *
- * Cosmetics (region colours, plant skins) deliberately do NOT draw from `rand`
+ * Cosmetics (region colours, the board's plant) deliberately do NOT draw from `rand`
  * — see `assemble`. They used to, which coupled the level table to the palette:
  * `shuffle(REGION_COLORS)` consumed `length - 1` draws, so adding a colour
  * shifted the stream for every later generation attempt and silently rewrote
@@ -388,12 +388,17 @@ function assemble(
   // (see the note on `rand`). It also means `assemble` is free to run on the
   // fallback path without shifting later attempts.
   const skin = mulberry32(boardHash(regions, solution));
+  // Colours first, then the plant: the colour pass is the one whose *output*
+  // players have seen for every curated seed, and drawing the plant after it
+  // leaves those tints byte-identical to the per-region-plant era.
+  const colors = assignRegionColors(regions, size, skin);
   return {
     size,
     regions,
     solution,
-    plants: shuffleWith(PLANT_IDS, skin).slice(0, size),
-    colors: assignRegionColors(regions, size, skin),
+    // One species for the whole board — clusters are told apart by colour.
+    plant: PLANT_IDS[Math.floor(skin() * PLANT_IDS.length)],
+    colors,
     difficulty,
     tier,
   };

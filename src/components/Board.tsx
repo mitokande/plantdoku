@@ -59,6 +59,9 @@ const HOLD_MS = 450;
 
 interface Props {
   puzzle: Puzzle;
+  /** The board's species, drawn on every tile. Comes from `useGame` (it tracks
+   *  the card the player is working toward), not from `puzzle.plant`. */
+  plant: string;
   states: CellState[][];
   mistakes: Set<string>; // rejected guesses, drawn as red ✕ cells
   onPaint: (r: number, c: number) => void; // swipe → mark ✕
@@ -114,6 +117,7 @@ function HighlightRing({ x, y, px }: { x: number; y: number; px: number }) {
 
 export function Board({
   puzzle,
+  plant,
   states,
   mistakes,
   onPaint,
@@ -124,7 +128,7 @@ export function Board({
   hintCells,
 }: Props) {
   const { width } = useWindowDimensions();
-  const { size, regions, plants, colors } = puzzle;
+  const { size, regions, colors } = puzzle;
 
   const { cellPx, frameW } = boardMetrics(width, size);
 
@@ -326,7 +330,7 @@ export function Board({
                 key={`${boardKey}-${c}`}
                 px={cellPx}
                 state={states[r][c]}
-                plantId={plants[region]}
+                plantId={plant}
                 color={colors[region]}
                 mistake={mistakes.has(cellKey(r, c))}
               />

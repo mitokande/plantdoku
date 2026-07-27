@@ -399,9 +399,6 @@ export function GameScreen({ game, onMenu }: Props) {
   const canMarkAt = (r: number, c: number) =>
     !tutorial || tutMarkTargets.some(([nr, nc]) => nr === r && nc === c);
 
-  // The plant of the most recent placement — what the win flourish blooms.
-  const lastPlanted = useRef<string | null>(null);
-
   // Drag-paint fires the mark cue once per cell — even on a fast swipe every
   // cell ticks (the audio facade pools voices so they overlap, see src/audio).
   const paint = (r: number, c: number) => {
@@ -431,9 +428,6 @@ export function GameScreen({ game, onMenu }: Props) {
     // the solved effect when the final correct plant completes the board).
     const correct = game.puzzle.solution[r] === c;
     audio.play(correct ? "place" : "mistake");
-    // Remember what was planted last: if this move completes the board, that
-    // plant is the one the win flourish blooms.
-    if (correct) lastPlanted.current = game.puzzle.plants[game.puzzle.regions[r][c]];
     game.place(r, c);
   };
   const tapCell = (r: number, c: number) => {
@@ -442,20 +436,6 @@ export function GameScreen({ game, onMenu }: Props) {
     audio.play("mark");
     game.tap(r, c);
   };
-  // A hint can be the move that finishes the board, so it records its plant
-  // too. Mirrors the reducer's HINT scan (first row whose solution cell is not
-  // yet planted); if the two ever drift, the only cost is which plant blooms.
-  const hint = () => {
-    const { solution, plants, regions } = game.puzzle;
-    const row = solution.findIndex(
-      (c, r) => game.states[r][c] !== "placed",
-    );
-    if (row >= 0) {
-      lastPlanted.current = plants[regions[row][solution[row]]];
-    }
-    game.requestHint();
-  };
-
   // Win fanfare: sound + haptic on the solved edge, then the flourish (a big
   // bloom of the plant that finished the board) holds the screen before the
   // result card. `flourish` gates WinOverlay; a timer backstops the animation
@@ -686,6 +666,7 @@ export function GameScreen({ game, onMenu }: Props) {
       >
         <Board
           puzzle={game.puzzle}
+          plant={game.plant}
           states={game.states}
           mistakes={game.mistakes}
           onPaint={paint}
@@ -747,7 +728,7 @@ export function GameScreen({ game, onMenu }: Props) {
             label="Hint"
             icon="bulb"
             variant="forest"
-            onPress={hint}
+            onPress={game.requestHint}
             disabled={tutorial}
             badge={game.hintsUsed}
             pill
@@ -791,11 +772,10 @@ export function GameScreen({ game, onMenu }: Props) {
       {game.solved && flourish && (
         <WinFlourish
           plantId={
-            // The freshly unlocked card outranks the last plant placed — it is
+            // The freshly unlocked card outranks the board's own plant — it is
             // the more exciting thing to bloom, and the win card reveals it next.
             (game.mode === "level" && game.newCards[0]?.plantId) ||
-            lastPlanted.current ||
-            game.puzzle.plants[0]
+            game.plant
           }
           onDone={() => setFlourish(false)}
         />

@@ -190,7 +190,7 @@ LEVELS.forEach(({ difficulty, seed }, i) => {
     JSON.stringify(p1.regions) === JSON.stringify(p2.regions) &&
       JSON.stringify(p1.solution) === JSON.stringify(p2.solution) &&
       JSON.stringify(p1.colors) === JSON.stringify(p2.colors) &&
-      JSON.stringify(p1.plants) === JSON.stringify(p2.plants),
+      p1.plant === p2.plant,
     `level ${level}: seed ${seed} not deterministic`,
   );
   check(

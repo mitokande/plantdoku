@@ -156,7 +156,7 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           placed && styles.tilePlaced,
         ]}
       >
-        {/* Embossed watermark of the cluster's plant, hidden under the
+        {/* Embossed watermark of the board's plant, hidden under the
             full-colour sprite once the cell is planted.
 
             This Image is **always mounted** and only fades — do NOT put it

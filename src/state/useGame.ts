@@ -36,6 +36,11 @@ interface GameState {
   dailyKey: string | null; // the date the daily board was started for
   endlessDifficulty: Difficulty | null; // set in endless mode
   puzzle: Puzzle;
+  /** The one species this board is planted with — see `boardPlant`. Frozen at
+   *  board creation, NOT derived per render: the solve that finishes the board
+   *  may cross the very milestone it was picked from, and the grid is still on
+   *  screen behind the win flourish. */
+  plant: string;
   states: CellState[][];
   history: Snapshot[];
   // Cells the player tried to plant on and got wrong: the plant is rejected
@@ -55,7 +60,10 @@ interface GameState {
  *  from an older shape is ignored rather than restored half-read. The undo
  *  stack is deliberately not persisted — a resumed board starts with a clean
  *  history (cheap, and undoing across an app restart isn't expected). */
-const RESUME_VERSION = 1;
+// v2: Puzzle.plants[] (one species per region) became one species per board,
+// chosen from the collection (`plant`), so a v1 snapshot would restore a board
+// with no sprite to draw.
+const RESUME_VERSION = 2;
 
 export interface ResumeSnapshot {
   v: number;
@@ -64,6 +72,7 @@ export interface ResumeSnapshot {
   dailyKey: string | null;
   endlessDifficulty: Difficulty | null;
   puzzle: Puzzle;
+  plant: string;
   states: CellState[][];
   mistakes: string[];
   seconds: number;
@@ -76,10 +85,13 @@ export interface ResumeSnapshot {
  *  half-solved level (each mode supersedes only its own saved board). */
 type ResumeSlots = Partial<Record<GameState["mode"], ResumeSnapshot>>;
 
+// The board-creating actions carry `plant` because picking it needs the star
+// total, which lives outside the reducer (see `boardPlant`). Omitted → the
+// puzzle's own seeded pick.
 type Action =
-  | { type: "NEW_GAME"; level: number }
-  | { type: "NEW_DAILY" }
-  | { type: "NEW_ENDLESS"; difficulty: Difficulty }
+  | { type: "NEW_GAME"; level: number; plant?: string }
+  | { type: "NEW_DAILY"; plant?: string }
+  | { type: "NEW_ENDLESS"; difficulty: Difficulty; plant?: string }
   | { type: "RESTORE"; snap: ResumeSnapshot } // resume a persisted board
   | { type: "PAINT"; r: number; c: number } // swipe/drag → mark ✕
   | { type: "ERASE"; r: number; c: number } // swipe/drag from an ✕ → unmark
@@ -175,6 +187,7 @@ function blankState(
   dailyKey: string | null,
   endlessDifficulty: Difficulty | null,
   puzzle: Puzzle,
+  plant = puzzle.plant,
 ): GameState {
   return {
     mode,
@@ -182,6 +195,7 @@ function blankState(
     dailyKey,
     endlessDifficulty,
     puzzle,
+    plant,
     states: emptyGrid(puzzle.size),
     history: [],
     mistakes: new Set(),
@@ -195,20 +209,48 @@ function blankState(
   };
 }
 
-function freshState(level: number): GameState {
+function freshState(level: number, plant?: string): GameState {
   const { difficulty, seed } = getLevel(level);
-  return blankState("level", level, null, null, generatePuzzle(difficulty, seed));
+  return blankState(
+    "level",
+    level,
+    null,
+    null,
+    generatePuzzle(difficulty, seed),
+    plant,
+  );
 }
 
-function freshDailyState(): GameState {
+function freshDailyState(plant?: string): GameState {
   const key = todayKey();
   const puzzle = generatePuzzle(DAILY_DIFFICULTY, dailySeed(key));
-  return blankState("daily", 0, key, null, puzzle);
+  return blankState("daily", 0, key, null, puzzle, plant);
 }
 
-function freshEndlessState(difficulty: Difficulty): GameState {
+function freshEndlessState(difficulty: Difficulty, plant?: string): GameState {
   // Unseeded -> a fresh random board every time.
-  return blankState("endless", 0, null, difficulty, generatePuzzle(difficulty));
+  return blankState(
+    "endless",
+    0,
+    null,
+    difficulty,
+    generatePuzzle(difficulty),
+    plant,
+  );
+}
+
+/**
+ * The species a new board is planted with: **the card the player is working
+ * toward** (`nextCard`), so the board they are solving, the win flourish and
+ * the "<Card> unlocked!" hero are all the same plant when the solve crosses
+ * that milestone. Returns undefined once the collection is complete — there is
+ * no next card, so the board falls back to the puzzle's own seeded pick, which
+ * keeps some variety instead of pinning every post-152★ game to one legendary.
+ *
+ * Player state, hence here and not in the (pure, seed-deterministic) generator.
+ */
+function boardPlant(totalStars: number): string | undefined {
+  return nextCard(totalStars)?.plantId;
 }
 
 /** Serialise the live board for the resume slot (null when there's nothing
@@ -224,6 +266,7 @@ function toSnapshot(state: GameState): ResumeSnapshot | null {
     dailyKey: state.dailyKey,
     endlessDifficulty: state.endlessDifficulty,
     puzzle: state.puzzle,
+    plant: state.plant,
     states: state.states,
     mistakes: [...state.mistakes],
     seconds: state.seconds,
@@ -238,6 +281,7 @@ function toSnapshot(state: GameState): ResumeSnapshot | null {
  *  restored — a bad resume is worse than no resume. */
 function validSnapshot(snap: ResumeSnapshot | undefined): boolean {
   if (!snap || snap.v !== RESUME_VERSION || !snap.puzzle) return false;
+  if (typeof snap.plant !== "string") return false;
   const { size, solution, regions } = snap.puzzle;
   if (!Array.isArray(solution) || solution.length !== size) return false;
   if (!Array.isArray(regions) || regions.length !== size) return false;
@@ -300,13 +344,13 @@ function newestSlot(slots: ResumeSlots): ResumeSnapshot | null {
 function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case "NEW_GAME":
-      return freshState(action.level);
+      return freshState(action.level, action.plant);
 
     case "NEW_DAILY":
-      return freshDailyState();
+      return freshDailyState(action.plant);
 
     case "NEW_ENDLESS":
-      return freshEndlessState(action.difficulty);
+      return freshEndlessState(action.difficulty, action.plant);
 
     // Resume a persisted board: the clock picks up where it stopped, hearts
     // and hints carry over, the undo stack starts empty (not persisted).
@@ -318,6 +362,7 @@ function reducer(state: GameState, action: Action): GameState {
         snap.dailyKey,
         snap.endlessDifficulty,
         snap.puzzle,
+        snap.plant,
       );
       return {
         ...base,
@@ -418,7 +463,8 @@ function reducer(state: GameState, action: Action): GameState {
         history: [],
       };
 
-    // After a fail: same puzzle, blank board, hearts + timer reset.
+    // After a fail: same puzzle (and same plant), blank board, hearts + timer
+    // reset.
     case "RETRY":
       return blankState(
         state.mode,
@@ -426,6 +472,7 @@ function reducer(state: GameState, action: Action): GameState {
         state.dailyKey,
         state.endlessDifficulty,
         state.puzzle,
+        state.plant,
       );
 
     // Places the first still-open row's true solution cell (overwriting an ✕
@@ -992,7 +1039,9 @@ export function useGame(initialLevel = 1) {
       notifications.cancelAll();
       setDaily({ streak: 0, last: null, log: {} });
       writeSlots({}, true);
-      dispatch({ type: "NEW_GAME", level: 1 });
+      // Star total is 0 again, so the board goes back to the first card's plant
+      // (passed literally: the state update above isn't visible here yet).
+      dispatch({ type: "NEW_GAME", level: 1, plant: boardPlant(0) });
     },
     // Starting a new board supersedes the saved board *of that mode* only.
     newGame: (level: number) => {
@@ -1002,7 +1051,7 @@ export function useGame(initialLevel = 1) {
         difficulty: getLevel(level).difficulty,
       });
       putSlot("level", null, true);
-      dispatch({ type: "NEW_GAME", level });
+      dispatch({ type: "NEW_GAME", level, plant: boardPlant(totalStars) });
     },
     newDaily: () => {
       analytics.track("game_started", {
@@ -1010,12 +1059,16 @@ export function useGame(initialLevel = 1) {
         difficulty: DAILY_DIFFICULTY,
       });
       putSlot("daily", null, true);
-      dispatch({ type: "NEW_DAILY" });
+      dispatch({ type: "NEW_DAILY", plant: boardPlant(totalStars) });
     },
     newEndless: (difficulty: Difficulty) => {
       analytics.track("game_started", { mode: "endless", difficulty });
       putSlot("endless", null, true);
-      dispatch({ type: "NEW_ENDLESS", difficulty });
+      dispatch({
+        type: "NEW_ENDLESS",
+        difficulty,
+        plant: boardPlant(totalStars),
+      });
     },
     paint: (r: number, c: number) => dispatch({ type: "PAINT", r, c }),
     erase: (r: number, c: number) => dispatch({ type: "ERASE", r, c }),
