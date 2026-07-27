@@ -20,7 +20,7 @@ import { parSeconds } from "../game/stars";
 import type { Coord } from "../game/types";
 import { formatDateKey, formatTime } from "../format";
 import { useBackHandler } from "../hooks/useBackHandler";
-import { radius, space, theme, typography } from "../theme";
+import { radius, shadow, space, theme, typography } from "../theme";
 import { Board, BOARD_FRAME, boardMetrics } from "./Board";
 import { Button } from "./Button";
 import { FailOverlay } from "./FailOverlay";
@@ -83,9 +83,37 @@ function bbox(cells: Coord[]) {
 
 const DIFF_LABEL = { easy: "Easy", medium: "Medium", hard: "Hard" } as const;
 
-// Morning-garden depth on a warm near-white canvas: the faintest glade behind
-// the board, a touch deeper at the top and bottom edges.
-const BG_GRADIENT = ["#EAF2DE", "#F7FAF0", "#E7F0DA"] as const;
+// --- Rule-chip metrics ------------------------------------------------------
+// The three chips are equal thirds of one row (see `ruleChip`), so how much
+// label fits is pure arithmetic rather than something to eyeball: measure the
+// third, subtract the icon and the padding, and size the type to what's left.
+// This is what stops the row from overflowing the screen on a narrow phone —
+// the chips can't grow past their third, so the *label* has to give.
+const CHIP_GAP = space(2);
+const CHIP_PAD = 5; // horizontal padding inside a chip
+const CHIP_ICON = 15;
+const CHIP_ICON_GAP = 4;
+const CHIP_MAX_W = 440; // the rules row's own max width
+/** Longest label ("One per color") at 12.5pt/700, measured off a screenshot. */
+const CHIP_LABEL_PT = 78;
+const CHIP_FONT_MAX = 12.5;
+const CHIP_FONT_MIN = 10;
+/** Screen padding either side of the row (`wrap`'s paddingHorizontal). */
+const SCREEN_PAD = 12;
+
+function chipFontSize(winW: number) {
+  const rowW = Math.min(winW - SCREEN_PAD * 2, CHIP_MAX_W);
+  const chipW = (rowW - CHIP_GAP * 2) / 3;
+  const labelRoom = chipW - CHIP_PAD * 2 - CHIP_ICON - CHIP_ICON_GAP;
+  const fitted = (labelRoom / CHIP_LABEL_PT) * CHIP_FONT_MAX;
+  return Math.max(CHIP_FONT_MIN, Math.min(CHIP_FONT_MAX, fitted));
+}
+
+// A warm ivory canvas with the faintest lift behind the board. This screen
+// deliberately drops the tabs' green tint: the region pastels are a narrow
+// band of light hues, and a neutral-warm page is what stops the canvas itself
+// from reading as one more cluster colour.
+const BG_GRADIENT = ["#FFFCF6", theme.bgWarm, "#FBF1E1"] as const;
 
 // The three core rules. During the tutorial these get the full card (that's
 // when the player is actually reading); afterwards they collapse to a row of
@@ -314,6 +342,8 @@ export function GameScreen({ game, onMenu }: Props) {
   // measured off the board wrapper so the spotlight can ring exact cells.
   const { width: winW } = useWindowDimensions();
   const [boardBox, setBoardBox] = useState<{ x: number; y: number; w: number } | null>(null);
+  // Rule-chip type is sized off the viewport, not fixed — see chipFontSize.
+  const chipFont = chipFontSize(winW);
 
   // The blackout's spotlight hole for the current stage (null = total
   // blackout, used only for the finish stage). Stage 0: just the singleton
@@ -524,7 +554,9 @@ export function GameScreen({ game, onMenu }: Props) {
           accessibilityLabel="Back to menu"
           style={styles.headerBtn}
         >
-          <Ionicons name="chevron-back" size={24} color={theme.text} />
+          <View style={styles.headerCircle}>
+            <Ionicons name="arrow-back" size={21} color={theme.text} />
+          </View>
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {game.mode === "daily" && game.dailyKey ? (
@@ -548,8 +580,8 @@ export function GameScreen({ game, onMenu }: Props) {
           accessibilityLabel="How to play"
           style={styles.headerBtn}
         >
-          <View style={styles.helpBtn}>
-            <Ionicons name="help" size={18} color={theme.text} />
+          <View style={styles.headerCircle}>
+            <Ionicons name="help" size={20} color={theme.text} />
           </View>
         </Pressable>
       </View>
@@ -580,8 +612,17 @@ export function GameScreen({ game, onMenu }: Props) {
                 accessibilityLabel={rule.detail}
                 style={[styles.ruleChip, openRule === i && styles.ruleChipOpen]}
               >
-                <Ionicons name={rule.icon} size={15} color={theme.accent} />
-                <Text style={styles.ruleChipTxt}>{rule.label}</Text>
+                <Ionicons
+                  name={rule.icon}
+                  size={CHIP_ICON}
+                  color={theme.accentDark}
+                />
+                <Text
+                  style={[styles.ruleChipTxt, { fontSize: chipFont }]}
+                  numberOfLines={1}
+                >
+                  {rule.label}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -595,7 +636,7 @@ export function GameScreen({ game, onMenu }: Props) {
       <View style={styles.statusRow}>
         <Text style={styles.clock}>{formatTime(game.seconds)}</Text>
         <View style={styles.statusItem}>
-          <Hearts hearts={game.hearts} max={game.maxHearts} />
+          <Hearts hearts={game.hearts} max={game.maxHearts} size={24} />
           {!game.onboarded && (
             <Text style={styles.statusLabel}>mistakes left</Text>
           )}
@@ -608,7 +649,7 @@ export function GameScreen({ game, onMenu }: Props) {
       <View style={styles.progressRow}>
         <View style={styles.progressLabel}>
           <Animated.View style={{ transform: [{ scale: leafPop }] }}>
-            <Ionicons name="leaf" size={14} color={theme.accent} />
+            <Ionicons name="leaf" size={17} color={theme.accentDark} />
           </Animated.View>
           <Text style={styles.progressTxt}>
             {`${game.placedCount} of ${size} planted`}
@@ -678,40 +719,49 @@ export function GameScreen({ game, onMenu }: Props) {
         )}
       </View>
 
-      {/* Undo and Hint are the everyday controls and share the row as equal,
-          medium white buttons. Reset is ranked down by *footprint* — a smaller
-          round button — rather than by being drained of contrast, which is what
-          made it read as disabled. It stays in the same white-button family,
-          keeps a full-strength icon, and is captioned, so it never looks like
-          dead UI. Destroying real work needs a second tap (or a long press to
-          skip the confirmation once you know the control). */}
+      {/* Hint is the row's hero — the widest and the only filled button —
+          because it is the one control a stuck player is looking for.
+          Undo sits beside it in the cream secondary family, and Reset is ranked
+          down by *footprint* (a narrow rounded button) rather than by being
+          drained of contrast, which is what made it read as disabled. It keeps
+          a full-strength icon and a caption, so it never looks like dead UI.
+          Destroying real work needs a second tap (or a long press to skip the
+          confirmation once you know the control). */}
       <View style={styles.controls}>
         <Button
           label="Undo"
           icon="arrow-undo"
+          variant="warm"
           onPress={game.undo}
           disabled={!game.canUndo || tutorial}
           badge={game.undoDepth}
+          pill
           flex
         />
-        <Button
-          label="Hint"
-          icon="bulb"
-          variant="ghost"
-          onPress={hint}
-          disabled={tutorial}
-          badge={game.hintsUsed}
-          flex
-        />
+        <View style={styles.hintCol}>
+          {/* No `flex` here: the wrapper is a *column*, so flex-grow would
+              stretch the button vertically (which is what left a slab of the
+              dark bottom edge showing under it) — a column child already
+              stretches to full width on its own. */}
+          <Button
+            label="Hint"
+            icon="bulb"
+            variant="forest"
+            onPress={hint}
+            disabled={tutorial}
+            badge={game.hintsUsed}
+            pill
+          />
+        </View>
         <View style={styles.resetCol}>
           <Button
             label={resetArmed ? "Confirm reset" : "Reset board"}
             icon={resetArmed ? "alert" : "refresh"}
-            variant={resetArmed ? "danger" : "ghost"}
+            variant={resetArmed ? "danger" : "warm"}
             onPress={onReset}
             onLongPress={game.placedCount > 0 ? resetNow : undefined}
             disabled={tutorial}
-            circle
+            compact
           />
           <Text style={[styles.resetTxt, resetArmed && styles.resetTxtArmed]}>
             {resetArmed ? "Tap again" : "Reset"}
@@ -827,49 +877,59 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerTitle: {
-    ...typography.cardTitle,
     color: theme.text,
+    fontSize: 27,
+    fontWeight: "900",
     flexShrink: 1,
   },
-  helpBtn: {
-    width: 32,
-    height: 32,
+  // Both header controls are the same soft white disc: the back arrow and the
+  // help mark are peers, and a disc reads as tappable on a page with no other
+  // chrome.
+  headerCircle: {
+    width: 38,
+    height: 38,
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
+    backgroundColor: theme.panelWarm,
+    ...shadow.card,
   },
+  // Full width inside the screen's own padding — the three chips have to fit
+  // one row on the narrowest phone, so there is no width to give away here.
   ruleChipsWrap: {
     alignSelf: "center",
-    width: "92%",
+    width: "100%",
     maxWidth: 440,
     marginTop: space(1),
   },
   ruleChips: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: space(2),
+    gap: CHIP_GAP,
   },
+  // `flex: 1` (not intrinsic width) is what keeps this row on-screen: three
+  // equal thirds that shrink with the viewport, instead of three content-sized
+  // pills whose sum overflowed the page on a 390pt phone. The padding is small
+  // because it is invisible here — the labels are centred in a fixed third, so
+  // all it does is eat into the room the label has (see chipFontSize).
   ruleChip: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: radius.chip,
-    backgroundColor: theme.panel,
-    borderWidth: 1,
-    borderColor: theme.panelLine,
+    justifyContent: "center",
+    gap: CHIP_ICON_GAP,
+    paddingVertical: 9,
+    paddingHorizontal: CHIP_PAD,
+    borderRadius: 999,
+    backgroundColor: theme.panelWarm,
+    ...shadow.card,
   },
   ruleChipOpen: {
-    backgroundColor: theme.bgAlt,
-    borderColor: theme.accent,
+    backgroundColor: theme.btnWarm,
   },
+  // fontSize comes from chipFontSize at render — it depends on the viewport.
   ruleChipTxt: {
-    ...typography.caption,
     color: theme.text,
+    fontWeight: "700",
   },
   ruleDetail: {
     ...typography.caption,
@@ -883,11 +943,11 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     width: "92%",
     maxWidth: 440,
-    backgroundColor: theme.panel,
-    borderColor: theme.panelLine,
+    backgroundColor: theme.panelWarm,
+    borderColor: theme.btnWarmLine,
     borderWidth: 1,
     borderBottomWidth: 3,
-    borderBottomColor: theme.panelEdge,
+    borderBottomColor: theme.btnWarmEdge,
     borderRadius: radius.md,
     paddingVertical: 12,
     marginTop: 10,
@@ -926,7 +986,7 @@ const styles = StyleSheet.create({
   statusItem: {
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 38,
+    minHeight: 42,
     gap: 2,
   },
   statusLabel: {
@@ -936,7 +996,7 @@ const styles = StyleSheet.create({
   },
   clock: {
     color: theme.text,
-    fontSize: 26,
+    fontSize: 33,
     fontWeight: "900",
     fontVariant: ["tabular-nums"],
   },
@@ -956,9 +1016,9 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     alignSelf: "stretch",
-    height: 8,
+    height: 10,
     borderRadius: 999,
-    backgroundColor: theme.bgAlt,
+    backgroundColor: theme.bgWarmAlt,
     overflow: "hidden",
   },
   progressFill: {
@@ -973,8 +1033,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   progressTxt: {
-    ...typography.caption,
-    color: theme.textDim,
+    color: theme.text,
+    fontSize: 15,
+    fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
   boardWrap: {
@@ -992,7 +1053,7 @@ const styles = StyleSheet.create({
   },
   hintPill: {
     flexShrink: 1,
-    backgroundColor: theme.bgAlt,
+    backgroundColor: theme.btnWarm,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 7,
@@ -1006,7 +1067,13 @@ const styles = StyleSheet.create({
   controls: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: space(2),
+    gap: space(3),
+  },
+  // The hero leads on *width* and on being the only filled button — it is the
+  // same height as its neighbours, so the row still reads as one row. Ranking
+  // it up with extra height and 20pt type as well made it a slab.
+  hintCol: {
+    flex: 1.35,
   },
   resetCol: {
     alignItems: "center",
@@ -1014,10 +1081,10 @@ const styles = StyleSheet.create({
   // Always captioned: a bare icon is what left this control ambiguous, and a
   // caption that comes and goes with the level would move the row instead.
   resetTxt: {
-    color: theme.textDim,
-    fontSize: 10.5,
+    color: theme.text,
+    fontSize: 12,
     fontWeight: "700",
-    marginTop: 2,
+    marginTop: 3,
   },
   resetTxtArmed: {
     color: theme.dangerDark,

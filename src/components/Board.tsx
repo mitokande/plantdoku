@@ -12,13 +12,15 @@ import { cellKey } from "../game/validator";
 import { radius, shadow, theme } from "../theme";
 import { Cell } from "./Cell";
 
-// The tray rim around the grid, kept deliberately slim so it frames the puzzle
-// instead of competing with it. FRAME is the full rim width
-// the touch math sees (dark border + padding); locationX/Y are border-box
-// relative on both RN and web, so cells start exactly FRAME px from the view's
-// edge.
-const FRAME = 7;
-const FRAME_BORDER = 2;
+// The tray rim around the grid. FRAME is the full rim width the touch math
+// sees (border + padding); locationX/Y are border-box relative on both RN and
+// web, so cells start exactly FRAME px from the view's edge. The tray is a
+// light cream, so it can be generous without competing — it reads as a mat
+// around the grid rather than as a heavy frame.
+const FRAME = 12;
+const FRAME_BORDER = 1.5;
+// How far the carved highlight ring sits inside the border.
+const RIM_INSET = 3;
 // position:absolute children are placed relative to the *padding* edge (i.e.
 // already inset by the border), unlike locationX/Y above which is border-box
 // relative — so absolute overlays over the grid (ring, hintCell) must offset
@@ -309,9 +311,10 @@ export function Board({
       pointerEvents="box-only"
       style={[styles.frame, { width: frameW }]}
     >
-      {/* Shows through the tile gaps: a step darker than the tray face, so each
-          light pastel tile gets a soft separating line and reads as its own
-          raised object. */}
+      {/* Shows through the tile gaps: a hair deeper than the tray face. It is
+          inset to exactly the grid's footprint, so the mat *around* the grid
+          keeps the lighter face colour — that step is what makes the grid read
+          as sunk into the tray rather than floating on it. */}
       <View pointerEvents="none" style={styles.bedGap} />
       <View pointerEvents="none" style={styles.frameGloss} />
       {Array.from({ length: size }, (_, r) => (
@@ -363,31 +366,34 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bed,
     borderWidth: FRAME_BORDER,
     borderColor: theme.bedEdge,
-    borderRadius: radius.md,
+    borderRadius: radius.tray,
     overflow: "hidden",
     ...shadow.card,
   },
-  // Absolute children sit relative to the padding edge, so 0/0/0/0 hugs the
-  // inside of the border — i.e. exactly the grid's footprint.
+  // Absolute children sit relative to the *padding* edge (already inset by the
+  // border), so this has to be pushed in by the padding itself to land on the
+  // grid's footprint rather than on the whole inside of the tray.
   bedGap: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: FRAME - FRAME_BORDER,
+    left: FRAME - FRAME_BORDER,
+    right: FRAME - FRAME_BORDER,
+    bottom: FRAME - FRAME_BORDER,
     backgroundColor: theme.bedGap,
     borderRadius: radius.sm,
   },
-  // 1px light ring just inside the border — the tray's carved highlight.
+  // 1px light ring set a few px inside the border — the tray's carved
+  // highlight, which is what keeps a pale cream tray from looking like a flat
+  // rectangle of nothing.
   frameGloss: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: RIM_INSET,
+    left: RIM_INSET,
+    right: RIM_INSET,
+    bottom: RIM_INSET,
     borderWidth: 1,
     borderColor: theme.bedRim,
-    borderRadius: radius.md - FRAME_BORDER,
+    borderRadius: radius.tray - FRAME_BORDER - RIM_INSET,
   },
   row: {
     flexDirection: "row",

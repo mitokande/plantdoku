@@ -41,8 +41,12 @@ const INNER = MARK - (TRAY_PAD + TRAY_BORDER) * 2;
 const TILE = Math.floor((INNER - TILE_GAP * (GRID - 1)) / GRID);
 
 // Nine tints walking the palette, so the mark reads as a Plantdoku board.
-// Index 4 is the centre tile — the one that gets planted.
-const TILES = [0, 3, 6, 9, 11, 2, 13, 7, 4].map((i) => REGION_COLORS[i]);
+// Index 4 is the centre tile — the one that gets planted. Indices are taken
+// mod the palette length so shrinking or growing REGION_COLORS can never leave
+// a tile `undefined` (which renders as a transparent hole, not as an error).
+const TILES = [0, 3, 6, 9, 1, 2, 8, 7, 4].map(
+  (i) => REGION_COLORS[i % REGION_COLORS.length],
+);
 const PLANTED = 4;
 
 // The plant grows *out of* the centre tile rather than floating over the whole

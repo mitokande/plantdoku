@@ -45,20 +45,48 @@ export const theme = {
   onGold: "#3D2E08",
   // bottom-edge colours for the chunky "3D" hybrid-casual buttons/cards
   panelEdge: "#CBD8BD",
-  // The board's bed: a soft sage-grey planter tray. Deliberately low-chroma and
-  // a clear step DARKER than every region tile (which are all light pastels), so
-  // it frames the grid instead of reading as one more cluster colour. The old
-  // warm-wood bed sat only ~58 redmean units from the nearest pastel — closer
-  // than two *touching* clusters ever get (55–85, median 76) — which is what
-  // made peach and sand tiles bleed into the frame. These clear that bar:
-  // bed 88 · bedGap 117 · bedEdge 150 · bedRim 65.
-  bed: "#A6B4A4",
+
+  // ---------------------------------------------------------------------
+  // Warm (board-screen) surfaces. The gameplay screen sits on a warm ivory
+  // canvas rather than the green-tinted `bg` used by the tabs: it is the one
+  // screen where the region pastels have to be the only colour talking, and a
+  // neutral-warm page is what lets them. `panelWarm` is its card/chip white
+  // and `btnWarm*` its secondary buttons — the same roles `panel`/`panelLine`
+  // play elsewhere, in the warm key.
+  // ---------------------------------------------------------------------
+  bgWarm: "#FEF8EF",
+  panelWarm: "#FEFAF2",
+  /** Recessed warm track (the board screen's progress bar). */
+  bgWarmAlt: "#F3EFDA",
+  btnWarm: "#FCF2DD",
+  btnWarmLine: "#E5CEAD",
+  btnWarmEdge: "#E9D6B2",
+  /**
+   * The board screen's one hero action (Hint). A deep forest green with white
+   * type — distinct from `accent`, which is a bright lime that would fight the
+   * pastel grid right above it.
+   */
+  forest: "#4E744B",
+  forestEdge: "#375A38",
+  /** Type/icon colour on top of `forest`. */
+  onForest: "#FFFFFF",
+
+  // The board's bed: a cream planter tray. It reads as a *frame* rather than as
+  // one more cluster colour by being warm-neutral and lighter than every tile
+  // (the region palette is a set of airy pastels), which is the opposite of the
+  // old sage-grey tray — that one worked by being darker than everything.
+  // The nearest region tile sits 61 redmean units from the tray (the old sage
+  // tray managed 87). The slack is bought back on the tile itself: every tile
+  // carries a 1px rim in a deeper shade of its own hue (see `Cell.tsx`), and
+  // that rim is 153 from the tray — so a tile's outline no longer depends on
+  // the tray being the darker thing. Re-check both together if either changes.
+  bed: "#FEF5E1",
   /** Outer border of the tray — its darkest line. */
-  bedEdge: "#8FA08D",
-  /** Seen in the gaps between tiles: a soft shadow line that separates them. */
-  bedGap: "#9CAA9A",
-  /** The carved highlight just inside the border. */
-  bedRim: "#AEBCAC",
+  bedEdge: "#E3CAA6",
+  /** Seen in the gaps between tiles: a hair deeper than the tray face. */
+  bedGap: "#FCF1D9",
+  /** The carved highlight ring set just inside the border. */
+  bedRim: "#EFDCBE",
   /** Warm soil — the mound under the Home wordmark's planted bed. */
   soil: "#D9B489",
 };
@@ -78,7 +106,9 @@ export const radius = {
   btn: 20,
   lg: 24,
   modal: 32,
-  cell: 0.15,
+  /** The board's tray. */
+  tray: 22,
+  cell: 0.2,
 };
 
 /**

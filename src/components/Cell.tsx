@@ -14,8 +14,10 @@ interface Props {
   mistake: boolean;
 }
 
-// Inset between tiles — the board's soil shows through the gaps.
-const GAP = 1.5;
+// Inset between tiles — the tray's cream shows through the gaps. Kept narrow:
+// the tiles are separated by their own rim (see `tileStates`), so the gap only
+// has to keep two rims from touching.
+const GAP = 1;
 
 type RGB = [number, number, number];
 
@@ -44,13 +46,25 @@ function saturate([r, g, b]: RGB, k: number): RGB {
 }
 
 const WHITE: RGB = [255, 255, 255];
-const DRAIN: RGB = toRgb("#EFF2E8");
-const SHADE: RGB = toRgb(theme.frame);
+const DRAIN: RGB = toRgb("#F6F1E4");
+
+/** Scale every channel — darkens (k<1) without touching the hue balance. */
+function shade([r, g, b]: RGB, k: number): RGB {
+  return [r * k, g * k, b * k];
+}
 
 /**
- * The three tile states a region colour has to carry. The base tint is the
+ * The tile states a region colour has to carry. The base tint is the
  * "available" one; a planted cell is the most vivid thing on the board (the
  * player's payoff) and an eliminated one recedes.
+ *
+ * `rim` and `glyph` are the two deeper shades every tile draws in its *own*
+ * hue — a 1px outline and the embossed plant. Both are "more saturated and a
+ * little darker", never "mixed toward a neutral": mixing a pastel toward a dark
+ * green turned the silhouette into a grey smudge and cost the tile the only cue
+ * that says which cluster it belongs to. Keeping them on-hue is also what lets
+ * the tray be lighter than the tiles (see `theme.bed`) — a tile is outlined by
+ * itself, not by the gap around it.
  *
  * `excluded` is only *softened*, never drained: which cluster a cell belongs to
  * is live information the player is still reasoning with ("one plant per
@@ -62,11 +76,10 @@ function tileStates(color: string) {
   const base = toRgb(color);
   return {
     available: color,
-    planted: toHex(mix(saturate(base, 1.4), WHITE, 0.06)),
-    excluded: toHex(mix(saturate(base, 0.82), DRAIN, 0.14)),
-    // Medium-contrast silhouette: darkened toward the shade token but kept on
-    // the tile's own hue, so it reads as an embossed plant, not a smudge.
-    glyph: toHex(mix(saturate(base, 1.15), SHADE, 0.58)),
+    planted: toHex(mix(saturate(base, 1.55), WHITE, 0.04)),
+    excluded: toHex(mix(saturate(base, 0.8), DRAIN, 0.16)),
+    rim: toHex(shade(saturate(base, 1.5), 0.88)),
+    glyph: toHex(shade(saturate(base, 1.9), 0.76)),
   };
 }
 
@@ -116,7 +129,7 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
       pointerEvents="none"
       style={[styles.cell, { width: px, height: px }]}
     >
-      {/* The rounded tile, inset so the board's soil shows in the gaps.
+      {/* The rounded tile, inset so the tray's cream shows in the gaps.
           overflow:hidden keeps the overlays inside the rounding. */}
       <View
         pointerEvents="none"
@@ -124,6 +137,9 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           styles.tile,
           {
             borderRadius: px * radius.cell,
+            // 1px rim in a deeper shade of the tile's own colour: it is what
+            // gives every tile a hard edge on a tray that is *lighter* than it.
+            borderColor: mistake ? theme.dangerDark : tint.rim,
             // A rejected guess owns its tile outright (`dangerTile`) rather
             // than getting a translucent red wash: red over a botanical green
             // blends to muddy tan, not to "wrong". Losing the cluster hue on
@@ -140,7 +156,6 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           placed && styles.tilePlaced,
         ]}
       >
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.bevel]} />
         {/* Embossed watermark of the cluster's plant, hidden under the
             full-colour sprite once the cell is planted.
 
@@ -159,8 +174,11 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
               // On a mistake tile the silhouette follows the red, or the
               // region's green would read as a smudge on the pink.
               tintColor: mistake ? theme.dangerDark : tint.glyph,
-              // Recede under an ✕ so the mark reads unobstructed.
-              opacity: placed ? 0 : state === "marked" ? 0.14 : 0.34,
+              // Full strength on an untouched tile: the silhouette is the
+              // cluster's second identity cue after its colour, and on a pastel
+              // grid the colours alone are a narrow band. It still recedes hard
+              // under an ✕ so the mark reads unobstructed.
+              opacity: placed ? 0 : state === "marked" ? 0.16 : 1,
             },
           ]}
         />
@@ -240,31 +258,29 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-  },
-  // Faint top-light / bottom-shade so each tile reads softly "3D", matching
-  // the chunky panelEdge buttons — static, no animation.
-  bevel: {
-    borderTopWidth: 2,
-    borderTopColor: "rgba(255,255,255,0.18)",
-    borderBottomWidth: 2,
-    borderBottomColor: "rgba(12,23,17,0.09)",
+    // Colour comes from `tint.rim` at render time. The tile is otherwise flat —
+    // there is no bevel any more, because a top-light/bottom-shade pair on a
+    // pastel just muddies it; the rim does the separating instead.
+    borderWidth: 1,
   },
   // The solved cell lifts: a soft drop shadow plus a bright inner rim. This is
   // the loudest thing a tile can be, and it should stay that way — the ✕ is
   // tuned quiet relative to it.
   tilePlaced: {
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.6)",
+    // Overrides the per-hue rim: a planted tile is ringed in light, not in a
+    // deeper shade of itself, which is half of why it reads as raised.
+    borderColor: "rgba(255,255,255,0.75)",
     shadowColor: "#1C3322",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.26,
     shadowRadius: 5,
     elevation: 4,
   },
-  // Opacity is set inline per state (see the render): 0.34 available · 0.2
-  // under an ✕ — still readable, because the cluster's colour and shape is
-  // what the player reasons with and an eliminated cell is not out of the
-  // puzzle — · 0 when planted.
+  // Opacity is set inline per state (see the render): 1 available · 0.16 under
+  // an ✕ — still readable, because the cluster's colour and shape is what the
+  // player reasons with and an eliminated cell is not out of the puzzle — · 0
+  // when planted.
   glyph: {
     width: "60%",
     height: "60%",

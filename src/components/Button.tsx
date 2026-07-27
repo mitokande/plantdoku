@@ -13,25 +13,29 @@ interface Props {
   onLongPress?: () => void;
   disabled?: boolean;
   /**
-   * Emphasis, high → low: `solid` (the primary action) · `ghost` (a normal
-   * white card button) · `danger` (a destructive step, or one awaiting
-   * confirmation). To rank an action *down*, shrink its footprint with
-   * `circle` rather than draining its contrast — a low-contrast button reads
-   * as disabled, not as secondary.
+   * Emphasis, high → low: `solid` (the primary action) · `forest` (the board
+   * screen's one hero action — deep green, white type; `solid`'s bright lime
+   * would fight the pastel grid above it) · `ghost` (a normal white card
+   * button) · `warm` (the board screen's cream secondary buttons) · `danger`
+   * (a destructive step, or one awaiting confirmation). To rank an action
+   * *down*, shrink its footprint with `compact` rather than draining its
+   * contrast — a low-contrast button reads as disabled, not as secondary.
    */
-  variant?: "solid" | "ghost" | "danger";
+  variant?: "solid" | "forest" | "ghost" | "warm" | "danger";
   flex?: boolean;
   badge?: number; // info count in a gold corner bubble; hidden when 0/undefined
   small?: boolean; // compact pill
+  /** Fully rounded pill instead of the default `radius.btn` corners. */
+  pill?: boolean;
   /** Drop the label and show just the icon (the label becomes the a11y name). */
   iconOnly?: boolean;
   /**
-   * Icon in a fixed round face, the same height as a normal button so it sits
-   * on the baseline of a control row. Use it to rank a secondary action *down*
-   * by footprint while keeping it in the same white-button family — which is
+   * Icon in a fixed, narrow rounded face, the same height as a normal button so
+   * it sits on the baseline of a control row. Use it to rank a secondary action
+   * *down* by footprint while keeping it in the same button family — which is
    * what stops it reading as disabled the way an outline-only button does.
    */
-  circle?: boolean;
+  compact?: boolean;
 }
 
 // Height of the darker bottom edge that gives buttons their "pressable" depth.
@@ -47,13 +51,40 @@ export function Button({
   flex,
   badge,
   small,
+  pill,
   iconOnly,
-  circle,
+  compact,
 }: Props) {
-  const bare = iconOnly || circle;
+  const bare = iconOnly || compact;
   const solid = variant === "solid";
+  const forest = variant === "forest";
+  const warm = variant === "warm";
   const danger = variant === "danger";
-  const fg = solid ? theme.onAccent : danger ? theme.onDanger : theme.text;
+  const fg = solid
+    ? theme.onAccent
+    : forest
+      ? theme.onForest
+      : danger
+        ? theme.onDanger
+        : theme.text;
+  const edgeStyle = solid
+    ? styles.edgeSolid
+    : forest
+      ? styles.edgeForest
+      : warm
+        ? styles.edgeWarm
+        : danger
+          ? styles.edgeDanger
+          : styles.edgeGhost;
+  const faceStyle = solid
+    ? styles.faceSolid
+    : forest
+      ? styles.faceForest
+      : warm
+        ? styles.faceWarm
+        : danger
+          ? styles.faceDanger
+          : styles.faceGhost;
   return (
     <Pressable
       onPress={() => {
@@ -72,8 +103,9 @@ export function Button({
       accessibilityLabel={label}
       style={[
         styles.edge,
-        solid ? styles.edgeSolid : danger ? styles.edgeDanger : styles.edgeGhost,
-        circle && styles.edgeCircle,
+        edgeStyle,
+        pill && styles.edgeRound,
+        compact && styles.edgeCompact,
         flex && { flex: 1 },
         disabled && styles.disabled,
       ]}
@@ -83,10 +115,11 @@ export function Button({
           <View
             style={[
               styles.face,
-              solid ? styles.faceSolid : danger ? styles.faceDanger : styles.faceGhost,
+              faceStyle,
               small && styles.faceSmall,
+              pill && styles.facePill,
               iconOnly && styles.faceIconOnly,
-              circle && styles.faceCircle,
+              compact && styles.faceCompact,
               pressed && !disabled && styles.facePressed,
             ]}
           >
@@ -129,14 +162,23 @@ const styles = StyleSheet.create({
   edgeSolid: {
     backgroundColor: theme.accentDark,
   },
+  edgeForest: {
+    backgroundColor: theme.forestEdge,
+  },
   edgeGhost: {
     backgroundColor: theme.panelEdge,
+  },
+  edgeWarm: {
+    backgroundColor: theme.btnWarmEdge,
   },
   edgeDanger: {
     backgroundColor: theme.dangerDark,
   },
-  edgeCircle: {
+  edgeRound: {
     borderRadius: 999,
+  },
+  edgeCompact: {
+    borderRadius: radius.md,
   },
   face: {
     flexDirection: "row",
@@ -155,19 +197,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 4,
   },
+  facePill: {
+    borderRadius: 999,
+  },
   faceIconOnly: {
     minWidth: 44,
     paddingHorizontal: 10,
   },
-  // 44 + EDGE matches a normal button's 44 face + EDGE, so a circle and a
-  // full-size button in the same row share a baseline.
-  faceCircle: {
-    width: 44,
+  // 44 high matches a normal button's face, so a compact button and a full-size
+  // one in the same row share a baseline. It ranks down by *width*, not by
+  // contrast.
+  faceCompact: {
+    width: 56,
     height: 44,
     minHeight: 44,
     paddingVertical: 0,
     paddingHorizontal: 0,
-    borderRadius: 999,
+    borderRadius: radius.md,
   },
   facePressed: {
     marginTop: EDGE,
@@ -176,10 +222,18 @@ const styles = StyleSheet.create({
   faceSolid: {
     backgroundColor: theme.accent,
   },
+  faceForest: {
+    backgroundColor: theme.forest,
+  },
   faceGhost: {
     backgroundColor: theme.panel,
     borderWidth: 1,
     borderColor: theme.panelLine,
+  },
+  faceWarm: {
+    backgroundColor: theme.btnWarm,
+    borderWidth: 1,
+    borderColor: theme.btnWarmLine,
   },
   faceDanger: {
     backgroundColor: theme.danger,

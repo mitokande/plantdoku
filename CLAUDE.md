@@ -328,11 +328,12 @@ not eyeball per-file values**, or the screens drift apart again (the reason this
 section exists).
 
 - **Colour by function, not decoration**: `accent` green = primary actions,
-  progress, active selection · `text` dark forest green = type/icons · `gold` =
+  progress, active selection · `forest` = the board screen's one hero action
+  (Hint) · `text` dark forest green = type/icons · `gold` =
   stars, rewards, rarity (**never** a plain card border) · `bed*` = the
   board's tray only, `soil` = the Home wordmark's mound only · `danger` = mistakes and hearts only. `onAccent` /
-  `onGold` / `onDanger` are the type colours on those fills (very dark greens
-  and browns — never pure black).
+  `onForest` / `onGold` / `onDanger` are the type colours on those fills (very
+  dark greens and browns, or white on `forest` — never pure black).
 - Surface hierarchy, lightest first: `panel` (white — cards *and* modal cards) >
   `bg` (the warm off-white page canvas) > `bgAlt` (things sunken *into* a card:
   chips, progress tracks, recessed slots) > `panelEdge` (the chunky 3D bottom
@@ -343,6 +344,14 @@ section exists).
   is the opposite: a **mid forest green**, deliberately not near-black — but it
   still has to be legible at a glance on every region tint; see the ✕ note under
   Board for how that balance is struck.
+- **The board screen runs a parallel warm set** (`bgWarm` · `panelWarm` ·
+  `bgWarmAlt` · `btnWarm*` · `forest*`) filling exactly the same roles as
+  `bg`/`panel`/`bgAlt`/`panelLine`/`accent`, in ivory instead of green. It
+  exists because that screen's whole job is to show eleven pale region tints:
+  a green-tinted canvas there reads as one more cluster colour, and the tabs'
+  cool white chips read as a twelfth. **Use the warm token on the board screen
+  and the plain one everywhere else** — mixing them in one screen is the drift
+  this section exists to prevent.
 - `radius` is picked by role (`chip` 12 · `md` 16 · `btn` 20 · `lg` 24 card ·
   `modal` 32; `cell` is a *fraction* of tile size). `shadow` has exactly three
   presets — `card`, `raised` (primary button, tab bar), `modal` — all soft and
@@ -358,20 +367,24 @@ section exists).
 
 ### Board
 
-- Cells are **rounded tiles** with a small gap between them (the bed's `bedGap`
-  shows through), a faint static bevel echoing the chunky 3D buttons, and a
-  **faint embossed glyph** of the cluster's plant. Each region colour carries
-  **three states**, derived in `Cell.tsx` from the one base tint in
-  `REGION_COLORS` (which is the *available* colour): `available` · `excluded`
-  (only *softened* — ~0.82 saturation and a touch paler, replacing the old dark
-  scrim) · `planted` (saturation boosted, bright inner rim, small drop shadow,
-  full-colour sprite). **Do not drain `excluded`**: which cluster a ✕'d cell
-  belongs to is information the player is still reasoning with, so the hue must
-  survive the mark — the ✕ carries the eliminated state, the tile only steps
-  back. A solved cell should be the most vivid, most physically
-  raised thing on the board — that's the player's payoff.
-- **No bold cluster borders.** Clusters read by colour + glyph; tile gaps are
-  uniform everywhere.
+- Cells are **rounded tiles** (radius = 0.2 × tile) with a 1px gap between them
+  (the bed's `bedGap` shows through), a **1px rim in a deeper shade of the
+  tile's own colour**, and a **full-strength embossed glyph** of the cluster's
+  plant. Everything a tile needs is derived in `Cell.tsx` from the one base tint
+  in `REGION_COLORS` (which is the *available* colour): `available` · `excluded`
+  (only *softened* — ~0.8 saturation and a touch paler) · `planted` (saturation
+  boosted, bright white rim, small drop shadow, full-colour sprite) · `rim` and
+  `glyph` (saturated up and scaled down in luminance). **Keep `rim`/`glyph`
+  on-hue**: mixing a pastel toward a dark neutral turns the silhouette into a
+  grey smudge and costs the tile its cluster identity. **Do not drain
+  `excluded`** either: which cluster a ✕'d cell belongs to is information the
+  player is still reasoning with, so the hue must survive the mark — the ✕
+  carries the eliminated state, the tile only steps back. A solved cell should
+  be the most vivid, most physically raised thing on the board — that's the
+  player's payoff.
+- **No bold cluster borders.** Clusters read by colour + glyph; tile gaps and
+  rims are uniform everywhere. There is **no bevel** — a top-light/bottom-shade
+  pair only muddies a pastel; the rim does the separating.
 - The ✕ must be **legible at a glance but never louder than a plant.** Most
   cells on a solved board end up eliminated, so a heavy mark turns the board
   into a field of dark crosses and the player's own placements stop being what
@@ -386,21 +399,19 @@ section exists).
   silhouette-plus-tile-colour > ✕**. A *mistake* ✕ is the one exception — solid
   `close`, larger, near-opaque, `dangerDark` — because there are only ever a
   few of them and they mean something different.
-- The board sits in a **slim tray** (`theme.bed` face · `bedEdge` outer border ·
-  `bedGap` in the tile gaps · `bedRim` carved highlight — no texture assets),
-  kept thin (`FRAME`/`FRAME_BORDER` in `Board.tsx`) so it frames the puzzle
-  rather than competing with it. The tray is a **low-chroma sage grey, a clear
-  step darker than every tile**: the region palette is entirely bright tints, so
-  a warm or saturated bed reads as one more cluster colour. The bar to clear is
-  measurable — touching clusters are 55–85 redmean units apart (median 76), and
-  the old warm-wood bed was only 58 from the nearest tile, which is why peach
-  and sand tiles bled into the frame. Current margins (nearest tile to each
-  tray colour): `bed` 97 · `bedGap` 101 · `bedEdge` 113 · `bedRim` 87.
-  **Re-check these if the palette changes** — the un-pastel pass did, and the
-  two tints that came out closest to the tray (mint, warm stone) were pushed
-  further until they cleared 95.
+- The board sits in a **cream mat** (`theme.bed` face · `bedEdge` outer border ·
+  `bedGap` in the tile gaps · `bedRim` carved ring set 3px inside the border —
+  no texture assets), `FRAME` 12 / `FRAME_BORDER` 1.5 in `Board.tsx`, corner
+  radius `radius.tray`. Note `bedGap` is **inset to exactly the grid's
+  footprint**, so the mat around the grid keeps the lighter face colour and the
+  grid reads as sunk into the tray. The tray is **lighter than every tile**,
+  which inverts the old sage-grey design — that one worked by being the darkest
+  thing on the board. It can do this because each tile now carries its own rim:
+  the nearest tile sits only 61 redmean units from the tray, but that tile's rim
+  sits 153 away, so a tile's outline no longer depends on the tray. **Re-check
+  both numbers together if either the palette or the tray changes.**
   `GameScreen` lays the whole screen on a very faint vertical
-  `expo-linear-gradient`.
+  `expo-linear-gradient` in the warm ivory key.
 - A rejected guess is a **red ✕ cell**: the tile becomes opaque
   `theme.dangerTile` (silhouette and ✕ both `dangerDark`) rather than taking a
   translucent red wash — red over a botanical green blends to muddy tan, not to
@@ -414,25 +425,39 @@ section exists).
 Each screen answers one question, and the board screen's is "where do I plant?"
 — so everything else is compressed:
 
-- Header is **back chevron · level name · round `?` button**. No capsule around
-  the level (it isn't interactive) and no "Help ?" text.
+- Header is **back arrow · level name · `?`**, the two controls as matching soft
+  white discs (`headerCircle`). No capsule around the level (it isn't
+  interactive) and no "Help ?" text.
 - The three rules get the **full card only during the tutorial**; afterwards
-  they're three chips (`One per line` / `One per color` / `No touching`) that
-  expand to a one-line explanation on tap. The reclaimed vertical space goes to
-  the board.
-- The **clock is the headline number**; hearts are smaller, and `Best` only
-  renders when there is one. A "mistakes left" caption sits under the hearts for
-  a not-yet-onboarded player only — and the row has a fixed height so its
-  arrival/departure never shifts the board.
+  they're three white pill chips (`One per line` / `One per color` /
+  `No touching`) that expand to a one-line explanation on tap. The reclaimed
+  vertical space goes to the board. The chips are **equal thirds** (`flex: 1`,
+  full content width) — content-sized pills overflowed both screen edges on a
+  390pt phone. Since a chip can no longer grow past its third, the *label* is
+  what gives: `chipFontSize` derives the type size from the measured third minus
+  the icon and padding (`CHIP_*` constants), so the row fits from 320pt up
+  without ever ellipsizing. Re-measure `CHIP_LABEL_PT` if the labels change.
+- The **clock is the headline number** (33pt); hearts are smaller, and `Best`
+  only renders when there is one. A "mistakes left" caption sits under the
+  hearts for a not-yet-onboarded player only — and the row has a fixed height so
+  its arrival/departure never shifts the board.
 - The gesture reminder pill is **onboarding copy, not a control**: it shows on a
   first-time player's board and lives in Help from then on. Its row keeps its
   height either way, so finishing the tutorial can't jolt the board up-screen.
-- Controls are ranked **by footprint, not by contrast**: **Undo** and **Hint**
-  are equal medium white buttons (gold info badges — undoable-move count / hints
-  used — sitting inside their own button's width), and **Reset** is a smaller
-  round white button *of the same family*, captioned "Reset". An earlier pass
-  ranked it down by draining it to a borderless outline, which just made it look
-  disabled — don't do that again; shrink the target, keep the contrast.
+- Controls are ranked **by footprint, not by contrast**. **Hint** is the row's
+  hero: the widest and the only filled button, in `forest` deep green with white
+  type — it is what a stuck player is looking for, and `accent`'s bright lime
+  would fight the pastel grid directly above it. It leads on width *only*: an
+  earlier pass also gave it a taller face and 20pt type and it stopped reading
+  as a button in a row (all three share a height, and the hero's wrapper column
+  must not pass `flex` to it — flex-grow in a column stretches it vertically and
+  leaves a slab of its dark bottom edge showing).
+  **Undo** sits beside it as a cream `warm` pill, and **Reset** is a narrow
+  rounded `compact` button *of the same cream family*, captioned "Reset". Both
+  carry gold info badges (undoable-move count / hints used) inside their own
+  button's width. An earlier pass ranked Reset down by draining it to a
+  borderless outline, which just made it look disabled — don't do that again;
+  shrink the target, keep the contrast.
   Reset **arms on first press** (circle turns red, caption becomes "Tap again",
   falling back after 3.5s) whenever there is progress to destroy; a **long
   press** skips straight to the reset for players who already know the control,
@@ -510,7 +535,8 @@ src/game/
   stars.ts       par times (size+tier) + starsFor — headless-safe
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
-  palette.ts     PLANT_IDS (17) + REGION_COLORS — pure data, headless-safe
+  palette.ts     PLANT_IDS (17) + REGION_COLORS (11 pastels) — pure data,
+                 headless-safe
   plants.ts      id -> require(png) sprite map — RN ONLY (do not import in core)
   generator.ts   generatePuzzle(difficulty, seed?) -> logic-solvable, tier-gated
                  Puzzle; seeded = deterministic (mulberry32 behind all randomness)
@@ -542,7 +568,8 @@ src/components/
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
-  Button.tsx (solid/ghost/danger + iconOnly/circle, optional long-press), WinFlourish.tsx (big plant
+  Button.tsx (solid/forest/ghost/warm/danger + pill/small/iconOnly/
+  compact, optional long-press), WinFlourish.tsx (big plant
   bloom before the win modal), WinOverlay.tsx (card-flip reveal + Continue),
   FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
