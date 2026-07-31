@@ -57,6 +57,12 @@ interface Props {
   onEndless: (difficulty: Difficulty) => void;
   /** Jump to the Cards tab (showcase panel tap-through). */
   onCards: () => void;
+  /**
+   * Centre of the primary button in *window* coords, reported on layout. App
+   * uses it as the launch point of the post-win star flight — measured rather
+   * than assumed, since this row's height moves with the screen size.
+   */
+  onCtaMeasure?: (p: { x: number; y: number }) => void;
 }
 
 const ENDLESS_CHIPS: { difficulty: Difficulty; label: string }[] = [
@@ -349,6 +355,7 @@ export function HomeScreen({
   onLevel,
   onEndless,
   onCards,
+  onCtaMeasure,
 }: Props) {
   // The card being chased — and, by design, the species growing on the board
   // right now. Null once the collection is complete.
@@ -360,6 +367,14 @@ export function HomeScreen({
   // The Endless difficulty popover — closed by default, so the row stays two
   // buttons wide until the player actually asks for the mode.
   const [endlessOpen, setEndlessOpen] = useState(false);
+
+  // Where the star flight takes off from. Measured in *window* coords (the
+  // flight layer is mounted at the app root), on every layout of the button.
+  const ctaRef = useRef<View>(null);
+  const measureCta = () =>
+    ctaRef.current?.measureInWindow((x, y, w, h) =>
+      onCtaMeasure?.({ x: x + w / 2, y: y + h / 2 }),
+    );
 
   // A short screen (SE-class phones) can't carry the full wordmark *and* a
   // readable path without scrolling, and the path is what the screen is for —
@@ -479,13 +494,19 @@ export function HomeScreen({
       <Rise delay={260}>
         <View style={styles.ctaRow}>
           {allComplete && !resume ? (
-            <View style={[styles.ctaMain, styles.doneCard]}>
+            <View
+              ref={ctaRef}
+              onLayout={measureCta}
+              style={[styles.ctaMain, styles.doneCard]}
+            >
               <Ionicons name="trophy" size={28} color={theme.gold} />
               <Text style={styles.doneTitle}>All levels complete!</Text>
               <Text style={styles.doneSub}>More levels coming soon.</Text>
             </View>
           ) : (
             <Animated.View
+              ref={ctaRef}
+              onLayout={measureCta}
               style={[
                 styles.ctaMain,
                 {

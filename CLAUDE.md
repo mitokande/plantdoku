@@ -743,6 +743,29 @@ once, and it holds no game state (the app is fully live behind it).
   run; the header back arrow still uses `onMenu` and returns to the tab you
   came from.
 
+### Star flight (win → Home)
+
+Continue-ing off a solved **level** pays its stars back visibly:
+`StarFlight.tsx` arcs one gold star per earned star from Home's Play button up
+into the HUD star pill, which pops as each one lands. It is mounted at the app
+root **outside the `SafeAreaView`**, like the splash, because it works in
+*window* coordinates.
+
+- **Both endpoints are measured, never assumed** — `HomeScreen`'s
+  `onCtaMeasure` prop reports the primary button's centre via
+  `measureInWindow` on its layout, and `App` measures the pill the same way.
+  Home's path row is elastic (see Home), so a hard-coded launch point would
+  drift with screen size. The flight only renders once both points exist.
+- **It is cosmetic and owes the player nothing.** The star total is already
+  counted — the pill shows the new number the whole time — so a dropped frame,
+  an interrupted flight or an unmount costs nothing. Nothing may ever wait on
+  `onDone`, and no game state may move through here.
+- The arc is a quadratic Bézier sampled into ~16 segments (Animated only
+  interpolates straight lines), fanned by index so three stars read as three
+  paths; `START_DELAY` holds it until Home's own `Rise` entrance has settled.
+- Level mode only: `App`'s `onHome` reads `game.solveStars` *before* leaving the
+  board, and daily/endless fly nothing.
+
 ### Page backdrop
 
 The whole tab shell sits on a **painted garden illustration**
