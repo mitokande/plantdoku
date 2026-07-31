@@ -132,7 +132,14 @@ export default function App() {
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         {playing ? (
-          <GameScreen game={game} onMenu={() => setPlaying(false)} />
+          <GameScreen
+            game={game}
+            onMenu={() => setPlaying(false)}
+            onHome={() => {
+              setPlaying(false);
+              setTab("home");
+            }}
+          />
         ) : (
           <>
             {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}

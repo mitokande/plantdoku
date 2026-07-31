@@ -53,6 +53,7 @@ export type EventName =
   | "coins_earned"
   | "coins_spent"
   | "revive_used"
+  | "milestone_reached" // crossed a chest level on the Home path
   | "board_abandoned" // left an unfinished board (drop-off signal)
   | "board_resumed" // picked a saved board back up
   | "hint_requested"

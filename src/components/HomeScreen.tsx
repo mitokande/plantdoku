@@ -10,6 +10,9 @@ import {
 } from "react-native";
 
 import { nextCard, type PlantCard } from "../game/cards";
+// The chest levels and their payout come from the economy module, so the chest
+// the player is shown is always the chest that actually pays.
+import { MILESTONE_COINS, MILESTONE_EVERY } from "../game/economy";
 import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
@@ -87,8 +90,6 @@ const NODE_MIN = 42;
 const NODE_MAX = 68;
 /** Break between the window's top level and the dangling milestone teaser. */
 const GAP_H = 12;
-/** Every Nth level is a gold "chest" node — visual punctuation on the climb. */
-const MILESTONE_EVERY = 10;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -231,13 +232,15 @@ function LevelNode({
           the milestone's blurb. */}
       <View style={styles.gutterLeft}>
         {teasing ? (
+          // Name the actual prize: "a rare reward" is a promise the player
+          // can't act on, and the chest now pays a real, known amount.
           <View style={styles.callout}>
             <View style={styles.calloutHead}>
-              <Ionicons name="star" size={13} color={theme.gold} />
+              <Ionicons name="gift" size={13} color={theme.gold} />
               <Text style={styles.calloutTitle}>Milestone</Text>
             </View>
             <Text style={styles.calloutSub}>
-              {`Reach level ${level}\nfor a rare reward!`}
+              {`Reach level ${level}\nfor ${MILESTONE_COINS} coins!`}
             </Text>
           </View>
         ) : showReward && reward ? (

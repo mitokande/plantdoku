@@ -35,6 +35,31 @@ export const COINS_PER_DAILY = 20;
  */
 export const STARTING_COINS = 0;
 
+/**
+ * Every Nth level is a gold "chest" node on the Home path, and reaching one
+ * pays a bonus. This lives here rather than in `HomeScreen.tsx` so the chest
+ * the player is *shown* and the chest that actually *pays* can never drift
+ * apart — the screen imports this constant.
+ */
+export const MILESTONE_EVERY = 10;
+export const MILESTONE_COINS = 100;
+
+/** Whether `level` carries a chest. */
+export function isMilestoneLevel(level: number): boolean {
+  return level > 0 && level % MILESTONE_EVERY === 0;
+}
+
+/**
+ * The chest bonus for *reaching* `level` — i.e. paid when that level becomes
+ * playable, which is the moment the path stops drawing its chest. Tying it to
+ * unlocking rather than to clearing is what keeps the two in step: the chest
+ * disappears exactly when it is collected, and it matches the callout's own
+ * wording ("Reach level 10 ...").
+ */
+export function milestoneCoins(level: number): number {
+  return isMilestoneLevel(level) ? MILESTONE_COINS : 0;
+}
+
 /** Endless payout by board size — the mode's first actual reward. */
 const ENDLESS_COINS: Record<Difficulty, number> = {
   easy: 10,

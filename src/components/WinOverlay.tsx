@@ -19,10 +19,9 @@ import { Tappable } from "./Tappable";
 interface Props {
   level: number;
   seconds: number;
-  hasNext: boolean;
-  /** Set when a daily puzzle was solved — switches title/stats/actions. */
+  /** Set when a daily puzzle was solved — switches title/stats. */
   daily?: { date: string; streak: number } | null;
-  /** Set in endless mode — "Continue" becomes "New board". */
+  /** Set in endless mode — only changes the tag above the headline. */
   endless?: boolean;
   /**
    * Level-mode star rating for this solve. `hintsUsed` is here so the card can
@@ -36,8 +35,13 @@ interface Props {
   totalStars?: number;
   /** Coins this solve paid out. 0 on a replay, which shows no line at all. */
   coinsEarned?: number;
-  onShare?: () => void;
-  onNext: () => void;
+  /** Set when the solve reached a chest level — celebrated on its own line. */
+  milestone?: { level: number; coins: number } | null;
+  /**
+   * The card's only action: "Continue" leaves the board for Home. There is
+   * deliberately no next-level / new-board shortcut here — the win card ends
+   * the session on this board and Home is where the player picks the next one.
+   */
   onMenu: () => void;
 }
 
@@ -49,15 +53,13 @@ const REVEAL_MS = 620;
 export function WinOverlay({
   level,
   seconds,
-  hasNext,
   daily,
   endless,
   stars,
   newCards = [],
   totalStars = 0,
   coinsEarned = 0,
-  onShare,
-  onNext,
+  milestone = null,
   onMenu,
 }: Props) {
   const wonCard = newCards[0] ?? null;
@@ -107,22 +109,28 @@ export function WinOverlay({
     extrapolate: "clamp",
   });
 
-  const tag = daily
-    ? `Daily · ${daily.date}`
-    : endless
-      ? "Endless"
-      : `Level ${level} complete`;
+  // The card's only sentence. It carries the context too, so nothing else has
+  // to: the unlocked card if the solve earned one, else which board was solved.
+  const title = wonCard
+    ? `${wonCard.name} unlocked!`
+    : daily
+      ? "Daily solved!"
+      : endless
+        ? "Solved!"
+        : `Level ${level} complete`;
 
-  // One headline: the card if this solve earned one, otherwise the solve.
-  const title = wonCard ? `${wonCard.name} unlocked!` : "Solved!";
-
-  const goals = stars
-    ? [
-        { label: "Puzzle solved", done: true },
-        { label: "No hints used", done: stars.hintsUsed === 0 },
-        { label: `Finish under ${formatTime(stars.par)}`, done: seconds <= stars.par },
-      ]
-    : [];
+  // Everything else is icon + number, never a sentence: time, streak, coins,
+  // chest. A win card is a reward beat, not a receipt.
+  const facts: { icon: keyof typeof Ionicons.glyphMap; value: string; gold?: boolean }[] = [
+    { icon: "time-outline", value: formatTime(seconds) },
+    ...(daily ? [{ icon: "flame" as const, value: `${daily.streak}` }] : []),
+    ...(coinsEarned > 0
+      ? [{ icon: "cash" as const, value: `+${coinsEarned}` }]
+      : []),
+    ...(milestone
+      ? [{ icon: "gift" as const, value: `+${milestone.coins}`, gold: true }]
+      : []),
+  ];
 
   return (
     <Animated.View style={[styles.backdrop, { opacity: fade }]}>
@@ -146,7 +154,6 @@ export function WinOverlay({
           },
         ]}
       >
-        <Text style={styles.tag}>{tag}</Text>
         <Text style={styles.title}>{title}</Text>
 
         {wonCard ? (
@@ -223,8 +230,7 @@ export function WinOverlay({
                 <Text style={{ color: RARITY_COLORS[wonCard.rarity] }}>
                   {wonCard.rarity}
                 </Text>
-                {`  ·  ${collected}/${CARDS.length} collected`}
-                {newCards.length > 1 ? `  ·  +${newCards.length - 1} more` : ""}
+                {`  ·  ${collected}/${CARDS.length}`}
               </Text>
             )}
           </View>
@@ -242,92 +248,49 @@ export function WinOverlay({
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
             </View>
+            {/* No sentence here either — the "?" card above already says what
+                is being worked toward, so the bar just needs its number. */}
             <Text style={styles.barLabel}>
               <Ionicons name="star" size={12} color={theme.gold} />
-              {`  ${totalStars}/${upcoming.stars} to unlock ${upcoming.name}`}
+              {`  ${totalStars}/${upcoming.stars}`}
             </Text>
           </View>
         ) : null}
 
         {stars && (
-          <>
-            <View style={styles.stars}>
-              {[1, 2, 3].map((i) => (
-                <Ionicons
-                  key={i}
-                  name={i <= stars.earned ? "star" : "star-outline"}
-                  size={28}
-                  color={i <= stars.earned ? theme.gold : theme.panelLine}
-                />
-              ))}
-            </View>
-            {stars.earned < 3 && (
-              <View style={styles.goals}>
-                {goals.map((g) => (
-                  <View key={g.label} style={styles.goalRow}>
-                    <Ionicons
-                      name={g.done ? "star" : "star-outline"}
-                      size={13}
-                      color={g.done ? theme.gold : theme.panelLine}
-                    />
-                    <Text style={[styles.goalTxt, g.done && styles.goalDone]}>
-                      {g.label}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-
-        {/* The payout, only when there was one — a replay pays nothing and a
-            "+0 coins" line would read as a penalty. */}
-        {coinsEarned > 0 && (
-          <View style={styles.coins}>
-            <Ionicons name="cash" size={15} color={theme.gold} />
-            <Text style={styles.coinsTxt}>{`+${coinsEarned} coins`}</Text>
+          <View style={styles.stars}>
+            {[1, 2, 3].map((i) => (
+              <Ionicons
+                key={i}
+                name={i <= stars.earned ? "star" : "star-outline"}
+                size={30}
+                color={i <= stars.earned ? theme.gold : theme.panelLine}
+              />
+            ))}
           </View>
         )}
 
-        <Text style={styles.timeLine}>
-          {`Solved in ${formatTime(seconds)}`}
-          {daily ? `  ·  🔥 ${daily.streak}` : ""}
-        </Text>
+        {/* One row of glanceable chips. The chest is the loud one — gold fill,
+            because it is the payoff for a promise the Home path has been
+            dangling for ten levels, not routine income. */}
+        <View style={styles.facts}>
+          {facts.map((f) => (
+            <View key={f.icon} style={[styles.fact, f.gold && styles.factGold]}>
+              <Ionicons
+                name={f.icon}
+                size={15}
+                color={f.gold ? theme.onGold : theme.textDim}
+              />
+              <Text style={[styles.factTxt, f.gold && styles.factGoldTxt]}>
+                {f.value}
+              </Text>
+            </View>
+          ))}
+        </View>
 
         <View style={styles.actions}>
-          {daily ? (
-            <Button
-              label="Share"
-              icon="share-outline"
-              variant="solid"
-              onPress={onShare ?? (() => {})}
-              flex
-            />
-          ) : endless ? (
-            <Button
-              label="New board"
-              variant="solid"
-              onPress={onNext}
-              flex
-            />
-          ) : hasNext ? (
-            <Button label="Continue" variant="solid" onPress={onNext} flex />
-          ) : null}
+          <Button label="Continue" variant="solid" onPress={onMenu} flex />
         </View>
-        {!daily && !endless && (
-          <Text style={styles.nextLine}>
-            {hasNext ? `Next: Level ${level + 1}` : "More levels coming soon"}
-          </Text>
-        )}
-
-        <Tappable
-          onPress={onMenu}
-          hitSlop={8}
-          accessibilityRole="button"
-          style={styles.menuLink}
-        >
-          <Text style={styles.menuTxt}>Menu</Text>
-        </Tappable>
       </Animated.View>
     </Animated.View>
   );
@@ -356,16 +319,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...shadow.modal,
   },
-  tag: {
-    ...typography.overline,
-    color: theme.textDim,
-    textTransform: "uppercase",
-  },
   title: {
     ...typography.modalTitle,
     color: theme.text,
     textAlign: "center",
-    marginTop: 2,
   },
   hero: {
     alignItems: "center",
@@ -448,62 +405,38 @@ const styles = StyleSheet.create({
     gap: space(1),
     marginTop: space(3),
   },
-  goals: {
-    marginTop: space(2),
-    gap: 3,
-  },
-  goalRow: {
+  facts: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: 6,
+    justifyContent: "center",
+    gap: space(2),
+    marginTop: space(3),
   },
-  goalTxt: {
-    ...typography.caption,
-    color: theme.textDim,
-  },
-  goalDone: {
-    color: theme.text,
-  },
-  coins: {
+  fact: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    marginTop: space(3),
     paddingVertical: 4,
     paddingHorizontal: space(3),
     borderRadius: 999,
     backgroundColor: theme.bgAlt,
   },
-  coinsTxt: {
+  factTxt: {
     ...typography.caption,
     color: theme.text,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
   },
-  timeLine: {
-    ...typography.caption,
-    color: theme.textDim,
-    fontVariant: ["tabular-nums"],
-    marginTop: space(3),
+  factGold: {
+    backgroundColor: theme.gold,
+  },
+  factGoldTxt: {
+    color: theme.onGold,
   },
   actions: {
     flexDirection: "row",
     marginTop: space(4),
     alignSelf: "stretch",
-  },
-  nextLine: {
-    ...typography.caption,
-    color: theme.textDim,
-    marginTop: space(1),
-  },
-  menuLink: {
-    marginTop: space(3),
-    paddingVertical: space(1),
-    paddingHorizontal: space(4),
-  },
-  menuTxt: {
-    ...typography.caption,
-    color: theme.textDim,
-    textDecorationLine: "underline",
   },
 });

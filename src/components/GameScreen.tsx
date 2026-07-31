@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Platform,
-  Share,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -39,6 +38,11 @@ if (Platform.OS !== "web") {
 interface Props {
   game: Game;
   onMenu: () => void;
+  /**
+   * Where the win card's single "Continue" goes: back to the Home tab, whatever
+   * tab the board was started from. Defaults to `onMenu`.
+   */
+  onHome?: () => void;
 }
 
 // First-play tutorial: stages 0..5 run on the real Level 1 board; TUT_DONE =
@@ -141,7 +145,7 @@ const RULES = [
   detail: string;
 }[];
 
-export function GameScreen({ game, onMenu }: Props) {
+export function GameScreen({ game, onMenu, onHome }: Props) {
   const { size } = game.puzzle;
   const [showHelp, setShowHelp] = useState(false);
   // Which collapsed rule chip is showing its explanation (null = none).
@@ -178,6 +182,13 @@ export function GameScreen({ game, onMenu }: Props) {
   const leave = () => {
     game.abandonBoard();
     onMenu();
+  };
+
+  // The win card's one action. `abandonBoard` no-ops on a solved board, so this
+  // only differs from `leave` in where it lands: always the Home tab.
+  const goHome = () => {
+    game.abandonBoard();
+    (onHome ?? onMenu)();
   };
 
   // Android back returns to the menu (an open overlay registers later and
@@ -789,7 +800,6 @@ export function GameScreen({ game, onMenu }: Props) {
         <WinOverlay
           level={game.level}
           seconds={game.seconds}
-          hasNext={game.hasNextLevel}
           daily={
             game.mode === "daily" && game.dailyKey
               ? { date: formatDateKey(game.dailyKey), streak: game.dailyStreak }
@@ -807,23 +817,9 @@ export function GameScreen({ game, onMenu }: Props) {
           newCards={game.mode === "level" ? game.newCards : []}
           totalStars={game.totalStars}
           coinsEarned={game.coinsEarned}
-          onShare={() => {
-            if (game.mode !== "daily" || !game.dailyKey) return;
-            const streak = game.dailyStreak;
-            const message =
-              `🌻 Plantdoku Daily ${formatDateKey(game.dailyKey)} — ` +
-              `⏱ ${formatTime(game.seconds)}` +
-              (streak > 1 ? ` · 🔥 ${streak} day streak` : "");
-            // Rejects on web when navigator.share is unavailable — ignore.
-            Share.share({ message }).catch(() => {});
-          }}
+          milestone={game.mode === "level" ? game.milestone : null}
           endless={game.mode === "endless"}
-          onNext={() =>
-            game.mode === "endless" && game.endlessDifficulty
-              ? game.newEndless(game.endlessDifficulty)
-              : game.newGame(game.level + 1)
-          }
-          onMenu={leave}
+          onMenu={goHome}
         />
       )}
 

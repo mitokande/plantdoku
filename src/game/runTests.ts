@@ -13,6 +13,10 @@ import {
   COINS_PER_LEVEL,
   dailyCoins,
   endlessCoins,
+  isMilestoneLevel,
+  MILESTONE_COINS,
+  MILESTONE_EVERY,
+  milestoneCoins,
   REVIVE_COST,
   STARTING_COINS,
 } from "./economy";
@@ -335,6 +339,28 @@ for (let s = 1; s <= 40; s++) {
 check(
   dailyCoins(1000) === dailyCoins(10) && dailyCoins(10) < REVIVE_COST,
   "daily streak bonus must be capped, and a single daily must not buy a revive",
+);
+check(
+  whole(MILESTONE_COINS) && whole(MILESTONE_EVERY),
+  "milestone constants must be whole positive numbers",
+);
+check(
+  isMilestoneLevel(MILESTONE_EVERY) &&
+    isMilestoneLevel(MILESTONE_EVERY * 2) &&
+    !isMilestoneLevel(MILESTONE_EVERY + 1) &&
+    !isMilestoneLevel(0),
+  "isMilestoneLevel must fire on multiples only (and never on 0)",
+);
+check(
+  milestoneCoins(MILESTONE_EVERY) === MILESTONE_COINS &&
+    milestoneCoins(MILESTONE_EVERY + 1) === 0,
+  "milestoneCoins must pay only on chest levels",
+);
+// The level table has to actually contain chests, or the Home path advertises a
+// reward that can never be collected.
+check(
+  LEVELS.length >= MILESTONE_EVERY,
+  "level table is too short to contain a single milestone chest",
 );
 check(
   canAfford(REVIVE_COST, REVIVE_COST) &&

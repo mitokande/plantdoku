@@ -64,14 +64,31 @@ card-unlock currency, and they are finite (180), so spending them would erase
 the rating and the faucet would run dry. Coins are the repeatably-earnable
 half. Every tunable number lives in that one module (`REVIVE_COST` 500,
 `COINS_PER_LEVEL` 20, `COINS_PER_DAILY` 20 + a capped streak bonus,
-`endlessCoins` 10/15/20, `STARTING_COINS`) and is covered by runTests; the UI
-never imports them, it reads `coins` / `reviveCost` / `canRevive` off `useGame`.
+`endlessCoins` 10/15/20, `MILESTONE_COINS` 100, `STARTING_COINS`) and is covered
+by runTests; the UI never imports the prices, it reads `coins` / `reviveCost` /
+`canRevive` off `useGame`.
 
 The faucet is **first-clear-only for levels** — the award sits inside the
 existing `if (level === unlockedLevel)` block, which *is* the first-clear test,
 so replaying a cleared level can't mint coins — with daily (gated on the same
 `firstToday` the streak uses) and endless as the ongoing income. Endless paying
 at all is new: it is the first reward that mode has ever given.
+
+**Chest levels pay on being *reached*, not cleared.** Every `MILESTONE_EVERY`
+(10) level is a gold chest node on the Home path, worth `MILESTONE_COINS` (100),
+and the bonus lands the moment `unlockedLevel` advances to a multiple of 10 —
+so clearing level 9 collects the level-10 chest. That timing is deliberate and
+worth preserving: `teasing` only draws the chest while its level is still
+`locked`, so paying on *reaching* means the chest disappears exactly when it is
+collected, and it matches the callout's own wording ("Reach level 10 for 100
+coins"). Paying on *clearing* level 10 instead would leave a window where the
+chest is gone but unpaid, which reads as a lost reward.
+`MILESTONE_EVERY`/`MILESTONE_COINS` live in `economy.ts` and are **imported by
+`HomeScreen.tsx`** precisely so the chest the player is shown can't drift from
+the chest that pays. The win card shows the chest as its own gold chip beside
+the ordinary `+20`, not folded into a bigger total — it is the payoff for a
+promise the path has been dangling for ten levels, so it should read as its own
+event.
 
 `REVIVE` is the exact opposite of `RETRY`: **+1 heart and nothing else
 touched**, because continuing the solve you were losing is the entire thing
@@ -241,7 +258,7 @@ Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 `level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
 `board_abandoned`/`board_resumed`, `mistake_made`, `hint_requested`,
 `card_unlocked`, `undo_used`/`board_reset`/`board_retried`,
-`coins_earned`/`coins_spent`/`revive_used` (the last one matters most — it is
+`coins_earned`/`coins_spent`/`revive_used`/`milestone_reached` (revive matters most — it is
 the only sink, so it measures whether the currency does anything; it also means
 `hearts_left` on the *_completed events no longer implies the board never
 dropped to one heart),
@@ -702,13 +719,29 @@ once, and it holds no game state (the app is fully live behind it).
   stacked faces at the midpoint) with a rarity glow, and only *after* the flip
   the rarity + `N/17 collected` line. **Tapping the backdrop skips the reveal to
   its end** — a reward beat must never become a wait.
-- Stars show as three glyphs, and when fewer than 3 were earned as an explicit
-  goal list (`Puzzle solved` / `No hints used` / `Finish under M:SS`) so the
-  rating reads as feedback, not as fine print. That list mirrors `starsFor`
-  exactly (1 + no-hints + under-par), which is why `WinOverlay` takes
-  `hintsUsed` rather than only the star count.
-- One primary action (`Continue` / `New board` / `Share`) with a quiet
-  `Next: Level N` line under it; **Menu** is a small text link, not a peer.
+- **The card carries exactly one sentence** (Royal Match's bar): the headline —
+  `<Card> unlocked!`, else `Level 12 complete` / `Daily solved!` / `Solved!`, so
+  the title carries the context and nothing else has to. Everything below it is
+  **hero → three star glyphs → one row of icon+number chips → Continue**. The
+  chips are ⏱ time · 🔥 streak · 🪙 coins · 🎁 chest (gold-filled, the loud one
+  — see Coins), built from the `facts` array; a fact with no value simply isn't
+  in the row. This card was a receipt once — an overline tag, a three-row goal
+  list restating the rating in words, a coin chip row, a separate time line —
+  and each pass cut prose, not information. Two consequences to keep: the star
+  glyphs stand alone (no `3★ needs: …` line; the goals live in the level's own
+  screens), and the next-card bar shows a bare `★ 34/40` because the "?" card
+  above it already says what is being chased. **Add a number to the chip row,
+  never a new line of text.**
+- **Exactly one action, in every mode: `Continue`, which returns to Home.** The
+  card ends the session on this board; picking the next one is Home's job (the
+  path map, the Daily tab, the Endless popover), so the win card no longer
+  carries a next-level shortcut, a `New board` button, a daily `Share`, the
+  `Next: Level N` line or a `Menu` text link — `WinOverlay` has no `onNext` /
+  `hasNext` / `onShare` props at all. Don't re-add them without asking.
+  `GameScreen`'s `onHome` prop (App switches to the Home *tab*, not just out of
+  the board) is what makes Continue land on Home even for a daily or endless
+  run; the header back arrow still uses `onMenu` and returns to the tab you
+  came from.
 
 ### Page backdrop
 
@@ -753,12 +786,14 @@ cut for exactly that reason. Don't put them back; the meta that survived moved
   left gutter; current = green disc with a **gold ring**, pulsing on the same
   `Animated.Value` as the CTA (one heartbeat leads the eye from map to button),
   with a pointed "Current level" flag; locked = pale disc + padlock. Every
-  `MILESTONE_EVERY` (10) level is a **gold chest node**, and the next one above
-  the window is appended as a dangling teaser after a visual `gap` — that
-  dangle is the whole point of a path map. The chest + its "Milestone" blurb
-  only ride a milestone that is still `locked` (`teasing`); once it's the
-  current level or behind, the node goes back to normal status dressing and just
-  keeps its gold ring.
+  `MILESTONE_EVERY` (10) level is a **gold chest node** worth `MILESTONE_COINS`
+  — both imported from `game/economy.ts`, never redeclared here, so the chest
+  shown is the chest that pays — and the next one above the window is appended
+  as a dangling teaser after a visual `gap`; that dangle is the whole point of a
+  path map. The chest + its "Reach level N for 100 coins" blurb only ride a
+  milestone that is still `locked` (`teasing`); once it's the current level or
+  behind, the node goes back to normal status dressing and just keeps its gold
+  ring — which is also the moment the bonus is paid (see Coins / revive).
 - **Tapping a node plays that level** — `onLevel`, wired to `App.tsx`'s
   `startLevel(level)` (which still picks the level's resume slot up when it
   matches). This is the app's only level select; locked nodes are `disabled`.
@@ -804,8 +839,9 @@ src/game/
   daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
                  date math — pure data, headless-safe
   stars.ts       par times (size+tier) + starsFor — headless-safe
-  economy.ts     coin faucet + revive price (every tunable number) —
-                 headless-safe; the UI reads these off useGame, never directly
+  economy.ts     coin faucet + revive price + chest levels/bonus (every
+                 tunable number) — headless-safe; HomeScreen imports
+                 MILESTONE_* so the chest shown is the chest that pays
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
   palette.ts     PLANT_IDS (17, one picked per board) + REGION_COLORS

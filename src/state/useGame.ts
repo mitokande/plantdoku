@@ -20,6 +20,7 @@ import {
   COINS_PER_LEVEL,
   dailyCoins,
   endlessCoins,
+  milestoneCoins,
   REVIVE_COST,
   STARTING_COINS,
 } from "../game/economy";
@@ -565,6 +566,12 @@ export function useGame(initialLevel = 1) {
   // screen, so the win overlay can show "+20".
   const [coins, setCoins] = useState(STARTING_COINS);
   const [coinsEarned, setCoinsEarned] = useState(0);
+  // Set when the solve on screen reached a chest level, so the win card can
+  // celebrate it separately from the ordinary per-level payout.
+  const [milestone, setMilestone] = useState<{
+    level: number;
+    coins: number;
+  } | null>(null);
   // Mirrors `coins` for the callbacks and effects below (same reason as
   // `stateRef`/`slotsRef`): a solve award and a revive spend can land in the
   // same tick, and reading stale state would silently mint or eat coins.
@@ -890,10 +897,22 @@ export function useGame(initialLevel = 1) {
           awardCoins(COINS_PER_LEVEL, "level");
           setCoinsEarned(COINS_PER_LEVEL);
           const next = level + 1; // may be LEVEL_COUNT + 1 = "all complete"
+          // The chest on the Home path pays when its level is *reached* — i.e.
+          // now, as `next` becomes playable — which is the same moment the path
+          // stops drawing it. Clearing level 9 collects the level-10 chest.
+          const bonus = next <= LEVEL_COUNT ? milestoneCoins(next) : 0;
+          if (bonus > 0) {
+            awardCoins(bonus, "milestone");
+            setMilestone({ level: next, coins: bonus });
+            analytics.track("milestone_reached", { level: next, coins: bonus });
+          } else {
+            setMilestone(null);
+          }
           setUnlockedLevel(next);
           AsyncStorage.setItem(UNLOCKED_KEY, String(next)).catch(() => {});
         } else {
           setCoinsEarned(0);
+          setMilestone(null);
         }
       }
     }
@@ -901,6 +920,7 @@ export function useGame(initialLevel = 1) {
       setSolveStars(null);
       setNewCards([]);
       setCoinsEarned(0);
+      setMilestone(null);
     }
     wasSolved.current = state.solved;
   }, [state.solved]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1009,6 +1029,7 @@ export function useGame(initialLevel = 1) {
     // UI never imports the economy constants itself.
     coins,
     coinsEarned,
+    milestone,
     reviveCost: REVIVE_COST,
     canRevive: canAfford(coins, REVIVE_COST),
     canUndo: state.history.length > 0,
