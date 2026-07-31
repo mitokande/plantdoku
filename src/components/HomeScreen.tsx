@@ -1,8 +1,15 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef } from "react";
-import { Animated, Image, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Image,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
-import { CARDS, nextCard, RARITY_COLORS, unlockedCards } from "../game/cards";
+import { nextCard, type PlantCard } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
@@ -16,6 +23,10 @@ import { Tappable } from "./Tappable";
 // rebuild binned three of the originals, which just rendered as gaps) can
 // never silently thin the bed out again.
 const DECO_PLANTS = ["sunflower", "toadstool", "tulip", "monstera", "lavender"]
+  .filter((id) => PLANT_SOURCES[id]);
+
+/** Sprites that grow alongside the path, one per solved/current node. */
+const PATH_PLANTS = ["sprout", "sunflower", "clover", "tulip", "daisy", "fern"]
   .filter((id) => PLANT_SOURCES[id]);
 
 /** The saved mid-solve board behind the Continue button (see useGame.resume). */
@@ -38,6 +49,8 @@ interface Props {
   resume: ResumeInfo | null;
   onResume: () => void;
   onPlay: () => void;
+  /** Tap a node on the path — replay a solved level or start the current one. */
+  onLevel: (level: number) => void;
   onEndless: (difficulty: Difficulty) => void;
   /** Jump to the Cards tab (showcase panel tap-through). */
   onCards: () => void;
@@ -54,6 +67,30 @@ const EDGE = 5;
 
 // Endless mode stays locked until the player has reached this level.
 const ENDLESS_UNLOCK_LEVEL = 15;
+
+// ---------------------------------------------------------------------------
+// Level path geometry. **Home never scrolls** — everything from the wordmark to
+// the Endless row has to fit one screen, on a 4" phone as well as a tall one.
+// So the path is the only elastic thing on the page: it takes `flex: 1`,
+// measures what it was actually given (`onLayout`) and derives its row height
+// and disc size from that, clamped. Everything else is deliberately compact.
+// Nothing here may be a fixed height that assumes a screen size.
+// ---------------------------------------------------------------------------
+/** Levels visible at once: where the player is, and where they're going. */
+const PATH_WINDOW = 2;
+const STEM_W = 6;
+/** Row-height bounds the measured path is clamped into. */
+const ROW_MIN = 56;
+const ROW_MAX = 118;
+/** Disc bounds; the disc is the row minus breathing room. */
+const NODE_MIN = 42;
+const NODE_MAX = 68;
+/** Break between the window's top level and the dangling milestone teaser. */
+const GAP_H = 12;
+/** Every Nth level is a gold "chest" node — visual punctuation on the climb. */
+const MILESTONE_EVERY = 10;
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** Springs children up + in, staggered by `delay` ms. */
 function Rise({ delay, children }: { delay: number; children: React.ReactNode }) {
@@ -96,7 +133,7 @@ const DIFF_LABEL: Record<Difficulty, string> = {
   hard: "Hard",
 };
 
-/** What the Continue card calls the board it saved. */
+/** What the Continue button calls the board it saved. */
 function resumeLabel(r: ResumeInfo): string {
   if (r.mode === "daily") {
     return r.dailyKey ? `Daily ${formatDateKey(r.dailyKey)}` : "Daily puzzle";
@@ -107,6 +144,198 @@ function resumeLabel(r: ResumeInfo): string {
   return `Level ${r.level}`;
 }
 
+type NodeState = "done" | "current" | "locked";
+
+interface PathNode {
+  level: number;
+  state: NodeState;
+  milestone: boolean;
+  /** A gap in the ladder sits above this node (the teaser milestone). */
+  gapAbove: boolean;
+}
+
+/**
+ * The window of levels the path shows, **top of the screen = highest level**
+ * (the ladder is climbed upward): where the player is and where they're going.
+ * At the top of the ladder there is nothing above, so it falls back to the
+ * level just cleared. The next milestone is appended above the window as a
+ * teaser — that dangling chest is the whole point of a path map.
+ */
+function pathNodes(unlockedLevel: number): PathNode[] {
+  const current = Math.min(unlockedLevel, LEVEL_COUNT);
+  const end = Math.min(LEVEL_COUNT, current + PATH_WINDOW - 1);
+  const start = Math.max(1, end - PATH_WINDOW + 1);
+
+  const nodes: PathNode[] = [];
+  for (let level = end; level >= start; level--) {
+    nodes.push({
+      level,
+      state:
+        level < unlockedLevel ? "done" : level === unlockedLevel ? "current" : "locked",
+      milestone: level % MILESTONE_EVERY === 0,
+      gapAbove: false,
+    });
+  }
+
+  // The teaser: the next chest above the window, if there is one.
+  const teaser = (Math.floor(end / MILESTONE_EVERY) + 1) * MILESTONE_EVERY;
+  if (teaser <= LEVEL_COUNT) {
+    nodes.unshift({
+      level: teaser,
+      state: teaser < unlockedLevel ? "done" : "locked",
+      milestone: true,
+      gapAbove: false,
+    });
+    nodes[1].gapAbove = true;
+  }
+  return nodes;
+}
+
+/** One stop on the ladder: the disc, its status badge and its side callouts. */
+function LevelNode({
+  node,
+  size,
+  rowH,
+  pulse,
+  reward,
+  totalStars,
+  onPress,
+  onReward,
+}: {
+  node: PathNode;
+  /** Disc diameter, derived from the height the path was actually given. */
+  size: number;
+  rowH: number;
+  pulse: Animated.Value;
+  /** The card being chased — shown beside the current level only. */
+  reward: PlantCard | null;
+  totalStars: number;
+  onPress: () => void;
+  onReward: () => void;
+}) {
+  const { level, state, milestone } = node;
+  const playable = state !== "locked";
+  // The chest and its blurb are a *promise*, so they only ride a milestone the
+  // player hasn't reached — once it's the current level (or behind them) the
+  // node goes back to normal status dressing, keeping its gold ring.
+  const teasing = milestone && state === "locked";
+  // The current level's plant IS the next card (see One plant per board), so
+  // standing it beside that node says "this is what you're growing" — which is
+  // the job the Next-unlocks panel used to do, without a panel.
+  const showReward = state === "current" && reward != null;
+  const deco = state === "done" ? PATH_PLANTS[level % PATH_PLANTS.length] : null;
+
+  return (
+    <View style={[styles.row, { height: rowH }]}>
+      {/* Left gutter: the card being chased, a plant already grown here, or
+          the milestone's blurb. */}
+      <View style={styles.gutterLeft}>
+        {teasing ? (
+          <View style={styles.callout}>
+            <View style={styles.calloutHead}>
+              <Ionicons name="star" size={13} color={theme.gold} />
+              <Text style={styles.calloutTitle}>Milestone</Text>
+            </View>
+            <Text style={styles.calloutSub}>
+              {`Reach level ${level}\nfor a rare reward!`}
+            </Text>
+          </View>
+        ) : showReward && reward ? (
+          <Tappable onPress={onReward} style={styles.reward}>
+            <Image
+              source={PLANT_SOURCES[reward.plantId]}
+              style={[styles.pathPlant, { width: size, height: size }]}
+            />
+            <Text style={styles.rewardName} numberOfLines={1}>
+              {reward.name}
+            </Text>
+            <View style={styles.rewardStars}>
+              <Ionicons name="star" size={11} color={theme.gold} />
+              <Text style={styles.rewardStarsTxt}>
+                {totalStars}/{reward.stars}
+              </Text>
+            </View>
+          </Tappable>
+        ) : deco ? (
+          <Image
+            source={PLANT_SOURCES[deco]}
+            style={[styles.pathPlant, { width: size - 8, height: size - 8 }]}
+          />
+        ) : null}
+      </View>
+
+      <Tappable
+        disabled={!playable}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Level ${level}${
+          state === "locked" ? ", locked" : state === "done" ? ", completed" : ""
+        }`}
+        style={{ width: size, height: size }}
+      >
+        {({ pressed }) => (
+          <Animated.View
+            style={[
+              styles.node,
+              { width: size, height: size, borderRadius: size / 2 },
+              milestone && styles.nodeMilestone,
+              state === "done" && styles.nodeDone,
+              state === "current" && styles.nodeCurrent,
+              state === "locked" && !milestone && styles.nodeLocked,
+              pressed && playable && styles.nodePressed,
+              state === "current" && {
+                transform: [
+                  {
+                    scale: pulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 1.06],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.nodeNum,
+                { fontSize: size * 0.4 },
+                state === "locked" && !milestone && styles.nodeNumLocked,
+              ]}
+            >
+              {level}
+            </Text>
+          </Animated.View>
+        )}
+      </Tappable>
+
+      {/* Right gutter: status badge, plus the "you are here" flag. */}
+      <View style={styles.gutterRight}>
+        {teasing ? (
+          <View style={styles.chest}>
+            <Ionicons name="gift" size={24} color={theme.gold} />
+          </View>
+        ) : state === "done" ? (
+          <View style={styles.badgeDone}>
+            <Ionicons name="checkmark" size={16} color={theme.onAccent} />
+          </View>
+        ) : state === "locked" ? (
+          <View style={styles.badgeLocked}>
+            <Ionicons name="lock-closed" size={14} color={theme.textDim} />
+          </View>
+        ) : null}
+
+        {state === "current" && (
+          <View style={styles.flag}>
+            <View style={styles.flagPoint} />
+            <Text style={styles.flagTitle}>Current level</Text>
+            <Text style={styles.flagSub}>Keep planting!</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export function HomeScreen({
   unlockedLevel,
   allComplete,
@@ -114,16 +343,41 @@ export function HomeScreen({
   resume,
   onResume,
   onPlay,
+  onLevel,
   onEndless,
   onCards,
 }: Props) {
-  const collected = unlockedCards(totalStars);
-  const upcoming = nextCard(totalStars);
-  // The showcase strip: latest unlocks + the next card as a face-down teaser.
-  const recent = collected.slice(-4);
-  const progress = upcoming ? Math.min(totalStars / upcoming.stars, 1) : 1;
+  // The card being chased — and, by design, the species growing on the board
+  // right now. Null once the collection is complete.
+  const reward = nextCard(totalStars);
+  const current = Math.min(unlockedLevel, LEVEL_COUNT);
+  const nodes = pathNodes(unlockedLevel);
+  const unlocked = unlockedLevel >= ENDLESS_UNLOCK_LEVEL;
 
-  // Idle "breathing" pulse on the Play button — hybrid-casual CTA juice.
+  // The Endless difficulty popover — closed by default, so the row stays two
+  // buttons wide until the player actually asks for the mode.
+  const [endlessOpen, setEndlessOpen] = useState(false);
+
+  // A short screen (SE-class phones) can't carry the full wordmark *and* a
+  // readable path without scrolling, and the path is what the screen is for —
+  // so the branding drops to a plain title and the panels lose their headers.
+  const compact = useWindowDimensions().height < 720;
+
+  // Home never scrolls, so the path is sized from the space left over after
+  // everything else has taken its (compact, fixed) share — see the geometry
+  // block above. `pathH` is 0 for exactly one frame; the fallback keeps that
+  // frame from collapsing, and Rise is still fading the map in when it lands.
+  const [pathH, setPathH] = useState(0);
+  const gapH = nodes.some((n) => n.gapAbove) ? GAP_H : 0;
+  const rowH = clamp(
+    ((pathH || ROW_MAX * nodes.length + gapH) - gapH) / nodes.length,
+    ROW_MIN,
+    ROW_MAX,
+  );
+  const nodeSize = clamp(rowH - 24, NODE_MIN, NODE_MAX);
+
+  // Idle "breathing" pulse, shared by the primary CTA and the current node —
+  // one heartbeat, so the eye is led from the map straight to the button.
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -146,10 +400,10 @@ export function HomeScreen({
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.content}>
-        {/* Wordmark on a planted bed: the sprites overlap and sit *in* a mound
-            of soil instead of floating as a detached row of icons. */}
-        <Rise delay={0}>
+      {/* Wordmark on a planted bed: the sprites overlap and sit *in* a mound
+          of soil instead of floating as a detached row of icons. */}
+      <Rise delay={0}>
+        {!compact && (
           <View style={styles.logo}>
             <View style={styles.bed}>
               {DECO_PLANTS.map((id, i) => (
@@ -171,31 +425,77 @@ export function HomeScreen({
             </View>
             <View style={styles.mound} />
           </View>
-          <Text style={styles.title}>Plantdoku</Text>
-        </Rise>
+        )}
+        <Text style={[styles.title, compact && styles.titleCompact]}>
+          Plantdoku
+        </Text>
+      </Rise>
 
-        {/* ONE primary action. A saved board is what the player wants next, so
-            it *is* the button — with its progress on the face — rather than a
-            second card competing with PLAY for the same tap. */}
-        <Rise delay={120}>
+      {/* The level path: the screen's centrepiece, and the only elastic thing
+          on the page. Highest level at the top, so the ladder is climbed
+          upward and the level just cleared sits underfoot. */}
+      <View
+        style={styles.pathRegion}
+        onLayout={(e) => setPathH(e.nativeEvent.layout.height)}
+      >
+        <Rise delay={180}>
+          <View style={styles.path}>
+            {/* The vine the nodes are threaded on. It runs centre-to-centre,
+                so its ends are always hidden behind the first/last disc. */}
+            <View
+              pointerEvents="none"
+              style={[styles.stemWrap, { top: rowH / 2, bottom: rowH / 2 }]}
+            >
+              <View style={styles.stem} />
+            </View>
+            {nodes.map((node) => (
+              <View key={node.level}>
+                {node.gapAbove && <View style={styles.gap} />}
+                <LevelNode
+                  node={node}
+                  size={nodeSize}
+                  rowH={rowH}
+                  pulse={pulse}
+                  reward={reward}
+                  totalStars={totalStars}
+                  onPress={() => onLevel(node.level)}
+                  onReward={onCards}
+                />
+              </View>
+            ))}
+          </View>
+        </Rise>
+      </View>
+
+      {/* ONE primary action: a saved board *is* the button, with its progress
+          on the face, rather than a second card competing for the same tap.
+          Play and Endless share one row at 3:1. Endless is a *quarter*, in the
+          cream key rather than green, so the screen still has exactly one
+          primary action — it is a door, not a peer. The row always renders, so
+          finishing the ladder can't take Endless away with it. */}
+      <Rise delay={260}>
+        <View style={styles.ctaRow}>
           {allComplete && !resume ? (
-            <View style={styles.doneCard}>
-              <Ionicons name="trophy" size={36} color={theme.gold} />
+            <View style={[styles.ctaMain, styles.doneCard]}>
+              <Ionicons name="trophy" size={28} color={theme.gold} />
               <Text style={styles.doneTitle}>All levels complete!</Text>
               <Text style={styles.doneSub}>More levels coming soon.</Text>
             </View>
           ) : (
             <Animated.View
-              style={{
-                transform: [
-                  {
-                    scale: pulse.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1, 1.02],
-                    }),
-                  },
-                ],
-              }}
+              style={[
+                styles.ctaMain,
+                {
+                  transform: [
+                    {
+                      scale: pulse.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.02],
+                      }),
+                    },
+                  ],
+                },
+              ]}
             >
               <Tappable
                 onPress={resume ? onResume : onPlay}
@@ -206,108 +506,36 @@ export function HomeScreen({
                   <View style={[styles.play, pressed && styles.playPressed]}>
                     <View style={styles.playRow}>
                       <Ionicons name="leaf" size={22} color={theme.onAccent} />
-                      <Text style={styles.playLabel}>
-                        {resume ? "Continue" : "Play"}
+                      <Text style={styles.playLabel} numberOfLines={1}>
+                        {resume ? `Continue ${resumeLabel(resume)}` : `Play level ${current}`}
                       </Text>
                     </View>
-                    <Text style={styles.playSub}>
+                    <Text style={styles.playSub} numberOfLines={1}>
                       {resume
-                        ? `${resumeLabel(resume)} · ${resume.placed}/${
-                            resume.size
-                          } planted · ${formatTime(resume.seconds)}`
-                        : `Level ${unlockedLevel} / ${LEVEL_COUNT}`}
+                        ? `${resume.placed}/${resume.size} planted · ${formatTime(
+                            resume.seconds,
+                          )} elapsed`
+                        : `Level ${current} of ${LEVEL_COUNT}`}
                     </Text>
                   </View>
                 )}
               </Tappable>
             </Animated.View>
           )}
-        </Rise>
 
-        {/* The one case where a second entry point earns its place: the saved
-            board is a daily or an endless run, so the level ladder would
-            otherwise be unreachable from this screen. Deliberately a quiet
-            link, not a peer of the button above. */}
-        {resume && resume.mode !== "level" && !allComplete && (
-          <Rise delay={180}>
-            <Tappable onPress={onPlay} hitSlop={6} style={styles.altLink}>
-              <Text style={styles.altLinkTxt}>
-                {`Play level ${unlockedLevel} of ${LEVEL_COUNT}`}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={theme.textDim} />
-            </Tappable>
-          </Rise>
-        )}
-
-        {/* Card collection showcase — the meta lives front and center. */}
-        <Rise delay={220}>
-          <Tappable onPress={onCards} style={styles.cardsPanel}>
-            <View style={styles.cardsHeader}>
-              <Text style={styles.cardsTitle}>Plant collection</Text>
-              <Text style={styles.cardsCount}>
-                {collected.length} of {CARDS.length}
-              </Text>
-            </View>
-
-            {/* The cards themselves are the point — they get the room, and the
-                next one sits among them as a face-down slot. */}
-            <View style={styles.cardsRow}>
-              {recent.map((c) => (
-                <View
-                  key={c.plantId}
-                  style={[styles.mini, { borderColor: RARITY_COLORS[c.rarity] }]}
-                >
-                  <Image
-                    source={PLANT_SOURCES[c.plantId]}
-                    style={styles.miniImg}
-                  />
-                </View>
-              ))}
-              {upcoming && (
-                <View style={[styles.mini, styles.miniLocked]}>
-                  <Image
-                    source={PLANT_SOURCES[upcoming.plantId]}
-                    style={[styles.miniImg, styles.miniImgLocked]}
-                  />
-                  <Text style={styles.miniQ}>?</Text>
-                </View>
-              )}
-              <View style={styles.topSpacer} />
-              <Ionicons name="chevron-forward" size={20} color={theme.textDim} />
-            </View>
-
-            {upcoming ? (
-              <>
-                <View style={styles.barTrack}>
-                  <View
-                    style={[styles.barFill, { width: `${progress * 100}%` }]}
-                  />
-                </View>
-                <Text style={styles.barLabel}>
-                  <Ionicons name="star" size={12} color={theme.gold} />
-                  {`  ${totalStars}/${upcoming.stars} — next up: ${upcoming.name}`}
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.barLabel}>
-                All {CARDS.length} cards collected!
-              </Text>
-            )}
-          </Tappable>
-        </Rise>
-
-        <Rise delay={320}>
-          {unlockedLevel >= ENDLESS_UNLOCK_LEVEL ? (
-            <View style={styles.endless}>
-              <View style={styles.endlessTitleRow}>
-                <Ionicons name="leaf" size={16} color={theme.accent} />
-                <Text style={styles.endlessTitle}>Endless garden</Text>
-              </View>
-              <View style={styles.endlessChips}>
+          <View style={styles.ctaSide}>
+            {/* The three difficulties don't fit a quarter, so they lift out as
+                a small popover above it rather than living on the page — which
+                is the clutter this row exists to remove. */}
+            {endlessOpen && unlocked && (
+              <View style={styles.endlessPop}>
                 {ENDLESS_CHIPS.map(({ difficulty, label }) => (
                   <Tappable
                     key={difficulty}
-                    onPress={() => onEndless(difficulty)}
+                    onPress={() => {
+                      setEndlessOpen(false);
+                      onEndless(difficulty);
+                    }}
                     style={({ pressed }) => [
                       styles.chip,
                       pressed && styles.chipPressed,
@@ -317,70 +545,83 @@ export function HomeScreen({
                   </Tappable>
                 ))}
               </View>
-            </View>
-          ) : (
-            // Locked, but still desirable: the garden stays visible behind the
-            // lock and the card shows how close the player is.
-            <View style={[styles.endless, styles.endlessLocked]}>
-              <View pointerEvents="none" style={styles.lockedGarden}>
-                {DECO_PLANTS.map((id) => (
-                  <Image
-                    key={id}
-                    source={PLANT_SOURCES[id]}
-                    style={styles.lockedGardenImg}
-                  />
-                ))}
-              </View>
-              <View style={styles.endlessLockedRow}>
-                <Ionicons name="lock-closed" size={20} color={theme.textDim} />
-                <View style={styles.topSpacer}>
-                  <Text style={styles.endlessTitle}>Endless garden</Text>
-                  <Text style={styles.endlessLockedSub}>
-                    Unlock at level {ENDLESS_UNLOCK_LEVEL}
-                  </Text>
-                </View>
-                <Text style={styles.endlessLockedCount}>
-                  {Math.min(unlockedLevel, ENDLESS_UNLOCK_LEVEL)} /{" "}
-                  {ENDLESS_UNLOCK_LEVEL}
-                </Text>
-              </View>
-              <View style={styles.barTrack}>
+            )}
+            <Tappable
+              disabled={!unlocked}
+              onPress={() => setEndlessOpen((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                unlocked
+                  ? "Endless garden"
+                  : `Endless garden, unlocks at level ${ENDLESS_UNLOCK_LEVEL}`
+              }
+              style={styles.endlessEdge}
+            >
+              {({ pressed }) => (
                 <View
                   style={[
-                    styles.barFill,
-                    styles.lockedBarFill,
-                    {
-                      width: `${
-                        Math.min(unlockedLevel / ENDLESS_UNLOCK_LEVEL, 1) * 100
-                      }%`,
-                    },
+                    styles.endless,
+                    pressed && unlocked && styles.playPressed,
+                    !unlocked && styles.endlessLocked,
                   ]}
-                />
-              </View>
-            </View>
-          )}
+                >
+                  <Ionicons
+                    name={unlocked ? "infinite" : "lock-closed"}
+                    size={22}
+                    color={unlocked ? theme.accentDark : theme.textDim}
+                  />
+                  <Text
+                    style={[
+                      styles.endlessTxt,
+                      !unlocked && styles.endlessTxtLocked,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {unlocked
+                      ? "Endless"
+                      : `${Math.min(unlockedLevel, ENDLESS_UNLOCK_LEVEL)}/${ENDLESS_UNLOCK_LEVEL}`}
+                  </Text>
+                </View>
+              )}
+            </Tappable>
+          </View>
+        </View>
+      </Rise>
+
+      {/* The one case where a second entry point earns its place: the saved
+          board is a daily or an endless run, so the level ladder would
+          otherwise be unreachable from this screen. Deliberately a quiet
+          link, not a peer of the button above. */}
+      {resume && resume.mode !== "level" && !allComplete && (
+        <Rise delay={300}>
+          <Tappable onPress={onPlay} hitSlop={6} style={styles.altLink}>
+            <Text style={styles.altLinkTxt}>
+              {`Play level ${current} of ${LEVEL_COUNT}`}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={theme.textDim} />
+          </Tappable>
         </Rise>
-      </View>
+      )}
+
     </View>
   );
 }
 
-const CARD_W = { alignSelf: "center" as const, width: "92%" as const, maxWidth: 340 };
+const CARD_W = { alignSelf: "center" as const, width: "100%" as const, maxWidth: 380 };
+
+// Cards sit on a photographic garden backdrop now, so they are a warm white
+// *veil* rather than flat panel white — the illustration stays faintly visible
+// through them, which is what keeps the screen reading as one scene.
+const VEIL = "rgba(255,252,242,0.93)";
 
 const styles = StyleSheet.create({
+  // A fixed column, never a ScrollView: everything has to be reachable without
+  // a scroll, so the path (`pathRegion`) absorbs whatever height is left.
   wrap: {
     flex: 1,
     paddingHorizontal: 20,
-  },
-  topSpacer: {
-    flex: 1,
-  },
-  // Branding sits high on the screen rather than floating in the middle of a
-  // tall empty column.
-  content: {
-    flex: 1,
-    justifyContent: "flex-start",
-    paddingTop: space(3),
+    paddingTop: space(2),
+    paddingBottom: space(2),
   },
   logo: {
     alignItems: "center",
@@ -410,10 +651,240 @@ const styles = StyleSheet.create({
     ...typography.screenTitle,
     color: theme.text,
     textAlign: "center",
-    marginBottom: space(5),
+    marginBottom: space(3),
   },
-  playEdge: {
+  titleCompact: {
+    fontSize: 28,
+    marginBottom: space(2),
+  },
+
+
+  // ---- level path ---------------------------------------------------------
+  // The elastic region. `minHeight: 0` lets it actually give ground on a short
+  // screen instead of pushing the button and the panels off the bottom.
+  pathRegion: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  path: {
     ...CARD_W,
+  },
+  stemWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  stem: {
+    flex: 1,
+    width: STEM_W,
+    borderRadius: STEM_W / 2,
+    backgroundColor: theme.accent,
+    opacity: 0.55,
+  },
+  // The break between the window's top level and the dangling milestone —
+  // "there is more ladder up there than fits on this screen".
+  gap: {
+    height: GAP_H,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  gutterLeft: {
+    flex: 1,
+    alignItems: "flex-end",
+    paddingRight: space(3),
+  },
+  gutterRight: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: space(2),
+    gap: space(2),
+  },
+  pathPlant: {
+    resizeMode: "contain",
+  },
+  // The card being chased, standing in the current level's gutter. No card
+  // frame or panel: it is a plant growing beside the path, and the ★ line is
+  // the only thing that says it's a collectible.
+  reward: {
+    alignItems: "center",
+    maxWidth: "100%",
+  },
+  rewardName: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: theme.text,
+    marginTop: -2,
+  },
+  rewardStars: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 1,
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+    backgroundColor: VEIL,
+  },
+  rewardStarsTxt: {
+    ...typography.caption,
+    fontSize: 11,
+    color: theme.textDim,
+    fontVariant: ["tabular-nums"],
+  },
+  node: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 4,
+    borderColor: theme.panel,
+    backgroundColor: theme.panel,
+    ...shadow.card,
+  },
+  nodeDone: {
+    backgroundColor: theme.accent,
+  },
+  // The one node the player is meant to tap: brighter fill, gold ring, pulse.
+  nodeCurrent: {
+    backgroundColor: theme.accent,
+    borderColor: theme.gold,
+    ...shadow.raised,
+  },
+  nodeLocked: {
+    backgroundColor: "#E6EADF",
+  },
+  nodeMilestone: {
+    backgroundColor: theme.gold,
+    borderColor: "#FFE9AE",
+  },
+  nodePressed: {
+    opacity: 0.82,
+  },
+  nodeNum: {
+    fontWeight: "900",
+    color: theme.panel,
+  },
+  nodeNumLocked: {
+    color: theme.textDim,
+  },
+  badgeDone: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.accent,
+    borderWidth: 2,
+    borderColor: theme.panel,
+  },
+  badgeLocked: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E6EADF",
+    borderWidth: 2,
+    borderColor: theme.panel,
+  },
+  chest: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.chip,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: VEIL,
+    borderWidth: 1.5,
+    borderColor: theme.gold,
+    ...shadow.card,
+  },
+  // "You are here" — a pointed flag rather than a card, so it reads as an
+  // annotation on the map instead of one more panel.
+  flag: {
+    flexShrink: 1,
+    paddingVertical: space(2),
+    paddingHorizontal: space(3),
+    backgroundColor: VEIL,
+    borderRadius: radius.chip,
+    ...shadow.card,
+  },
+  flagPoint: {
+    position: "absolute",
+    left: -5,
+    top: "50%",
+    marginTop: -5,
+    width: 10,
+    height: 10,
+    backgroundColor: VEIL,
+    transform: [{ rotate: "45deg" }],
+  },
+  flagTitle: {
+    ...typography.caption,
+    fontSize: 14,
+    fontWeight: "900",
+    color: theme.accentDark,
+  },
+  flagSub: {
+    ...typography.caption,
+    fontSize: 12,
+    color: theme.textDim,
+    marginTop: 1,
+  },
+  callout: {
+    flexShrink: 1,
+    paddingVertical: space(2),
+    paddingHorizontal: space(3),
+    backgroundColor: VEIL,
+    borderRadius: radius.chip,
+    borderWidth: 1,
+    borderColor: theme.panelLine,
+  },
+  calloutHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  calloutTitle: {
+    ...typography.caption,
+    fontWeight: "900",
+    color: theme.text,
+  },
+  calloutSub: {
+    ...typography.caption,
+    fontSize: 12,
+    color: theme.textDim,
+    marginTop: 2,
+  },
+
+  // ---- primary action -----------------------------------------------------
+  // Play : Endless = 3 : 1. Endless is a quarter and stays cream, so the row
+  // reads as one primary action with a door beside it.
+  ctaRow: {
+    ...CARD_W,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: space(2),
+    marginTop: space(2),
+  },
+  // `flex: n` in RN is grow n / shrink 1 / **basis 0**, so these are a true 3:1
+  // split of the row's width and the Play label can't widen its own column.
+  ctaMain: {
+    flex: 3,
+  },
+  ctaSide: {
+    flex: 1,
+  },
+  // NOT `flex: 1`. `ctaMain` is an auto-height column, and a flex child of an
+  // auto-height parent resolves to zero — the button then overflowed its own
+  // collapsed row and drew on top of the Next-unlocks card below it. Play is
+  // content-sized, and it is what gives the row its height; the Endless side
+  // stretches to match (see `endlessEdge`).
+  playEdge: {
+    alignSelf: "stretch",
     borderRadius: radius.btn,
     backgroundColor: theme.accentDark,
     ...shadow.raised,
@@ -421,7 +892,7 @@ const styles = StyleSheet.create({
   play: {
     alignItems: "center",
     backgroundColor: theme.accent,
-    paddingVertical: space(4),
+    paddingVertical: space(3),
     borderRadius: radius.btn,
     marginBottom: EDGE,
   },
@@ -435,8 +906,9 @@ const styles = StyleSheet.create({
     gap: space(2),
   },
   playLabel: {
+    flexShrink: 1,
     color: theme.onAccent,
-    fontSize: 26,
+    fontSize: 21,
     fontWeight: "900",
   },
   playSub: {
@@ -459,167 +931,76 @@ const styles = StyleSheet.create({
     color: theme.textDim,
   },
   doneCard: {
-    ...CARD_W,
     alignItems: "center",
-    backgroundColor: theme.panel,
+    justifyContent: "center",
+    backgroundColor: VEIL,
     borderRadius: radius.lg,
-    paddingVertical: space(6),
+    paddingVertical: space(3),
     ...shadow.card,
   },
   doneTitle: {
     ...typography.cardTitle,
+    fontSize: 17,
     color: theme.text,
-    marginTop: space(2),
+    marginTop: space(1),
   },
   doneSub: {
     ...typography.caption,
     color: theme.textDim,
     marginTop: 2,
   },
-  // A plain white card with a soft shadow: gold is for rewards, not for
-  // outlining ordinary panels.
-  cardsPanel: {
-    ...CARD_W,
-    marginTop: space(6),
-    paddingVertical: space(4),
-    paddingHorizontal: space(4),
-    backgroundColor: theme.panel,
-    borderRadius: radius.lg,
+
+  // ---- endless (the quarter beside Play) ----------------------------------
+  // `flex: 1` is safe here, unlike on `playEdge`: `ctaSide` has no explicit
+  // height, so the row's `alignItems: "stretch"` gives it Play's height, and
+  // this then fills it — which is what keeps the two buttons the same size.
+  endlessEdge: {
+    flex: 1,
+    borderRadius: radius.btn,
+    backgroundColor: theme.panelEdge,
     ...shadow.card,
-  },
-  cardsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: space(3),
-  },
-  cardsTitle: {
-    ...typography.cardTitle,
-    fontSize: 17,
-    color: theme.text,
-  },
-  cardsCount: {
-    ...typography.caption,
-    color: theme.textDim,
-  },
-  cardsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(2),
-  },
-  mini: {
-    width: 50,
-    height: 50,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: theme.bgAlt,
-    borderRadius: radius.chip,
-    borderWidth: 1.5,
-  },
-  miniLocked: {
-    borderColor: theme.panelLine,
-    borderStyle: "dashed",
-  },
-  miniImg: {
-    width: 38,
-    height: 38,
-    resizeMode: "contain",
-  },
-  miniImgLocked: {
-    tintColor: theme.frame,
-    opacity: 0.9,
-  },
-  miniQ: {
-    position: "absolute",
-    color: theme.gold,
-    fontSize: 19,
-    fontWeight: "900",
-  },
-  barTrack: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.bgAlt,
-    marginTop: space(3),
-    overflow: "hidden",
-  },
-  barFill: {
-    height: "100%",
-    borderRadius: 4,
-    backgroundColor: theme.gold,
-  },
-  lockedBarFill: {
-    backgroundColor: theme.accent,
-  },
-  barLabel: {
-    ...typography.caption,
-    color: theme.textDim,
-    marginTop: space(2),
   },
   endless: {
-    ...CARD_W,
-    marginTop: space(3),
-    paddingVertical: space(3),
-    paddingHorizontal: space(4),
-    backgroundColor: theme.panel,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    ...shadow.card,
-  },
-  endlessTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: space(2),
-  },
-  endlessTitle: {
-    ...typography.cardTitle,
-    fontSize: 16,
-    color: theme.text,
-  },
-  endlessChips: {
-    flexDirection: "row",
-    gap: space(2),
-  },
-  endlessLocked: {
-    backgroundColor: theme.bgAlt,
-  },
-  // The garden behind the lock: visible enough to want, faint enough to read
-  // as not-yet-yours.
-  lockedGarden: {
-    position: "absolute",
-    right: -6,
-    bottom: -10,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    opacity: 0.3,
-  },
-  lockedGardenImg: {
-    width: 54,
-    height: 54,
-    marginHorizontal: -8,
-    resizeMode: "contain",
-  },
-  endlessLockedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space(3),
-  },
-  endlessLockedSub: {
-    ...typography.caption,
-    color: theme.textDim,
-    marginTop: 1,
-  },
-  endlessLockedCount: {
-    ...typography.caption,
-    color: theme.textDim,
-    fontVariant: ["tabular-nums"],
-  },
-  chip: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 44,
-    paddingVertical: space(2),
+    gap: 2,
+    backgroundColor: VEIL,
+    borderRadius: radius.btn,
+    marginBottom: EDGE,
+  },
+  endlessLocked: {
+    backgroundColor: "rgba(240,244,232,0.93)",
+  },
+  endlessTxt: {
+    ...typography.caption,
+    fontSize: 12,
+    color: theme.accentDark,
+    fontVariant: ["tabular-nums"],
+  },
+  endlessTxtLocked: {
+    color: theme.textDim,
+  },
+  // The difficulties, lifted off the page into a popover above the button —
+  // `bottom: 100%` so it opens upward into the path's air, never off-screen.
+  endlessPop: {
+    position: "absolute",
+    right: 0,
+    bottom: "100%",
+    marginBottom: space(2),
+    padding: space(2),
+    gap: space(2),
+    backgroundColor: VEIL,
+    borderRadius: radius.md,
+    ...shadow.modal,
+  },
+  chip: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 38,
+    minWidth: 92,
+    paddingVertical: space(1),
+    paddingHorizontal: space(2),
     borderRadius: radius.chip,
     backgroundColor: theme.bgAlt,
     borderWidth: 1,

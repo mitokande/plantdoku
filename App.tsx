@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
   AppState,
+  Image,
   Platform,
   SafeAreaView,
   StatusBar as RNStatusBar,
@@ -25,6 +26,13 @@ import { LEVEL_COUNT } from "./src/game/levels";
 import { useBackHandler } from "./src/hooks/useBackHandler";
 import { useGame } from "./src/state/useGame";
 import { shadow, theme } from "./src/theme";
+
+// The painted garden the whole tab shell sits on. It is full-bleed at the root
+// — *outside* the SafeAreaView — so the status-bar inset is part of the scene
+// rather than a strip of flat canvas above it. The board screen keeps its own
+// warm gradient (the region pastels need a neutral page, see CLAUDE.md), so
+// this is mounted only while the shell is up.
+const PAGE_BG = require("./assets/home-bg.jpg");
 
 // Hold the static native splash until the animated one has painted, so the
 // launch reads as one continuous shot instead of a flash of empty canvas.
@@ -91,8 +99,9 @@ export default function App() {
   // Continue card is the explicit route, this just stops the big green button
   // from being a trap. Any other saved board (a daily, an endless run) is
   // superseded, as it would be by any other new game.
-  const startLevel = () => {
-    const level = Math.min(game.unlockedLevel, LEVEL_COUNT);
+  const startLevel = (
+    level: number = Math.min(game.unlockedLevel, LEVEL_COUNT),
+  ) => {
     if (game.resumeSlots.level?.level === level) game.resumeGame("level");
     else game.newGame(level);
     setPlaying(true);
@@ -117,6 +126,9 @@ export default function App() {
     // inset too — a launch animation letterboxed by a strip of page canvas
     // would give away the seam it exists to hide.
     <View style={styles.root}>
+      {!playing && (
+        <Image source={PAGE_BG} style={styles.pageBg} resizeMode="cover" />
+      )}
       <SafeAreaView style={styles.safe}>
         <StatusBar style="dark" />
         {playing ? (
@@ -155,7 +167,8 @@ export default function App() {
                   totalStars={game.totalStars}
                   resume={game.resume}
                   onResume={continueBoard}
-                  onPlay={startLevel}
+                  onPlay={() => startLevel()}
+                  onLevel={startLevel}
                   onEndless={(difficulty) => {
                     game.newEndless(difficulty);
                     setPlaying(true);
@@ -199,10 +212,16 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.bg,
   },
+  // Transparent so the page backdrop shows through; `root` keeps the flat
+  // canvas underneath for the board screen (which paints its own).
   safe: {
     flex: 1,
-    backgroundColor: theme.bg,
     paddingTop: Platform.OS === "android" ? RNStatusBar.currentHeight ?? 0 : 0,
+  },
+  pageBg: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
   },
   hud: {
     flexDirection: "row",

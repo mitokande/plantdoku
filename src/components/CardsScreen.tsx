@@ -307,13 +307,22 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 1,
   },
+  // The page backdrop is a painted garden and this line lands on its busiest
+  // part (the pots along the bottom), so it carries its own warm veil — dim
+  // type straight on the illustration is unreadable.
   footer: {
+    alignSelf: "center",
     color: theme.textDim,
     fontSize: 13,
     lineHeight: 18,
     textAlign: "center",
     marginTop: 10,
     marginBottom: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: radius.chip,
+    backgroundColor: "rgba(255,252,242,0.88)",
+    overflow: "hidden",
   },
   backdrop: {
     position: "absolute",

@@ -655,23 +655,86 @@ once, and it holds no game state (the app is fully live behind it).
 - One primary action (`Continue` / `New board` / `Share`) with a quiet
   `Next: Level N` line under it; **Menu** is a small text link, not a peer.
 
+### Page backdrop
+
+The whole tab shell sits on a **painted garden illustration**
+(`assets/home-bg.jpg`, mounted in `App.tsx` as `PAGE_BG`). It is full-bleed at
+the *root*, **outside** the `SafeAreaView`, so the status-bar inset is part of
+the scene rather than a strip of flat canvas above it — and it is mounted only
+while `!playing`: the board screen keeps its own warm ivory gradient, because
+that screen's job is to show eleven pale region tints and a photographic
+backdrop behind them would be one more thing competing with the grid.
+`styles.safe` is therefore transparent; `styles.root` keeps `theme.bg` as the
+flat canvas underneath.
+
+Cards on this screen are a **warm white veil** (`VEIL`, ~93% opaque) rather than
+flat `theme.panel` white — the illustration stays faintly visible through them,
+which is what keeps the screen reading as one scene instead of opaque cards
+pasted on a photo.
+
+The corollary: **loose dim type can no longer float on the page**. The backdrop
+is busiest along the bottom (pots and flowers), so anything sitting there needs
+its own surface — `CardsScreen`'s footer caption carries a veil chip for exactly
+this reason. Text in the calm upper half is fine bare.
+
 ### Home
 
-- **One primary action.** A saved board *is* the big green button (`Continue`,
-  with `mode · N/M planted · time` on its face) — there is no separate Continue
-  card competing with `Play` for the same tap. The single exception, and the
-  only place a second entry point is allowed: when the saved board is a *daily
-  or endless* run, a quiet text link below offers the level ladder, which would
-  otherwise be unreachable from this screen.
-- Branding sits **high** on the screen (not floating mid-column), and the
-  wordmark's plants are a **planted bed** — overlapping sprites at staggered
+Home is a **level-path map**, and it **never scrolls** — wordmark → the path →
+Play + Endless, all on one screen. It is a fixed flex column, not a
+`ScrollView`; anything added here has to earn its height from something else.
+The screen was cluttered once — a stats card under the title, Endless as a
+full-width card, a "Next unlocks" panel along the bottom — and all three were
+cut for exactly that reason. Don't put them back; the meta that survived moved
+*onto the path* (see the reward plant below), which is the pattern to follow.
+
+- **The path is the centrepiece and the only elastic thing on the page**
+  (`pathNodes` + `LevelNode`). It takes `flex: 1`, measures what it was actually
+  given (`onLayout` → `pathH`) and derives its row height and disc size from
+  that, clamped to `ROW_MIN/MAX` and `NODE_MIN/MAX`. Nothing in the path may be
+  a fixed height that assumes a screen size.
+- A window of `PATH_WINDOW` (**2**) levels threaded on a vine, **highest level at
+  the top** so the ladder is climbed upward: where the player is, and where
+  they're going. Nodes: solved = green disc + check badge + a plant grown in the
+  left gutter; current = green disc with a **gold ring**, pulsing on the same
+  `Animated.Value` as the CTA (one heartbeat leads the eye from map to button),
+  with a pointed "Current level" flag; locked = pale disc + padlock. Every
+  `MILESTONE_EVERY` (10) level is a **gold chest node**, and the next one above
+  the window is appended as a dangling teaser after a visual `gap` — that
+  dangle is the whole point of a path map. The chest + its "Milestone" blurb
+  only ride a milestone that is still `locked` (`teasing`); once it's the
+  current level or behind, the node goes back to normal status dressing and just
+  keeps its gold ring.
+- **Tapping a node plays that level** — `onLevel`, wired to `App.tsx`'s
+  `startLevel(level)` (which still picks the level's resume slot up when it
+  matches). This is the app's only level select; locked nodes are `disabled`.
+- **The card being chased grows beside the current level** (`reward` =
+  `nextCard(totalStars)`, in that node's left gutter, tapping through to the
+  Cards tab). This is not decoration and it is not arbitrary: that plant *is*
+  the species on the board right now (see One plant per board), so the path, the
+  grid and the unlock hero all show the same thing. It carries the plant, its
+  name and a `totalStars/required` ★ chip — and no card frame, because it should
+  read as something growing by the path rather than as a panel. It replaced the
+  bottom "Next unlocks" strip, which showed three cards the player couldn't act
+  on. Falls back to a decorative sprite once the collection is complete.
+- **One primary action, with a door beside it.** Play and Endless share one row
+  at **3:1** (`ctaRow` / `ctaMain` / `ctaSide`). A saved board *is* the big green
+  button (`Continue <board>`, with `N/M planted · time elapsed` on its face);
+  Endless is the quarter, in the cream key rather than green so it reads as a
+  door and not a peer. Its three difficulties don't fit a quarter, so they lift
+  into a small popover **above** the button (`endlessPop`, `bottom: 100%`) on
+  tap. Locked, it shows a padlock and `N/15`. The row renders even when the
+  ladder is finished (the "All levels complete" card takes the `ctaMain` slot),
+  so completing the game can't take Endless away with it. The one other entry
+  point allowed: when the saved board is a *daily or endless* run, a quiet text
+  link offers the level ladder, which would otherwise be unreachable here.
+- The wordmark's plants are a **planted bed** — overlapping sprites at staggered
   heights with a slight lean, standing in a `soil` mound — rather than a
-  detached row of icons.
-- The card-collection panel is a **plain white card with a soft shadow** (gold
-  is for rewards, not for outlining ordinary panels) and gives its room to the
-  card tiles themselves, with the next card as a dashed face-down slot.
-- Locked Endless is **desirable, not just disabled**: the garden stays visible
-  behind the lock and the card shows `N / 15` progress with a bar.
+  detached row of icons. On a **short screen** (`compact`, window height < 720)
+  the bed goes and the title shrinks, and the panels drop their headers: an
+  SE-class phone can't carry full branding *and* a readable path, and the path
+  is what the screen is for.
+- The full collection lives on the Cards tab; Home shows only the one card
+  being chased, on the path.
 
 ## Architecture / file map
 
@@ -710,9 +773,9 @@ src/components/
                  tile tints from the one region colour
   GameScreen.tsx header (back · Level N · ?), collapsible rules, stats, board,
                  ranked controls, win overlay; haptics; first-play tutorial
-  HomeScreen.tsx Home tab: planted-bed wordmark, ONE pulsing primary button
-                 (Play or Continue), card-collection showcase panel, endless
-                 card (level-15 lock)
+  HomeScreen.tsx Home tab (never scrolls): planted-bed wordmark, the elastic
+                 level-path map (tap a node to play; next card grows beside the
+                 current one), Play/Continue + Endless quarter (level-15 lock)
   CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
   BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
@@ -732,7 +795,8 @@ src/components/
   Hearts.tsx (lives row), Confetti.tsx
 src/theme.ts     design tokens: colour · radius · shadow · typography · space
 src/format.ts
-App.tsx          tab shell: global HUD (★ wallet → Cards, 🔥 streak, ⚙) +
+App.tsx          tab shell: full-bleed garden backdrop + global HUD
+                 (★ wallet → Cards, 🔥 streak, ⚙) +
                  Home/Cards/Daily pages + BottomNav; `playing` swaps in a
                  full-screen GameScreen (no HUD/nav); Android back returns
                  to the Home tab first; resume-aware Play/Daily entry points
