@@ -86,7 +86,7 @@ const ENDLESS_UNLOCK_LEVEL = 15;
 // Nothing here may be a fixed height that assumes a screen size.
 // ---------------------------------------------------------------------------
 /** Levels visible at once: where the player is, and where they're going. */
-const PATH_WINDOW = 2;
+const PATH_WINDOW = 3;
 const STEM_W = 6;
 /** Row-height bounds the measured path is clamped into. */
 const ROW_MIN = 56;
@@ -94,8 +94,6 @@ const ROW_MAX = 118;
 /** Disc bounds; the disc is the row minus breathing room. */
 const NODE_MIN = 42;
 const NODE_MAX = 68;
-/** Break between the window's top level and the dangling milestone teaser. */
-const GAP_H = 12;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -157,16 +155,15 @@ interface PathNode {
   level: number;
   state: NodeState;
   milestone: boolean;
-  /** A gap in the ladder sits above this node (the teaser milestone). */
-  gapAbove: boolean;
 }
 
 /**
  * The window of levels the path shows, **top of the screen = highest level**
  * (the ladder is climbed upward): where the player is and where they're going.
  * At the top of the ladder there is nothing above, so it falls back to the
- * level just cleared. The next milestone is appended above the window as a
- * teaser — that dangling chest is the whole point of a path map.
+ * levels just cleared. A chest is only ever drawn when its milestone level
+ * actually falls inside this window — the next one is never pinned above it,
+ * so the ladder always reads as three consecutive steps.
  */
 function pathNodes(unlockedLevel: number): PathNode[] {
   const current = Math.min(unlockedLevel, LEVEL_COUNT);
@@ -180,20 +177,7 @@ function pathNodes(unlockedLevel: number): PathNode[] {
       state:
         level < unlockedLevel ? "done" : level === unlockedLevel ? "current" : "locked",
       milestone: level % MILESTONE_EVERY === 0,
-      gapAbove: false,
     });
-  }
-
-  // The teaser: the next chest above the window, if there is one.
-  const teaser = (Math.floor(end / MILESTONE_EVERY) + 1) * MILESTONE_EVERY;
-  if (teaser <= LEVEL_COUNT) {
-    nodes.unshift({
-      level: teaser,
-      state: teaser < unlockedLevel ? "done" : "locked",
-      milestone: true,
-      gapAbove: false,
-    });
-    nodes[1].gapAbove = true;
   }
   return nodes;
 }
@@ -386,9 +370,8 @@ export function HomeScreen({
   // block above. `pathH` is 0 for exactly one frame; the fallback keeps that
   // frame from collapsing, and Rise is still fading the map in when it lands.
   const [pathH, setPathH] = useState(0);
-  const gapH = nodes.some((n) => n.gapAbove) ? GAP_H : 0;
   const rowH = clamp(
-    ((pathH || ROW_MAX * nodes.length + gapH) - gapH) / nodes.length,
+    (pathH || ROW_MAX * nodes.length) / nodes.length,
     ROW_MIN,
     ROW_MAX,
   );
@@ -468,7 +451,6 @@ export function HomeScreen({
             </View>
             {nodes.map((node) => (
               <View key={node.level}>
-                {node.gapAbove && <View style={styles.gap} />}
                 <LevelNode
                   node={node}
                   size={nodeSize}
@@ -589,11 +571,26 @@ export function HomeScreen({
                     !unlocked && styles.endlessLocked,
                   ]}
                 >
-                  <Ionicons
-                    name={unlocked ? "infinite" : "lock-closed"}
-                    size={22}
-                    color={unlocked ? theme.accentDark : theme.textDim}
-                  />
+                  {/* The ∞ is the mode's identity, so it stays even when
+                      locked — a lone padlock says "something is locked" but
+                      not *what*. The lock rides it as a corner badge, and the
+                      progress drops to its own small line under the name. */}
+                  <View style={styles.endlessIcon}>
+                    <Ionicons
+                      name="infinite"
+                      size={22}
+                      color={unlocked ? theme.accentDark : theme.textDim}
+                    />
+                    {!unlocked && (
+                      <View style={styles.endlessLockBadge}>
+                        <Ionicons
+                          name="lock-closed"
+                          size={9}
+                          color={theme.textDim}
+                        />
+                      </View>
+                    )}
+                  </View>
                   <Text
                     style={[
                       styles.endlessTxt,
@@ -601,10 +598,13 @@ export function HomeScreen({
                     ]}
                     numberOfLines={1}
                   >
-                    {unlocked
-                      ? "Endless"
-                      : `${Math.min(unlockedLevel, ENDLESS_UNLOCK_LEVEL)}/${ENDLESS_UNLOCK_LEVEL}`}
+                    Endless
                   </Text>
+                  {!unlocked && (
+                    <Text style={styles.endlessProgress} numberOfLines={1}>
+                      {`${Math.min(unlockedLevel, ENDLESS_UNLOCK_LEVEL)}/${ENDLESS_UNLOCK_LEVEL}`}
+                    </Text>
+                  )}
                 </View>
               )}
             </Tappable>
@@ -707,11 +707,6 @@ const styles = StyleSheet.create({
     borderRadius: STEM_W / 2,
     backgroundColor: theme.accent,
     opacity: 0.55,
-  },
-  // The break between the window's top level and the dangling milestone —
-  // "there is more ladder up there than fits on this screen".
-  gap: {
-    height: GAP_H,
   },
   row: {
     flexDirection: "row",
@@ -1004,6 +999,31 @@ const styles = StyleSheet.create({
   },
   endlessTxtLocked: {
     color: theme.textDim,
+  },
+  endlessIcon: {
+    // The badge hangs outside the glyph box, so the wrapper must not clip it.
+    position: "relative",
+  },
+  endlessLockBadge: {
+    position: "absolute",
+    right: -5,
+    bottom: -3,
+    width: 15,
+    height: 15,
+    borderRadius: 7.5,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.bgAlt,
+    borderWidth: 1.5,
+    borderColor: theme.panel,
+  },
+  endlessProgress: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 12,
+    color: theme.textDim,
+    opacity: 0.9,
+    fontVariant: ["tabular-nums"],
   },
   // The difficulties, lifted off the page into a popover above the button —
   // `bottom: 100%` so it opens upward into the path's air, never off-screen.

@@ -809,7 +809,7 @@ cut for exactly that reason. Don't put them back; the meta that survived moved
   given (`onLayout` → `pathH`) and derives its row height and disc size from
   that, clamped to `ROW_MIN/MAX` and `NODE_MIN/MAX`. Nothing in the path may be
   a fixed height that assumes a screen size.
-- A window of `PATH_WINDOW` (**2**) levels threaded on a vine, **highest level at
+- A window of `PATH_WINDOW` (**3**) levels threaded on a vine, **highest level at
   the top** so the ladder is climbed upward: where the player is, and where
   they're going. Nodes: solved = green disc + check badge + a plant grown in the
   left gutter; current = green disc with a **gold ring**, pulsing on the same
@@ -817,9 +817,11 @@ cut for exactly that reason. Don't put them back; the meta that survived moved
   with a pointed "Current level" flag; locked = pale disc + padlock. Every
   `MILESTONE_EVERY` (10) level is a **gold chest node** worth `MILESTONE_COINS`
   — both imported from `game/economy.ts`, never redeclared here, so the chest
-  shown is the chest that pays — and the next one above the window is appended
-  as a dangling teaser after a visual `gap`; that dangle is the whole point of a
-  path map. The chest + its "Reach level N for 100 coins" blurb only ride a
+  shown is the chest that pays. A chest is drawn **only when its level actually
+  falls inside the window**: the next milestone used to be pinned above the
+  window as a dangling teaser after a visual gap, and that was removed — the
+  path is three consecutive steps and nothing else, so the ladder never lies
+  about how far away the chest is. The chest + its "Reach level N for 100 coins" blurb only ride a
   milestone that is still `locked` (`teasing`); once it's the current level or
   behind, the node goes back to normal status dressing and just keeps its gold
   ring — which is also the moment the bonus is paid (see Coins / revive).
@@ -841,7 +843,10 @@ cut for exactly that reason. Don't put them back; the meta that survived moved
   Endless is the quarter, in the cream key rather than green so it reads as a
   door and not a peer. Its three difficulties don't fit a quarter, so they lift
   into a small popover **above** the button (`endlessPop`, `bottom: 100%`) on
-  tap. Locked, it shows a padlock and `N/15`. The row renders even when the
+  tap. Locked, it **keeps the ∞ glyph and the "Endless" label** and adds a small
+  lock badge on the corner of the icon plus an `N/15` line — it showed a bare
+  padlock and `N/15` once, which said something was locked but never what, so
+  the door had no identity until it opened. The row renders even when the
   ladder is finished (the "All levels complete" card takes the `ctaMain` slot),
   so completing the game can't take Endless away with it. The one other entry
   point allowed: when the saved board is a *daily or endless* run, a quiet text
