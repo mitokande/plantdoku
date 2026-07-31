@@ -22,7 +22,7 @@ import { GameScreen } from "./src/components/GameScreen";
 import { HomeScreen } from "./src/components/HomeScreen";
 import { SettingsOverlay } from "./src/components/SettingsOverlay";
 import { SplashScreen } from "./src/components/SplashScreen";
-import { StarFlight, type Pt } from "./src/components/StarFlight";
+import { RewardFlight, type Pt } from "./src/components/RewardFlight";
 import { Tappable } from "./src/components/Tappable";
 import { LEVEL_COUNT } from "./src/game/levels";
 import { useBackHandler } from "./src/hooks/useBackHandler";
@@ -50,29 +50,47 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // --- Post-win star flight -------------------------------------------------
-  // Leaving a solved level flings its stars from the Home Play button up into
-  // the HUD star pill. Purely cosmetic: the total is already counted by the
-  // time this runs (the pill under it shows the new number throughout), so the
-  // flight can be dropped on any frame without owing the player anything.
-  // Both endpoints are *measured* in window coords rather than assumed — the
-  // path row's height moves with the screen size.
-  const [flight, setFlight] = useState<{ count: number; id: number } | null>(
-    null,
-  );
+  // --- Post-win reward flight -----------------------------------------------
+  // Leaving a solved board flings its rewards from the Home Play button up into
+  // the HUD: stars first, then coins into their own pill. Purely cosmetic —
+  // both totals are already counted by the time this runs (the pills show the
+  // new numbers throughout), so a flight can be dropped on any frame without
+  // owing the player anything. Both endpoints are *measured* in window coords
+  // rather than assumed: the path row's height moves with the screen size.
+  const [flight, setFlight] = useState<{
+    id: number;
+    stars: number;
+    coins: number;
+    /** Which leg is in the air — coins wait for the stars to land. */
+    leg: "stars" | "coins";
+  } | null>(null);
   const [ctaPt, setCtaPt] = useState<Pt | null>(null);
-  const [pillPt, setPillPt] = useState<Pt | null>(null);
-  const pillRef = useRef<View>(null);
-  const pillPop = useRef(new Animated.Value(0)).current;
-  const popPill = () => {
-    pillPop.setValue(0);
-    Animated.spring(pillPop, {
+  const [starPt, setStarPt] = useState<Pt | null>(null);
+  const [coinPt, setCoinPt] = useState<Pt | null>(null);
+  const starRef = useRef<View>(null);
+  const coinRef = useRef<View>(null);
+  const starPop = useRef(new Animated.Value(0)).current;
+  const coinPop = useRef(new Animated.Value(0)).current;
+  const pop = (v: Animated.Value) => () => {
+    v.setValue(0);
+    Animated.spring(v, {
       toValue: 1,
       friction: 4,
       tension: 140,
       useNativeDriver: true,
     }).start();
   };
+  // A pill's scale, driven by whichever reward is landing in it.
+  const popStyle = (v: Animated.Value) => ({
+    transform: [
+      {
+        scale: v.interpolate({
+          inputRange: [0, 0.5, 1],
+          outputRange: [1, 1.18, 1],
+        }),
+      },
+    ],
+  });
 
   // Android back from a non-home tab returns Home before exiting the app.
   // (GameScreen / overlays mount later, so their handlers win while open.)
@@ -162,37 +180,39 @@ export default function App() {
             game={game}
             onMenu={() => setPlaying(false)}
             onHome={() => {
-              // Read the rating *before* leaving — the board's solve state goes
-              // with it. Only a level pays stars; daily/endless fly nothing.
-              const earned = game.mode === "level" ? game.solveStars ?? 0 : 0;
+              // Read the payout *before* leaving — the board's solve state goes
+              // with it. Only a level pays stars; coins are paid in every mode,
+              // and the chest rides in with them.
+              const stars = game.mode === "level" ? game.solveStars ?? 0 : 0;
+              const paid = game.coinsEarned + (game.milestone?.coins ?? 0);
+              // Coins fly as a small flock, not one sprite per coin — 100 of
+              // them would be a swarm, and the pill already shows the number.
+              const coins = paid > 0 ? Math.min(6, 2 + Math.round(paid / 40)) : 0;
               setPlaying(false);
               setTab("home");
-              if (earned > 0) setFlight({ count: earned, id: Date.now() });
+              if (stars > 0 || coins > 0)
+                setFlight({
+                  id: Date.now(),
+                  stars,
+                  coins,
+                  leg: stars > 0 ? "stars" : "coins",
+                });
             }}
           />
         ) : (
           <>
             {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}
             <View style={styles.hud}>
+              {/* Each landing reward knocks its pill — the wallet has to react
+                  or the flight looks like it passed through it. */}
               <Animated.View
-                ref={pillRef}
+                ref={starRef}
                 onLayout={() =>
-                  pillRef.current?.measureInWindow((x, y, w, h) =>
-                    setPillPt({ x: x + w / 2, y: y + h / 2 }),
+                  starRef.current?.measureInWindow((x, y, w, h) =>
+                    setStarPt({ x: x + w / 2, y: y + h / 2 }),
                   )
                 }
-                style={{
-                  transform: [
-                    {
-                      // Each landing star knocks the pill — the wallet has to
-                      // react or the flight looks like it passed through it.
-                      scale: pillPop.interpolate({
-                        inputRange: [0, 0.5, 1],
-                        outputRange: [1, 1.18, 1],
-                      }),
-                    },
-                  ],
-                }}
+                style={popStyle(starPop)}
               >
                 <Tappable onPress={() => setTab("cards")} style={styles.pill}>
                   <Ionicons name="star" size={15} color={theme.gold} />
@@ -202,10 +222,20 @@ export default function App() {
               {/* Coins. Gold here is a deliberate exception to "gold = stars,
                   rewards, rarity" — a coin *is* gold — so the wallet and the
                   star pill are told apart by glyph, not by colour. */}
-              <View style={styles.pill}>
-                <Ionicons name="cash" size={15} color={theme.gold} />
-                <Text style={styles.pillTxt}>{game.coins}</Text>
-              </View>
+              <Animated.View
+                ref={coinRef}
+                onLayout={() =>
+                  coinRef.current?.measureInWindow((x, y, w, h) =>
+                    setCoinPt({ x: x + w / 2, y: y + h / 2 }),
+                  )
+                }
+                style={popStyle(coinPop)}
+              >
+                <View style={styles.pill}>
+                  <Ionicons name="cash" size={15} color={theme.gold} />
+                  <Text style={styles.pillTxt}>{game.coins}</Text>
+                </View>
+              </Animated.View>
               {game.dailyStreak > 0 && (
                 <View style={styles.pill}>
                   <Ionicons name="flame" size={15} color={theme.danger} />
@@ -269,17 +299,42 @@ export default function App() {
         )}
       </SafeAreaView>
       {/* Outside the SafeAreaView, like the splash: window coords in, window
-          coords out. It waits for both endpoints — a flight fired before Home
-          has laid out would start from nowhere. */}
-      {flight && !playing && tab === "home" && ctaPt && pillPt && (
-        <StarFlight
-          key={flight.id}
-          from={ctaPt}
-          to={pillPt}
-          count={flight.count}
-          onArrive={popPill}
-          onDone={() => setFlight(null)}
-        />
+          coords out. Each leg waits for its own endpoints — a flight fired
+          before Home has laid out would start from nowhere — and the coins only
+          launch once the stars have landed, so the two reads as one payout
+          rather than a scramble. */}
+      {flight && !playing && tab === "home" && ctaPt && (
+        <>
+          {flight.leg === "stars" && starPt && (
+            <RewardFlight
+              key={`${flight.id}-stars`}
+              from={ctaPt}
+              to={starPt}
+              count={flight.stars}
+              icon="star"
+              onArrive={pop(starPop)}
+              onDone={() =>
+                setFlight((f) =>
+                  f && f.coins > 0 ? { ...f, leg: "coins" } : null,
+                )
+              }
+            />
+          )}
+          {flight.leg === "coins" && coinPt && (
+            <RewardFlight
+              key={`${flight.id}-coins`}
+              from={ctaPt}
+              to={coinPt}
+              count={flight.coins}
+              icon="cash"
+              // Shorter run-up: the screen settled during the star leg (and on
+              // a coins-only payout there were no stars to wait for anyway).
+              delay={flight.stars > 0 ? 90 : undefined}
+              onArrive={pop(coinPop)}
+              onDone={() => setFlight(null)}
+            />
+          )}
+        </>
       )}
       {splash && <SplashScreen onDone={() => setSplash(false)} />}
     </View>

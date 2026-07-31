@@ -743,13 +743,16 @@ once, and it holds no game state (the app is fully live behind it).
   run; the header back arrow still uses `onMenu` and returns to the tab you
   came from.
 
-### Star flight (win → Home)
+### Reward flight (win → Home)
 
-Continue-ing off a solved **level** pays its stars back visibly:
-`StarFlight.tsx` arcs one gold star per earned star from Home's Play button up
-into the HUD star pill, which pops as each one lands. It is mounted at the app
-root **outside the `SafeAreaView`**, like the splash, because it works in
-*window* coordinates.
+Continue-ing off a solved board pays it back visibly: `RewardFlight.tsx` arcs
+gold sprites from Home's Play button up into the HUD pills, which pop as each
+one lands. **Two legs, in order: stars, then coins** — `App` holds one `flight`
+object with a `leg`, and the star leg's `onDone` promotes it to the coin leg
+(with a short 90ms run-up instead of the full `START_DELAY`, since the screen
+has already settled). One payout, not a scramble. It is mounted at the app root
+**outside the `SafeAreaView`**, like the splash, because it works in *window*
+coordinates.
 
 - **Both endpoints are measured, never assumed** — `HomeScreen`'s
   `onCtaMeasure` prop reports the primary button's centre via
@@ -761,10 +764,13 @@ root **outside the `SafeAreaView`**, like the splash, because it works in
   an interrupted flight or an unmount costs nothing. Nothing may ever wait on
   `onDone`, and no game state may move through here.
 - The arc is a quadratic Bézier sampled into ~16 segments (Animated only
-  interpolates straight lines), fanned by index so three stars read as three
+  interpolates straight lines), fanned by index so a flock reads as several
   paths; `START_DELAY` holds it until Home's own `Rise` entrance has settled.
-- Level mode only: `App`'s `onHome` reads `game.solveStars` *before* leaving the
-  board, and daily/endless fly nothing.
+- `App`'s `onHome` reads the payout *before* leaving the board. Stars are level
+  mode only (`solveStars`); **coins fly in every mode** and the chest rides in
+  with them (`coinsEarned + milestone.coins`). Coins fly as a **small flock
+  (≤6), not one sprite per coin** — a 100-coin chest would be a swarm and the
+  pill already shows the number.
 
 ### Page backdrop
 
