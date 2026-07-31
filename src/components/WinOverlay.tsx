@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
 import {
   CARDS,
@@ -14,6 +14,7 @@ import { formatTime } from "../format";
 import { overlayZ, radius, scrim, shadow, space, theme, typography } from "../theme";
 import { Button } from "./Button";
 import { Confetti } from "./Confetti";
+import { Tappable } from "./Tappable";
 
 interface Props {
   level: number;
@@ -123,8 +124,10 @@ export function WinOverlay({
   return (
     <Animated.View style={[styles.backdrop, { opacity: fade }]}>
       <Confetti />
-      {/* Tap anywhere to skip ahead to the end of the reveal. */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={skipReveal} />
+      {/* Tap anywhere to skip ahead to the end of the reveal. Silent: this is
+          impatience, not a control, and it lands while the win jingle is still
+          playing — a click on top of that just muddies the reward beat. */}
+      <Tappable silent style={StyleSheet.absoluteFill} onPress={skipReveal} />
       <Animated.View
         style={[
           styles.card,
@@ -305,14 +308,14 @@ export function WinOverlay({
           </Text>
         )}
 
-        <Pressable
+        <Tappable
           onPress={onMenu}
           hitSlop={8}
           accessibilityRole="button"
           style={styles.menuLink}
         >
           <Text style={styles.menuTxt}>Menu</Text>
-        </Pressable>
+        </Tappable>
       </Animated.View>
     </Animated.View>
   );

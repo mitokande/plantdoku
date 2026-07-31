@@ -1,5 +1,6 @@
 // Game state hook: board, tap-cycle, undo/reset/hint, timer, win + level
-// progression (unlocked level + per-level best times persisted).
+// progression (unlocked level + per-level stars persisted). Levels keep no best
+// time; daily and endless still do.
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -105,7 +106,12 @@ type Action =
 
 const UNLOCKED_KEY = "plantdoku:unlocked";
 const ONBOARDED_KEY = "plantdoku:onboarded";
-const bestKey = (level: number) => `plantdoku:best:level:${level}`;
+// Levels no longer keep a best time — the board showed it only on replays,
+// which turned a re-solve into a time trial against yourself (see GameScreen's
+// status row). Stars are the level's record now. This key is retained solely so
+// `flushData` still clears the rows left behind on installs that predate the
+// removal; nothing writes it.
+const legacyLevelBestKey = (level: number) => `plantdoku:best:level:${level}`;
 const DAILY_STREAK_KEY = "plantdoku:daily:streak";
 const DAILY_LAST_KEY = "plantdoku:daily:last"; // date key of last completed daily
 const DAILY_LOG_KEY = "plantdoku:daily:log"; // JSON {dateKey: bestSeconds}
@@ -504,7 +510,6 @@ export function useGame(initialLevel = 1) {
   const [state, dispatch] = useReducer(reducer, initialLevel, freshState);
   // Highest level the player may attempt (LEVEL_COUNT + 1 = all complete).
   const [unlockedLevel, setUnlockedLevel] = useState(1);
-  const [bestTimes, setBestTimes] = useState<Record<number, number>>({});
   // Whether the first-play tutorial has been completed (or dismissed).
   const [onboarded, setOnboarded] = useState(false);
   // Sound-effects toggle (defaults on; persisted as "0" when muted).
@@ -546,11 +551,9 @@ export function useGame(initialLevel = 1) {
         SOUND_KEY,
         NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
-        ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
       ];
       const pairs = await AsyncStorage.multiGet(keys);
       if (!alive) return;
-      const bt: Record<number, number> = {};
       const eb: Partial<Record<Difficulty, number>> = {};
       let streak = 0;
       let last: string | null = null;
@@ -592,11 +595,8 @@ export function useGame(initialLevel = 1) {
           audio.setMuted(!on);
         } else if (key === NOTIF_KEY) {
           setNotifsOnState(v !== "0");
-        } else {
-          bt[parseInt(key.slice(key.lastIndexOf(":") + 1), 10)] = parseInt(v, 10);
         }
       }
-      setBestTimes(bt);
       setEndlessBests(eb);
       setDaily({ streak, last, log });
     })().catch(() => {});
@@ -759,13 +759,8 @@ export function useGame(initialLevel = 1) {
           replay: !firstToday,
         });
       } else {
-        const prev = bestTimes[level];
-        const improved = prev == null || seconds < prev;
-        setNewBest(improved);
-        if (improved) {
-          setBestTimes((b) => ({ ...b, [level]: seconds }));
-          AsyncStorage.setItem(bestKey(level), String(seconds)).catch(() => {});
-        }
+        // Level mode keeps no best time — stars are the record. `seconds` still
+        // rides along on the event and still decides the under-par star.
         const stars = starsFor(
           seconds,
           state.hintsUsed,
@@ -784,7 +779,6 @@ export function useGame(initialLevel = 1) {
           hints: state.hintsUsed,
           hearts_left: state.hearts,
           stars,
-          new_best: improved,
         });
         if (stars > prevBest) {
           const next = { ...starsByLevel, [level]: stars };
@@ -902,6 +896,8 @@ export function useGame(initialLevel = 1) {
     unlockedLevel,
     allComplete: unlockedLevel > LEVEL_COUNT,
     hasNextLevel: state.mode === "level" && state.level < LEVEL_COUNT,
+    // Daily and endless only — level mode has no best time (see
+    // `legacyLevelBestKey`).
     bestSeconds:
       state.mode === "daily"
         ? state.dailyKey
@@ -911,7 +907,7 @@ export function useGame(initialLevel = 1) {
           ? state.endlessDifficulty
             ? endlessBests[state.endlessDifficulty]
             : undefined
-          : bestTimes[state.level],
+          : undefined,
     dailyDoneToday,
     dailyStreak,
     dailyLog: daily.log,
@@ -1022,14 +1018,14 @@ export function useGame(initialLevel = 1) {
         SOUND_KEY,
         NOTIF_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
-        ...Array.from({ length: LEVEL_COUNT }, (_, i) => bestKey(i + 1)),
+        // Not written any more; cleared so a flush still tidies old installs.
+        ...Array.from({ length: LEVEL_COUNT }, (_, i) => legacyLevelBestKey(i + 1)),
       ];
       analytics.track("data_flushed");
       // Sever the analytics person so the fresh-start player is a new identity.
       analytics.reset();
       AsyncStorage.multiRemove(keys).catch(() => {});
       setUnlockedLevel(1);
-      setBestTimes({});
       setEndlessBests({});
       setStarsByLevel({});
       setOnboarded(false);

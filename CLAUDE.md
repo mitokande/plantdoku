@@ -169,7 +169,7 @@ re-derives from the board and cascades to the furthest completed stage.
     to 54** via `npx expo install --fix`. Keep deps aligned to SDK 54 — use
     `npx expo install <pkg>` (not bare `npm install`) for any RN/Expo package.
 - State: plain React `useReducer` hook (`src/state/useGame.ts`). No Redux.
-- Persistence: `@react-native-async-storage/async-storage` (best times).
+- Persistence: `@react-native-async-storage/async-storage` (progress, prefs).
 - Feedback: `expo-haptics` (loaded lazily, skipped on web).
 - Visuals: `expo-linear-gradient` (gameplay-screen background).
 - Analytics: **PostHog** (`posthog-react-native`) behind a thin facade in
@@ -220,8 +220,19 @@ All sound effects go through `audio` (the only export of `src/audio/index.ts`)
 — a typed facade over **expo-audio**, mirroring the analytics facade and the
 haptics pattern. Call `audio.play(name)`; never import `expo-audio` elsewhere.
 `SoundName` is a closed union (`place` · `mark` · `mistake` · `win` · `fail` ·
-`button`). One reusable `AudioPlayer` per clip is created lazily and cached;
-`play` does `seekTo(0)` then `play()` so a cue can retrigger rapidly. **On web,
+`button`). One row per cue in `CLIPS` gives it a clip and a **voice count** — a
+small round-robin pool of lazily created `AudioPlayer`s, so cues that retrigger
+faster than their own length overlap instead of cutting each other off (`mark`
+gets 8: drag-painting ✕ fires it once per cell). **A voice that has already
+played is parked at the end of its clip, where `play()` does nothing** — it must
+be rewound, and `seekTo` is *async*, so `play` awaits the seek before playing
+(`fire`). Firing the seek without awaiting it is what once made pooled cues die
+on wrap-around: the first N taps each got a fresh voice, then every later one hit
+a parked voice and the cue went silent for the rest of the session. A voice's
+first play skips the seek, so the common case stays synchronous. Don't switch the
+"needs rewinding" test to `player.currentTime` — status only refreshes on the
+player's 500ms interval, so a just-finished one-shot still reports a stale
+position; the facade tracks played voices itself. **On web,
 before init, or when muted, every call is a safe no-op** (so the headless web
 smoke-test runs without audio), and all failures are swallowed — audio can
 never break gameplay. Clips are bundled from `assets/audio/*.wav` via static
@@ -229,7 +240,7 @@ never break gameplay. Clips are bundled from `assets/audio/*.wav` via static
 
 **The clips are built, not hand-picked** (`npm run sfx` = `scripts/prep_sfx.py`,
 the audio counterpart to `prep_sprites.py`). Masters live in `art/sfx/` — CC0
-library recordings from four Kenney packs, see `art/sfx/CREDITS.md` — and are
+library recordings from five Kenney packs, see `art/sfx/CREDITS.md` — and are
 never bundled; the script renders the six shipped WAVs from a `RECIPES` table.
 The programmatic-synthesis era (`scripts/make_sfx.py`) is over; that script is
 deleted, don't bring it back.
@@ -243,9 +254,13 @@ the loudest thing in the game, `place` sits under it, and `button` is a
 near-subliminal −27dB. `npm run sfx:check` audits the shipped set (rate,
 channels, peak, RMS-vs-target, length) and exits non-zero, so it can gate a
 release like `sprites:check`. It tolerates a cue that lands *under* its target
-only when the clip is already peak-limited (a sharp transient can hit the
-−1dBFS ceiling before it reaches its RMS target — `mistake` does, by ~4dB);
-that is the limiter, not a mis-level, and there is no headroom left to give it.
+only when the clip is already peak-limited — a sharp transient can hit the
+−1dBFS ceiling before it reaches its RMS target, which is the limiter talking,
+not a mis-level, and there is no headroom left to give it. **All six currently
+land on target exactly**, so that branch is a guard rather than a description;
+a cue that starts tripping it is usually all transient and no body, which is a
+reason to look at the source before accepting the shortfall (that is exactly
+what `mistake` was — it sat 3.9dB under until it was re-sourced).
 
 **`mark` is deliberately louder than the "quiet cue" logic implies** (−21dB, not
 the −26 it started at). A cue that is both soft *and* very brief reads as
@@ -259,12 +274,26 @@ Two composition decisions worth keeping:
   library clip is "a plant being planted" — the layer is what makes it read as
   one, and this is the cue the player hears hundreds of times a session, so it's
   where the effort belongs.
-- **`win` and `fail` are the same instrument** (Kenney steel-drum jingles), one
-  resolving upward and one downward. Picking them as a pair is what stops a win
-  and a loss sounding like they came from two different games.
+- **`win` and `fail` are mirrored phrases on one instrument** — Kenney pizzicato
+  jingles 10 and 11. The win climbs `D F♯ F♯ G` (0.80s); the fail falls
+  `F♯ D D` (0.67s), which is PIZZI11 with its leading G cut off by the recipe's
+  `start_ms`. A win and a loss have to sound like one game, and answering a
+  rising figure with a falling one on the same instrument gets that far more
+  strongly than a shared instrument alone. The fail is deliberately the
+  *shorter* of the two — it descends to the same D but with less ceremony, which
+  suits a board the player is one tap from retrying. Keep that relationship
+  (win climbs to G, fail falls to D, fail no longer) if either is re-picked.
+  Note **the jingle pack is a
+  matrix** — the same 17 melodies played by 5 instrument families — so a cue is
+  chosen twice, phrase first, instrument second. The phrase is what carries: the
+  original pair (STEEL02/01) shared an instrument but its melodies were plain
+  six-note scale runs, up and back down, which is the stock level-up/game-over
+  gesture rather than a tune. Only 7 of the 86 clips are kept in `art/sfx/`;
+  re-download the pack to audition the rest.
 
-To re-cut a cue, edit its `Recipe` (sources, per-layer gain/delay, target,
-length cap) and re-run — the filenames in `SOURCES` are the contract, so no app
+To re-cut a cue, edit its `Recipe` (sources, per-layer gain/delay/pitch, target,
+`start_ms` head trim / `max_ms` length cap — the pair that lets a cue use just
+part of a musical phrase) and re-run — `CLIPS` filenames are the contract, so no app
 code changes. `soundfile`/`numpy` are dev-only deps of the script, not the app.
 
 **The clips are preloaded to local files at module load** (`preload()`, via
@@ -276,8 +305,8 @@ asset URL and has to stream each one-shot over the LAN. On Android that load
 never completes, the player stays `isLoaded === false`, and `play()` is a
 silent no-op: **audio works in the APK and is dead in Expo Go, with no error
 anywhere**. `downloadAsync()` is a no-op once local, so production pays nothing.
-`play()` also only `seekTo(0)`s a loaded voice (seeking an unprepared player
-rejects on Android), and `diagnose()` prints each cue's resolved `uri` —
+`play()` also never seeks a voice on its first play (seeking an unprepared
+player rejects on Android), and `diagnose()` prints each cue's resolved `uri` —
 `file://` = local, `http://…:8081/assets/…` = the failure above.
 
 Mute is owned by `useGame` (single source of truth, like the other prefs): it
@@ -285,9 +314,23 @@ persists `plantdoku:sound` ("0" = muted, default on), pushes the flag to
 `audio.setMuted`, and exposes `soundOn` / `setSoundOn`. `flushData` wipes the
 key (back to on). The toggle lives in `SettingsOverlay`. Cues fire from
 `GameScreen` (place/mistake on a placement by solution-cell check, `mark` on
-tap-✕, `win`/`fail` on the solved/failed edges) and the shared `Button`
-(`button` click). Keep audio **out of `src/game/*`** so the Node tests stay
+tap-✕, `win`/`fail` on the solved/failed edges) and from `Tappable` (the
+`button` click). Keep audio **out of `src/game/*`** so the Node tests stay
 framework-free (same rule as analytics).
+
+**`Tappable.tsx` is the app's only `Pressable`** — a pass-through wrapper that
+plays the click, which `Button` also renders through, so the two together own
+every tap in the app. Use it for anything tappable and **never reach for a bare
+`Pressable`**: a raw one silently opts out of the convention, which is exactly
+how the click ended up firing on `Button` alone while the Home screen's primary
+CTA, the tab bar, the star wallet, the card tiles and both header discs stayed
+mute. A UI where only some controls answer reads as broken, not as restrained —
+and `button` is mixed near-subliminal at −27dB (see Audio) precisely so it can
+be on *everything* without becoming noise. The `silent` prop is the deliberate
+opt-out, and it currently has exactly two users, both presses that are
+impatience rather than a control: skipping the splash, and skipping the win
+reveal (which lands while the `win` jingle is playing, where a click on top
+would only muddy it).
 
 ## Commands
 
@@ -536,10 +579,20 @@ Each screen answers one question, and the board screen's is "where do I plant?"
   what gives: `chipFontSize` derives the type size from the measured third minus
   the icon and padding (`CHIP_*` constants), so the row fits from 320pt up
   without ever ellipsizing. Re-measure `CHIP_LABEL_PT` if the labels change.
-- The **clock is the headline number** (33pt); hearts are smaller, and `Best`
-  only renders when there is one. A "mistakes left" caption sits under the
-  hearts for a not-yet-onboarded player only — and the row has a fixed height so
-  its arrival/departure never shifts the board.
+- The **clock is the headline number** (33pt) and the hearts are smaller; those
+  two are the whole status row. A "mistakes left" caption sits under the hearts
+  for a not-yet-onboarded player only — and the row has a fixed height so its
+  arrival/departure never shifts the board. A `Best <time>` caption used to sit
+  here too and was **deliberately removed**: it only rendered once the level had
+  a recorded time, so it appeared exactly on replays, turning a re-solve into a
+  time trial against yourself on a puzzle you already know the answer to. Levels
+  now keep **no best time at all** — not stored, not shown; **stars are the
+  level's record**. The solve clock still runs and still decides the under-par
+  star, it just isn't compared against a previous run. `plantdoku:best:level:*`
+  is dead (see `legacyLevelBestKey`, kept only so `flushData` clears old
+  installs), and `level_completed` no longer carries `new_best`. Daily and
+  endless are untouched and still track their own bests. Don't re-add either the
+  caption or the storage without asking.
 - The gesture reminder pill is **onboarding copy, not a control**: it shows on a
   first-time player's board and lives in Help from then on. Its row keeps its
   height either way, so finishing the tutorial can't jolt the board up-screen.
@@ -647,7 +700,7 @@ src/game/
   runTests.ts    headless correctness tests (npm test)
 src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
                  boardPlant (board species = the card being chased),
-                 RESTORE (resume), timer, unlocked level + per-level best +
+                 RESTORE (resume), timer, unlocked level + per-level stars +
                  onboarded + soundOn + resume slots (AsyncStorage)
 src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —
                  RN ONLY, no-op on web (do not import in core)
@@ -670,6 +723,8 @@ src/components/
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +
                  flush game data (inline confirm; uses useGame.flushData —
                  wipes all AsyncStorage keys, back to L1)
+  Tappable.tsx   the app's only Pressable — pass-through wrapper that plays the
+                 UI click (`silent` opts out). Button renders through it.
   Button.tsx (solid/forest/ghost/warm/danger + pill/small/iconOnly/
   compact, optional long-press), WinFlourish.tsx (big plant
   bloom before the win modal), WinOverlay.tsx (card-flip reveal + Continue),
@@ -784,7 +839,7 @@ into a crop. Feed its output through `prep_sprites.py` to normalise it.
 ## Status
 
 Feature-complete and verified: generator + unique solutions, gesture model,
-hearts + red-✕ mistakes, hint, undo/reset, timer + per-level best times,
+hearts + red-✕ mistakes, hint, undo/reset, timer + per-level stars,
 win animation, 30-level seeded progression with unlock persistence, first-play
 interactive tutorial + Help overlay. Runs on iOS/Android (Expo Go) and web.
 

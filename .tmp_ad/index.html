@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1080, height=1920" />
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#f3f6ea}
+    body{font-family:Arial,sans-serif;color:#173b22}.clip{position:absolute;inset:0;overflow:hidden}
+    .scene{padding:120px 76px;background:#f3f6ea}.grain{position:absolute;inset:0;opacity:.18;background-image:radial-gradient(#69c938 1.5px,transparent 1.5px);background-size:28px 28px}
+    .blob{position:absolute;border-radius:50%;background:#bde99e}.b1{width:560px;height:560px;right:-220px;top:-170px}.b2{width:390px;height:390px;left:-180px;bottom:120px;background:#ffe09b}
+    .eyebrow{font-weight:900;font-size:34px;letter-spacing:.12em;color:#4f7c55}.headline{font-family:Arial Black,Arial,sans-serif;font-size:112px;line-height:.92;letter-spacing:-.06em;margin-top:28px;text-transform:uppercase}
+    .accent{color:#55b92b}.danger{color:#ff4f58}.panel{background:#fff;border:5px solid #173b22;border-radius:42px;box-shadow:0 20px 0 #173b22;padding:38px}
+    .phone{position:absolute;width:820px;height:1080px;left:130px;top:540px;border:16px solid #173b22;border-radius:72px;background:#fff;box-shadow:0 34px 0 rgba(23,59,34,.18);padding:54px}
+    .board{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;background:#173b22;padding:8px;border-radius:24px}
+    .cell{height:104px;border-radius:10px;background:#e8f4d8;display:grid;place-items:center;font-size:58px;font-weight:900;color:#173b22;position:relative}.cell:nth-child(3n){background:#fff1b7}.cell:nth-child(4n){background:#d8f1ef}.cell:nth-child(5n){background:#f4d7e5}
+    .cell img{width:78px;height:78px;object-fit:contain}.target{outline:10px solid #ffb629;z-index:2}.bad{outline:10px solid #ff4f58;background:#ffd7d9!important}
+    .rule-stack{position:absolute;left:76px;right:76px;top:580px;display:grid;gap:26px}.rule{font-family:Arial Black,Arial,sans-serif;font-size:74px;line-height:1;background:#fff;border:5px solid #173b22;border-radius:30px;padding:34px;box-shadow:0 14px 0 #173b22}
+    .rule span{display:inline-block;width:92px;color:#55b92b}.warning{position:absolute;left:70px;right:70px;top:710px;background:#ff4f58;color:#fff;border:8px solid #173b22;border-radius:44px;padding:46px 36px;font-family:Arial Black,Arial,sans-serif;font-size:94px;line-height:.94;text-align:center;transform:rotate(-3deg);box-shadow:0 24px 0 #173b22}
+    .tools{position:absolute;left:60px;right:60px;top:610px;display:grid;grid-template-columns:repeat(2,1fr);gap:24px}.tool{height:245px;background:#fff;border:5px solid #173b22;border-radius:36px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900;font-size:38px;box-shadow:0 14px 0 #173b22}.tool b{font-size:82px;color:#55b92b}
+    .sizes{position:absolute;left:60px;right:60px;top:790px;display:flex;align-items:center;justify-content:center;gap:22px}.size{width:270px;height:220px;background:#fff;border:5px solid #173b22;border-radius:32px;display:grid;place-items:center;font-family:Arial Black;font-size:62px;box-shadow:0 14px 0 #173b22}.arrow{font-size:64px;font-weight:900}
+    .daily{position:absolute;left:70px;right:70px;top:600px;background:#173b22;color:#fff;border-radius:50px;padding:54px;box-shadow:0 24px 0 #69c938}.daily h2{font-family:Arial Black;font-size:86px;line-height:.95;margin:0}.streak{font-family:Arial Black;font-size:190px;color:#ffb629;margin-top:70px}.streak small{font:900 38px Arial;color:#fff;display:block;letter-spacing:.08em}
+    .final-logo{position:absolute;width:760px;height:520px;object-fit:contain;left:160px;top:330px}.plant-fan{position:absolute;left:90px;right:90px;top:850px;height:360px}.plant-fan img{position:absolute;width:250px;height:250px;object-fit:contain;filter:drop-shadow(0 18px 0 rgba(23,59,34,.18))}.plant-fan img:nth-child(1){left:0;transform:rotate(-16deg)}.plant-fan img:nth-child(2){left:210px;top:-60px;transform:rotate(-5deg)}.plant-fan img:nth-child(3){left:430px;top:-40px;transform:rotate(8deg)}.plant-fan img:nth-child(4){left:640px;transform:rotate(17deg)}
+    .cta{position:absolute;left:70px;right:70px;bottom:170px;background:#69c938;border:7px solid #173b22;border-radius:999px;padding:38px;text-align:center;font-family:Arial Black;font-size:60px;box-shadow:0 18px 0 #173b22}
+    .caption{position:absolute;left:54px;right:54px;bottom:72px;color:#fff;background:#173b22;border-radius:26px;padding:22px 30px;font-family:Arial Black;font-size:44px;line-height:1.05;text-align:center;z-index:20}
+    .spark{position:absolute;width:26px;height:80px;background:#ffb629;border-radius:20px}
+  </style>
+</head>
+<body>
+<main id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+  <section class="clip scene" id="s1" data-start="0" data-duration="3" data-track-index="1">
+    <div class="grain"></div><div class="blob b1"></div><div class="eyebrow">A PUZZLE FOR PLANT PEOPLE</div>
+    <h1 class="headline"><span class="danger">STOP.</span><br>WHERE DOES THE LAST <span class="accent">PLANT</span> GO?</h1>
+    <div class="phone"><div class="board" id="board1"></div></div><div class="caption">STOP SCROLLING. WHERE DOES THE LAST PLANT GO?</div>
+  </section>
+  <section class="clip scene" id="s2" data-start="3" data-duration="5" data-track-index="1">
+    <div class="grain"></div><div class="blob b2"></div><div class="eyebrow">THE RULES LOOK EASY</div><h1 class="headline">ONE PLANT.</h1>
+    <div class="rule-stack"><div class="rule"><span>01</span> EVERY ROW</div><div class="rule"><span>02</span> EVERY COLUMN</div><div class="rule"><span>03</span> EVERY COLOR</div></div>
+    <div class="caption">ONE PLANT IN EVERY ROW, COLUMN, AND COLOR CLUSTER.</div>
+  </section>
+  <section class="clip scene" id="s3" data-start="8" data-duration="4" data-track-index="1">
+    <div class="grain"></div><div class="eyebrow">ONE TINY CATCH</div><h1 class="headline">THEY CAN'T<br><span class="danger">TOUCH.</span></h1>
+    <div class="warning">NOT EVEN<br>DIAGONALLY.</div><div class="caption">AND PLANTS CAN'T TOUCH—NOT EVEN DIAGONALLY.</div>
+  </section>
+  <section class="clip scene" id="s4" data-start="12" data-duration="5" data-track-index="1">
+    <div class="grain"></div><div class="blob b1"></div><div class="eyebrow">FAST. TACTILE. SATISFYING.</div><h1 class="headline">RULE IT OUT.<br><span class="accent">PLANT IT.</span></h1>
+    <div class="tools"><div class="tool"><b>✕</b>TAP X</div><div class="tool"><b>✕✕✕</b>DRAG X</div><div class="tool"><b>🌱</b>DOUBLE-TAP</div><div class="tool"><b>↶</b>UNDO</div></div>
+    <div class="caption">TAP X'S TO RULE CELLS OUT. DOUBLE-TAP TO PLANT.</div>
+  </section>
+  <section class="clip scene" id="s5" data-start="17" data-duration="5" data-track-index="1">
+    <div class="grain"></div><div class="eyebrow">CHOOSE YOUR PAIN</div><h1 class="headline">EASY TO <span class="accent">HARD.</span></h1>
+    <div class="sizes"><div class="size">6×6</div><div class="arrow">→</div><div class="size">8×8</div><div class="arrow">→</div><div class="size">9×9</div></div>
+    <div class="rule-stack" style="top:1120px;grid-template-columns:repeat(3,1fr)"><div class="rule" style="font-size:38px;text-align:center">HINT</div><div class="rule" style="font-size:38px;text-align:center">UNDO</div><div class="rule" style="font-size:38px;text-align:center">RESET</div></div>
+    <div class="caption">STUCK? TAKE A HINT, UNDO, AND TRY AGAIN.</div>
+  </section>
+  <section class="clip scene" id="s6" data-start="22" data-duration="4" data-track-index="1">
+    <div class="grain"></div><div class="blob b2"></div><div class="eyebrow">A NEW BOARD EVERY DAY</div><h1 class="headline">START YOUR<br><span class="accent">STREAK.</span></h1>
+    <div class="daily"><h2>TODAY'S<br>PUZZLE</h2><div class="streak">7🔥<small>DAY STREAK</small></div></div>
+    <div class="caption">THINK YOU CAN SOLVE TODAY'S BOARD?</div>
+  </section>
+  <section class="clip scene" id="s7" data-start="26" data-duration="4" data-track-index="1">
+    <div class="grain"></div><div class="blob b1"></div><img class="final-logo" src="assets/logo.png" alt="Plantdoku">
+    <div class="plant-fan"><img src="assets/plants/monstera.png"><img src="assets/plants/cactus.png"><img src="assets/plants/bonsai.png"><img src="assets/plants/toadstool.png"></div>
+    <div class="cta">CAN YOU SOLVE IT?</div><div class="caption">PLANTDOKU. START YOUR STREAK.</div>
+  </section>
+  <audio class="clip" src="assets/audio/voiceover.wav" data-start="0" data-duration="30" data-track-index="2" data-volume="1"></audio>
+  <audio class="clip" src="assets/sfx/place.wav" data-start="2.55" data-duration=".45" data-track-index="3" data-volume=".7"></audio>
+  <audio class="clip" src="assets/sfx/button.wav" data-start="12.2" data-duration=".6" data-track-index="3" data-volume=".55"></audio>
+  <audio class="clip" src="assets/sfx/win.wav" data-start="26" data-duration="4" data-track-index="3" data-volume=".75"></audio>
+</main>
+<script>
+  const board=document.querySelector("#board1"); const plants=[2,9,16,23,30];
+  for(let i=0;i<36;i++){const c=document.createElement("div");c.className="cell"+(i===35?" target":"");if(plants.includes(i)){const im=document.createElement("img");im.src="assets/plants/sunflower.png";c.appendChild(im)}else if(i%4===0)c.textContent="×";board.appendChild(c)}
+  window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
+  tl.fromTo("#s1 .headline",{scale:1.7,rotation:-4},{scale:1,rotation:0,duration:.55,ease:"power4.out"},0)
+    .fromTo("#s1 .phone",{y:520,rotation:7},{y:0,rotation:-2,duration:.7,ease:"expo.out"},.25)
+    .fromTo("#s1 .target",{scale:.4},{scale:1,duration:.5,ease:"back.out(1.8)"},1.9);
+  gsap.utils.toArray("#s2 .rule").forEach((e,i)=>tl.fromTo(e,{x:i%2?-500:500,rotation:i%2?3:-3},{x:0,rotation:0,duration:.45,ease:i===1?"circ.out":"expo.out"},3.25+i*1.15));
+  tl.fromTo("#s3 .warning",{scale:1.8,rotation:8},{scale:1,rotation:-3,duration:.48,ease:"power4.out"},8.45)
+    .to("#s3 .warning",{x:-20,duration:.08,yoyo:true,repeat:5,ease:"none"},9.25);
+  gsap.utils.toArray("#s4 .tool").forEach((e,i)=>tl.fromTo(e,{scale:0,y:70,rotation:i%2?7:-7},{scale:1,y:0,rotation:0,duration:.5,ease:"power3.out"},12.2+i*.85));
+  gsap.utils.toArray("#s5 .size").forEach((e,i)=>tl.fromTo(e,{scale:.3,rotation:-8},{scale:1,rotation:0,duration:.48,ease:i===2?"back.out(1.7)":"power3.out"},17.35+i*1.05));
+  tl.fromTo("#s6 .daily",{x:700,rotation:8},{x:0,rotation:-2,duration:.65,ease:"expo.out"},22.25)
+    .fromTo("#s6 .streak",{scale:.2},{scale:1,duration:.55,ease:"back.out(1.8)"},23.25);
+  tl.fromTo("#s7 .final-logo",{scale:.3,rotation:-10},{scale:1,rotation:0,duration:.7,ease:"power4.out"},26.05);
+  gsap.utils.toArray("#s7 .plant-fan img").forEach((e,i)=>tl.fromTo(e,{y:500,scale:.4},{y:0,scale:1,duration:.55,ease:"back.out(1.7)"},26.45+i*.16));
+  tl.fromTo("#s7 .cta",{scale:.2},{scale:1,duration:.55,ease:"back.out(1.8)"},28.05);
+  window.__timelines.main=tl;
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "viral-tiktok-hooks": {
+      "source": "gonzalochale/skills",
+      "sourceType": "github",
+      "skillPath": "viral-tiktok-hooks/SKILL.md",
+      "computedHash": "7f05001acf294118fb49d95f4b44d7491de7f14bb4ae30db6e33266116a00732"
+    }
+  }
+}

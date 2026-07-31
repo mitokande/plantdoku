@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { PLANT_SOURCES } from "../game/plants";
 import { useBackHandler } from "../hooks/useBackHandler";
 import { radius, scrim, shadow, theme } from "../theme";
 import { Button } from "./Button";
+import { Tappable } from "./Tappable";
 
 interface Props {
   totalStars: number;
@@ -30,7 +30,7 @@ function CardTile({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={onPress}
       style={[
         styles.tile,
@@ -61,7 +61,7 @@ function CardTile({
           </Text>
         </>
       )}
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -108,7 +108,7 @@ function CardModal({
       ]}
     >
       {/* Tap outside the card to dismiss. */}
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <Tappable style={StyleSheet.absoluteFill} onPress={onClose} />
       <Animated.View
         style={[
           styles.bigCard,

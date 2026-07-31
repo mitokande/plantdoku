@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=1080, height=1920">
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#fef8ef;color:#183426;font-family:Inter,Arial,sans-serif}
+    .clip{position:absolute;inset:0;overflow:hidden}.bg{background:radial-gradient(circle at 88% 8%,#d9efc8 0,transparent 28%),#fef8ef}
+    .top{position:absolute;top:88px;left:62px;right:62px;display:flex;align-items:center;justify-content:space-between}.back,.help{width:76px;height:76px;border-radius:24px;background:#fcf2dd;border:3px solid #e5cead;display:grid;place-items:center;font-size:38px;font-weight:900}.level{font-size:34px;font-weight:900}
+    .rules{position:absolute;top:195px;left:42px;right:42px;display:flex;gap:12px}.chip{flex:1;background:#fefaF2;border:3px solid #e5cead;border-radius:24px;padding:18px 8px;text-align:center;font-size:25px;font-weight:900}.chip b{color:#429a27}
+    .status{position:absolute;top:305px;left:65px;right:65px;display:flex;justify-content:space-between;align-items:center;font-size:31px;font-weight:900}.hearts{color:#e2675a;letter-spacing:6px}
+    .progress{position:absolute;top:365px;left:65px;right:65px}.progress-label{font-size:25px;font-weight:800;margin-bottom:12px}.track{height:18px;border-radius:20px;background:#f3efda;overflow:hidden}.fill{height:100%;width:83%;transform-origin:left;background:#69c938;border-radius:20px}
+    .tray{position:absolute;top:450px;left:55px;width:970px;height:970px;padding:22px;background:#fef5e1;border:5px solid #e3caa6;border-radius:44px;box-shadow:0 18px 32px rgba(28,51,34,.13)}
+    .board{display:grid;grid-template-columns:repeat(6,1fr);width:916px;height:916px;background:#fcf1d9;border-radius:26px;overflow:hidden;position:relative}
+    .cell{position:relative;margin:2px;border:3px solid rgba(24,52,38,.16);border-radius:22px;display:grid;place-items:center;overflow:visible}.glyph{position:absolute;width:82%;height:82%;object-fit:contain;opacity:.18;filter:saturate(.35)}.plant{position:absolute;width:88%;height:88%;object-fit:contain;opacity:0;filter:drop-shadow(0 8px 4px rgba(24,52,38,.18));transform:scale(.2)}.xmark{position:absolute;font-size:88px;line-height:1;color:#2e4a38;font-weight:300;opacity:0}.mistake{position:absolute;inset:-3px;border-radius:22px;background:#e9a39b;border:5px solid #9e3d32;opacity:0}.mistake-x{position:absolute;font-size:100px;color:#9e3d32;font-weight:900;opacity:0}
+    .row-guide,.col-guide,.region-guide,.hint-ring{position:absolute;pointer-events:none;opacity:0}.row-guide{left:22px;right:22px;height:152px;top:174px;border:8px solid #f2b224;border-radius:24px}.col-guide{top:22px;bottom:22px;width:152px;left:174px;border:8px solid #69c938;border-radius:24px}.region-guide{left:22px;top:22px;width:456px;height:152px;border:8px dashed #4e744b;border-radius:26px}.hint-ring{width:152px;height:152px;left:326px;top:478px;border:10px solid #f2b224;border-radius:24px}
+    .controls{position:absolute;top:1490px;left:55px;right:55px;display:grid;grid-template-columns:1fr 1.35fr .8fr;gap:18px}.btn{height:105px;border-radius:34px;border:4px solid #e5cead;background:#fcf2dd;box-shadow:0 10px 0 #e9d6b2;display:grid;place-items:center;font-size:29px;font-weight:900}.btn.hint{background:#4e744b;color:#fff;border-color:#375a38;box-shadow:0 10px 0 #375a38}
+    .hook,.callout,.difficulty,.final{position:absolute;z-index:8}.hook{top:490px;left:55px;right:55px;background:#183426;color:#fff;border-radius:42px;padding:36px;font-family:Montserrat,Arial Black,sans-serif;font-size:74px;line-height:.94;text-align:center;box-shadow:0 18px 0 #f2b224}.hook em{color:#f2b224;font-style:normal}
+    .callout{left:80px;right:80px;top:250px;background:#183426;color:#fff;border-radius:32px;padding:28px 34px;text-align:center;font:900 49px/1 Montserrat,Arial,sans-serif;box-shadow:0 12px 0 #69c938}.callout.danger{background:#9e3d32;box-shadow:0 12px 0 #e2675a}
+    .difficulty{top:640px;left:70px;right:70px;display:flex;justify-content:center;gap:18px}.diff{background:#fff;border:5px solid #183426;border-radius:28px;padding:25px 28px;font:900 49px Montserrat}.diff.active{background:#69c938}
+    .final{inset:0;background:#f3f6ea;display:grid;place-items:center;text-align:center}.final img{width:650px;max-height:430px;object-fit:contain}.final h1{font:900 82px/.95 Montserrat;margin:0 60px}.final p{font-size:36px;font-weight:800}.cta{background:#69c938;border:6px solid #183426;border-radius:999px;padding:28px 55px;box-shadow:0 14px 0 #183426}
+    .caption{position:absolute;left:44px;right:44px;bottom:62px;background:#183426;color:#fff;border-radius:24px;padding:20px 28px;text-align:center;font:900 39px/1.08 Montserrat,Arial,sans-serif;z-index:20}
+  </style>
+</head>
+<body>
+<main id="root" data-composition-id="main" data-start="0" data-duration="30" data-width="1080" data-height="1920">
+  <section id="gameplay" class="clip bg" data-start="0" data-duration="26" data-track-index="1">
+    <div class="top"><div class="back">‹</div><div class="level">Level 20 · Hard</div><div class="help">?</div></div>
+    <div class="rules"><div class="chip"><b>🌿</b> One per line</div><div class="chip"><b>🎨</b> One per color</div><div class="chip"><b>⊘</b> No touching</div></div>
+    <div class="status"><div>00:42</div><div class="hearts">♥ ♥ ♥</div></div>
+    <div class="progress"><div class="progress-label">🌿 <span id="count">5 of 6 planted</span></div><div class="track"><div class="fill" id="fill"></div></div></div>
+    <div class="tray"><div class="board" id="board"></div><div class="row-guide"></div><div class="col-guide"></div><div class="region-guide"></div><div class="hint-ring"></div></div>
+    <div class="controls"><div class="btn">↶ Undo</div><div class="btn hint">💡 Hint</div><div class="btn">↻</div></div>
+  </section>
+  <section id="hook" class="clip" data-start="0" data-duration="4" data-track-index="2"><div class="hook">QUICK <em>BRAIN TEASER:</em><br>WHERE CAN THE LAST PLANT GO?</div><div class="caption">QUICK BRAIN TEASER: WHERE CAN THIS LAST PLANT GO?</div></section>
+  <section id="rule1" class="clip" data-start="4" data-duration="5" data-track-index="2"><div class="callout">RULE 1 · ONE PER ROW + COLUMN</div><div class="caption">EXACTLY ONE PLANT IN EVERY ROW AND COLUMN.</div></section>
+  <section id="rule2" class="clip" data-start="9" data-duration="4" data-track-index="2"><div class="callout">RULE 2 · ONE PER COLORED PATCH</div><div class="caption">EXACTLY ONE IN EVERY COLORED PATCH.</div></section>
+  <section id="rule3" class="clip" data-start="13" data-duration="4" data-track-index="2"><div class="callout danger">RULE 3 · NO TOUCHING. EVEN DIAGONALLY.</div><div class="caption">PLANTS CAN'T TOUCH, EVEN DIAGONALLY.</div></section>
+  <section id="tools" class="clip" data-start="17" data-duration="5" data-track-index="2"><div class="callout">MARK X · SPOT THE FORCED MOVE · HINT</div><div class="caption">MARK IMPOSSIBLE CELLS. SPOT THE FORCED MOVE.</div></section>
+  <section id="levels" class="clip" data-start="22" data-duration="4" data-track-index="2"><div class="difficulty"><div class="diff">6×6</div><div class="diff">8×8</div><div class="diff active">9×9</div></div><div class="caption">EASY STARTS 6×6. HARD GOES 9×9.</div></section>
+  <section id="finish" class="clip" data-start="26" data-duration="4" data-track-index="2"><div class="final"><div><img src="assets/logo.png" alt="Plantdoku"><h1>CAN YOUR BRAIN SOLVE TODAY'S BOARD?</h1><p><span class="cta">PLAY PLANTDOKU</span></p></div></div><div class="caption">CAN YOUR BRAIN SOLVE TODAY'S BOARD?</div></section>
+  <audio id="voiceover" class="clip" src="assets/audio/voiceover.wav" data-start="0" data-duration="30" data-track-index="3" data-volume="1"></audio>
+  <audio id="mark-sfx" class="clip" src="assets/sfx/place.wav" data-start="4.5" data-duration=".18" data-track-index="4" data-volume=".65"></audio>
+  <audio id="mistake-sfx" class="clip" src="assets/sfx/mistake.wav" data-start="13.7" data-duration=".6" data-track-index="4" data-volume=".75"></audio>
+  <audio id="win-sfx" class="clip" src="assets/sfx/win.wav" data-start="26" data-duration=".8" data-track-index="4" data-volume=".8"></audio>
+</main>
+<script>
+  const colors=["#CBE4F6","#C7D2F7","#DECBF5","#EFCBF2","#FDCADD","#FEE4A3"];
+  const regions=[[0,0,0,1,1,1],[0,2,2,1,1,1],[2,2,2,3,3,3],[4,4,3,3,3,5],[4,4,4,5,5,5],[4,4,4,5,5,5]];
+  const solution=[1,4,0,3,5,2], board=document.querySelector("#board");
+  for(let r=0;r<6;r++)for(let c=0;c<6;c++){const cell=document.createElement("div");cell.className="cell";cell.dataset.r=r;cell.dataset.c=c;cell.style.background=colors[regions[r][c]];
+    const glyph=document.createElement("img");glyph.className="glyph";glyph.src="assets/plants/sunflower.png";cell.appendChild(glyph);
+    const plant=document.createElement("img");plant.className="plant";plant.src="assets/plants/sunflower.png";if(solution[r]===c&&r!==5)plant.style.cssText="opacity:1;transform:scale(1)";cell.appendChild(plant);
+    const x=document.createElement("div");x.className="xmark";x.textContent="×";cell.appendChild(x);
+    const bad=document.createElement("div");bad.className="mistake";cell.appendChild(bad);const bx=document.createElement("div");bx.className="mistake-x";bx.textContent="×";cell.appendChild(bx);board.appendChild(cell)}
+  const cell=(r,c)=>document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+  window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
+  tl.fromTo("#hook .hook",{scale:1.6,rotation:-5},{scale:1,rotation:0,duration:.5,ease:"power4.out"},0);
+  tl.fromTo(".row-guide",{opacity:0,scaleX:.2},{opacity:1,scaleX:1,duration:.45,ease:"expo.out"},4.1)
+    .fromTo(".col-guide",{opacity:0,scaleY:.2},{opacity:1,scaleY:1,duration:.45,ease:"circ.out"},5.7)
+    .to([cell(0,3).querySelector(".xmark"),cell(0,4).querySelector(".xmark"),cell(0,5).querySelector(".xmark")],{opacity:.8,scale:1,duration:.18,stagger:.18,ease:"power3.out"},7.1)
+    .to([".row-guide",".col-guide"],{opacity:0,duration:.15},8.7);
+  tl.fromTo(".region-guide",{opacity:0,scale:.7},{opacity:1,scale:1,duration:.45,ease:"power3.out"},9.2)
+    .to([cell(0,0).querySelector(".xmark"),cell(0,2).querySelector(".xmark")],{opacity:.8,duration:.2,stagger:.2},10.1)
+    .to(".region-guide",{opacity:0,duration:.15},12.7);
+  tl.to([cell(4,4).querySelector(".mistake"),cell(4,4).querySelector(".mistake-x")],{opacity:1,duration:.12},13.35)
+    .to(".tray",{x:-18,duration:.07,yoyo:true,repeat:7,ease:"none"},13.5)
+    .to([cell(4,4).querySelector(".mistake"),cell(4,4).querySelector(".mistake-x")],{opacity:0,duration:.2},15.6);
+  [[5,0],[5,1],[5,3],[5,4],[5,5]].forEach(([r,c],i)=>tl.to(cell(r,c).querySelector(".xmark"),{opacity:.8,duration:.12},17.2+i*.28));
+  tl.fromTo(".hint-ring",{opacity:0,scale:.6},{opacity:1,scale:1,duration:.4,ease:"power3.out"},19)
+    .to(".hint-ring",{scale:1.1,duration:.35,yoyo:true,repeat:3,ease:"sine.inOut"},19.45)
+    .to(".hint-ring",{opacity:0,duration:.15},21.7);
+  gsap.utils.toArray(".diff").forEach((e,i)=>tl.fromTo(e,{scale:.3,y:100},{scale:1,y:0,duration:.42,ease:i===2?"back.out(1.7)":"power3.out"},22.2+i*.65));
+  tl.to(cell(5,2).querySelector(".plant"),{opacity:1,scale:1,duration:.55,ease:"back.out(1.8)"},25.65)
+    .to("#fill",{width:"100%",duration:.35,ease:"power3.out"},25.7).set("#count",{textContent:"6 of 6 planted"},25.72)
+    .fromTo("#finish .final img",{scale:.3,rotation:-9},{scale:1,rotation:0,duration:.65,ease:"power4.out"},26.05)
+    .fromTo("#finish .cta",{scale:.3},{scale:1,duration:.55,ease:"back.out(1.7)"},28.1);
+  window.__timelines.main=tl;
+</script>
+</body>
+</html>

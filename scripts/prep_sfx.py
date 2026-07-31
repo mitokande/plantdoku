@@ -60,12 +60,20 @@ class Layer:
     in pitch and lengthens. It is the main knob for warming a bright library
     clip into something cozy — most impact recordings are pitched for drama and
     sit too high for a quiet puzzle game.
+
+    `start_ms` drops the head of the source, measured on the *trimmed* clip and
+    before any pitch change. It is how a cue uses part of a musical phrase — the
+    jingle sources are 2-6 note figures and the useful cue is often the tail, so
+    this is the counterpart to `max_ms` at the other end. Aim a few ms early of
+    the note you want so its attack transient survives the cut; the fade-in
+    handles the click either way.
     """
 
     src: str
     gain_db: float = 0.0
     delay_ms: float = 0.0
     pitch: float = 1.0
+    start_ms: float = 0.0
 
 
 @dataclass
@@ -94,16 +102,28 @@ LEVELS = {
 }
 
 RECIPES: dict[str, Recipe] = {
-    # Soil thud + a leaf rustle trailing it — see the layering note above. The
-    # rustle sits high (-5dB) on purpose: leaning leafy rather than heavy is
-    # what keeps the cue from reading as a generic UI thump.
+    # Soil thud + a leaf rustle trailing it — see the layering note above. Both
+    # layers are the *longer* member of their family: the Kenney grass footsteps
+    # are one-shot crunches and most carry only ~70ms above -40dB, which is not
+    # enough rustle to hear under the thud — grass_001 has nearly twice that,
+    # and soft_001 is 183ms of low body against soft_000's 118ms. Check "usable
+    # ms", not file length, when swapping either: these sources pad a long
+    # near-silent tail, so file length says almost nothing.
+    #
+    # `gain_db` here is NOT comparable to the other layers' — tune it by the
+    # balance it produces, not by the number. Summed low (<300Hz) against high
+    # (>1.5kHz) energy, this cue wants to land around +7dB, i.e. clearly
+    # soil-forward with the leaves as texture on top. grass_001 is a good deal
+    # hotter than the grass_003 it replaced, so it needs -12dB to sit where
+    # that one sat at -5dB; left at -5 the balance goes to +0.8dB and the cue
+    # turns into a gravel crunch with a thump attached.
     "place": Recipe(
         layers=[
-            Layer("impact-sounds/impactSoft_medium_000.ogg"),
-            Layer("impact-sounds/footstep_grass_003.ogg", gain_db=-5.0, delay_ms=12.0),
+            Layer("impact-sounds/impactSoft_medium_001.ogg"),
+            Layer("impact-sounds/footstep_grass_001.ogg", gain_db=-12.0, delay_ms=12.0),
         ],
         rms_db=LEVELS["place"],
-        max_ms=320,
+        max_ms=380,
         notes="soil thud + leaf rustle",
     ),
     # Fires once per cell while drag-painting, so it has to survive being heard
@@ -117,36 +137,61 @@ RECIPES: dict[str, Recipe] = {
         fade_out_ms=16.0,
         notes="soft settle",
     ),
-    # Dull, weighted, no buzzer — the red ✕ on screen already says "wrong".
+    # Dull, weighted, no buzzer — the red ✕ on screen already says "wrong". But
+    # "dull" has a floor: the previous source (impactWood_light_002) rolled off
+    # at 553Hz with nothing above 600Hz at all, which is not restraint, it is a
+    # bump heard through a wall. A plank keeps the same dry wooden gesture and
+    # carries mid presence out to ~1.2kHz, so the cue has articulation without
+    # ever becoming a buzzer. It is also all body where the old one was all
+    # transient: the knock peak-limited 3.9dB *under* its own RMS target, while
+    # this lands on target exactly, so it now sits where LEVELS says it should.
     "mistake": Recipe(
-        layers=[Layer("impact-sounds/impactWood_light_002.ogg")],
+        layers=[Layer("impact-sounds/impactPlank_medium_001.ogg")],
         rms_db=LEVELS["mistake"],
-        max_ms=400,
-        notes="dry wood knock",
+        max_ms=300,
+        notes="dry plank knock",
     ),
-    # Steel-drum jingle that resolves upward.
+    # Pizzicato phrase that climbs D-F#-F#-G and lands. Kenney's pack is a
+    # matrix — the same 17 melodies played by 5 instruments — so a cue is chosen
+    # twice: the phrase, then the instrument. The phrase matters most, and the
+    # earlier pair (STEEL02/01) picked the two worst: plain six-note scale runs,
+    # straight up and straight back down, which is the generic level-up /
+    # game-over gesture rather than a melody. Plucked strings are also a better
+    # fit for this game than the steel drum was — small and wooden, not tropical.
     "win": Recipe(
-        layers=[Layer("music-jingles/jingles_STEEL02.ogg")],
+        layers=[Layer("music-jingles/jingles_PIZZI10.ogg")],
         rms_db=LEVELS["win"],
         max_ms=1600,
         fade_out_ms=90.0,
-        notes="rising steel jingle",
+        notes="pizzicato, rises and lands",
     ),
-    # Same instrument as `win`, falling instead of rising — the two read as a
-    # pair, which is what keeps a win and a loss feeling like one game.
+    # The mirror phrase on the same instrument, minus its leading G: PIZZI11 is
+    # G-F#-D-D and the cue starts at the second note, so it falls F#-D-D. Notes
+    # in these jingles land every ~116ms and 122ms is the second onset; the 118
+    # here is deliberately a few ms early so that note's attack survives the cut.
+    # Dropping the G is what keeps the loss from answering the win at equal
+    # weight — it descends to the same D, but shorter and with less ceremony,
+    # which suits a board the player is one tap from retrying. Keep the two
+    # mirrored (win climbs to G, fail falls to D) if either is ever re-picked.
     "fail": Recipe(
-        layers=[Layer("music-jingles/jingles_STEEL01.ogg")],
+        layers=[Layer("music-jingles/jingles_PIZZI11.ogg", start_ms=118.0)],
         rms_db=LEVELS["fail"],
         max_ms=1400,
         fade_out_ms=90.0,
-        notes="falling steel jingle",
+        notes="pizzicato, falling F#-D-D",
     ),
-    # Barely there. A UI tap should be felt, not listened to.
+    # Barely there. A UI tap should be felt, not listened to — but there is a
+    # lower bound on "brief" as well as on "quiet", and the previous source
+    # (click_003) sat under it: 10ms after trimming, of which the 8ms fade-out
+    # ate most, which the ear takes as a pop or a glitch rather than as a sound
+    # someone chose. This one is ~56ms — still far too short to listen *to*, but
+    # long enough to have a body. Same lesson as `mark` above, from the other
+    # direction: that cue was too quiet to register, this one was too short.
     "button": Recipe(
-        layers=[Layer("interface-sounds/click_003.ogg")],
+        layers=[Layer("ui-audio/click2.ogg")],
         rms_db=LEVELS["button"],
-        max_ms=60,
-        fade_out_ms=8.0,
+        max_ms=80,
+        fade_out_ms=10.0,
         notes="soft click",
     ),
 }
@@ -192,6 +237,8 @@ def render(recipe: Recipe) -> np.ndarray:
         if not src.exists():
             raise SystemExit(f"missing source: {src.relative_to(ROOT)}")
         y = trim(load(src))
+        if layer.start_ms:
+            y = y[int(SR * layer.start_ms / 1000) :]
         if layer.pitch != 1.0:
             n = int(round(len(y) / layer.pitch))
             y = np.interp(np.linspace(0, len(y) - 1, n), np.arange(len(y)), y)

@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Platform,
-  Pressable,
   Share,
   StyleSheet,
   Text,
@@ -26,6 +25,7 @@ import { Button } from "./Button";
 import { FailOverlay } from "./FailOverlay";
 import { Hearts } from "./Hearts";
 import { HelpOverlay } from "./HelpOverlay";
+import { Tappable } from "./Tappable";
 import { TutorialOverlay, type Hole } from "./TutorialOverlay";
 import { FLOURISH_MS, WinFlourish } from "./WinFlourish";
 import { WinOverlay } from "./WinOverlay";
@@ -527,7 +527,7 @@ export function GameScreen({ game, onMenu }: Props) {
       style={styles.wrap}
     >
       <View style={styles.header}>
-        <Pressable
+        <Tappable
           hitSlop={12}
           onPress={leave}
           accessibilityRole="button"
@@ -537,7 +537,7 @@ export function GameScreen({ game, onMenu }: Props) {
           <View style={styles.headerCircle}>
             <Ionicons name="arrow-back" size={21} color={theme.text} />
           </View>
-        </Pressable>
+        </Tappable>
         <Text style={styles.headerTitle} numberOfLines={1}>
           {game.mode === "daily" && game.dailyKey ? (
             <>
@@ -553,7 +553,7 @@ export function GameScreen({ game, onMenu }: Props) {
             `Level ${game.level}`
           )}
         </Text>
-        <Pressable
+        <Tappable
           hitSlop={12}
           onPress={() => setShowHelp(true)}
           accessibilityRole="button"
@@ -563,7 +563,7 @@ export function GameScreen({ game, onMenu }: Props) {
           <View style={styles.headerCircle}>
             <Ionicons name="help" size={20} color={theme.text} />
           </View>
-        </Pressable>
+        </Tappable>
       </View>
 
       {/* The rules get a full card only while the tutorial is teaching them;
@@ -585,7 +585,7 @@ export function GameScreen({ game, onMenu }: Props) {
         <View style={styles.ruleChipsWrap}>
           <View style={styles.ruleChips}>
             {RULES.map((rule, i) => (
-              <Pressable
+              <Tappable
                 key={rule.label}
                 onPress={() => setOpenRule(openRule === i ? null : i)}
                 accessibilityRole="button"
@@ -603,7 +603,7 @@ export function GameScreen({ game, onMenu }: Props) {
                 >
                   {rule.label}
                 </Text>
-              </Pressable>
+              </Tappable>
             ))}
           </View>
           {openRule != null && (
@@ -612,7 +612,14 @@ export function GameScreen({ game, onMenu }: Props) {
         </View>
       )}
 
-      {/* The clock is the headline number; hearts and best time support it. */}
+      {/* The clock is the headline number and the hearts support it. A "Best
+          <time>" caption used to sit alongside them; it was removed because it
+          only rendered once the level had been completed, so it showed up
+          exactly on the replays — turning a re-solve into a time trial against
+          yourself on a puzzle whose answer you already know. Levels now keep no
+          best time at all; stars are the record. The clock still runs and still
+          decides the under-par star, it just isn't measured against a previous
+          run. `game.bestSeconds` is daily/endless-only now. */}
       <View style={styles.statusRow}>
         <Text style={styles.clock}>{formatTime(game.seconds)}</Text>
         <View style={styles.statusItem}>
@@ -621,9 +628,6 @@ export function GameScreen({ game, onMenu }: Props) {
             <Text style={styles.statusLabel}>mistakes left</Text>
           )}
         </View>
-        {game.bestSeconds != null && (
-          <Text style={styles.best}>Best {formatTime(game.bestSeconds)}</Text>
-        )}
       </View>
 
       <View style={styles.progressRow}>
@@ -978,11 +982,6 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 33,
     fontWeight: "900",
-    fontVariant: ["tabular-nums"],
-  },
-  best: {
-    ...typography.caption,
-    color: theme.textDim,
     fontVariant: ["tabular-nums"],
   },
   progressRow: {

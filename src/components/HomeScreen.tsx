@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
-import { Animated, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
 import { CARDS, nextCard, RARITY_COLORS, unlockedCards } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
@@ -8,6 +8,7 @@ import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
 import { formatDateKey, formatTime } from "../format";
 import { radius, shadow, space, theme, typography } from "../theme";
+import { Tappable } from "./Tappable";
 
 // The plants in the wordmark's garden bed (and, faded, behind the Endless
 // lock). Purely decorative, picked for contrasting silhouettes and hues at
@@ -196,7 +197,7 @@ export function HomeScreen({
                 ],
               }}
             >
-              <Pressable
+              <Tappable
                 onPress={resume ? onResume : onPlay}
                 accessibilityRole="button"
                 style={styles.playEdge}
@@ -218,7 +219,7 @@ export function HomeScreen({
                     </Text>
                   </View>
                 )}
-              </Pressable>
+              </Tappable>
             </Animated.View>
           )}
         </Rise>
@@ -229,18 +230,18 @@ export function HomeScreen({
             link, not a peer of the button above. */}
         {resume && resume.mode !== "level" && !allComplete && (
           <Rise delay={180}>
-            <Pressable onPress={onPlay} hitSlop={6} style={styles.altLink}>
+            <Tappable onPress={onPlay} hitSlop={6} style={styles.altLink}>
               <Text style={styles.altLinkTxt}>
                 {`Play level ${unlockedLevel} of ${LEVEL_COUNT}`}
               </Text>
               <Ionicons name="chevron-forward" size={14} color={theme.textDim} />
-            </Pressable>
+            </Tappable>
           </Rise>
         )}
 
         {/* Card collection showcase — the meta lives front and center. */}
         <Rise delay={220}>
-          <Pressable onPress={onCards} style={styles.cardsPanel}>
+          <Tappable onPress={onCards} style={styles.cardsPanel}>
             <View style={styles.cardsHeader}>
               <Text style={styles.cardsTitle}>Plant collection</Text>
               <Text style={styles.cardsCount}>
@@ -292,7 +293,7 @@ export function HomeScreen({
                 All {CARDS.length} cards collected!
               </Text>
             )}
-          </Pressable>
+          </Tappable>
         </Rise>
 
         <Rise delay={320}>
@@ -304,7 +305,7 @@ export function HomeScreen({
               </View>
               <View style={styles.endlessChips}>
                 {ENDLESS_CHIPS.map(({ difficulty, label }) => (
-                  <Pressable
+                  <Tappable
                     key={difficulty}
                     onPress={() => onEndless(difficulty)}
                     style={({ pressed }) => [
@@ -313,7 +314,7 @@ export function HomeScreen({
                     ]}
                   >
                     <Text style={styles.chipTxt}>{label}</Text>
-                  </Pressable>
+                  </Tappable>
                 ))}
               </View>
             </View>

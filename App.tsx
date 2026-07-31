@@ -5,7 +5,6 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   AppState,
   Platform,
-  Pressable,
   SafeAreaView,
   StatusBar as RNStatusBar,
   StyleSheet,
@@ -21,6 +20,7 @@ import { GameScreen } from "./src/components/GameScreen";
 import { HomeScreen } from "./src/components/HomeScreen";
 import { SettingsOverlay } from "./src/components/SettingsOverlay";
 import { SplashScreen } from "./src/components/SplashScreen";
+import { Tappable } from "./src/components/Tappable";
 import { LEVEL_COUNT } from "./src/game/levels";
 import { useBackHandler } from "./src/hooks/useBackHandler";
 import { useGame } from "./src/state/useGame";
@@ -125,10 +125,10 @@ export default function App() {
           <>
             {/* Global HUD: star wallet (jumps to Cards) · streak · settings. */}
             <View style={styles.hud}>
-              <Pressable onPress={() => setTab("cards")} style={styles.pill}>
+              <Tappable onPress={() => setTab("cards")} style={styles.pill}>
                 <Ionicons name="star" size={15} color={theme.gold} />
                 <Text style={styles.pillTxt}>{game.totalStars}</Text>
-              </Pressable>
+              </Tappable>
               {game.dailyStreak > 0 && (
                 <View style={styles.pill}>
                   <Ionicons name="flame" size={15} color={theme.danger} />
@@ -136,7 +136,7 @@ export default function App() {
                 </View>
               )}
               <View style={styles.hudSpacer} />
-              <Pressable
+              <Tappable
                 hitSlop={10}
                 onPress={() => setShowSettings(true)}
                 accessibilityRole="button"
@@ -144,7 +144,7 @@ export default function App() {
                 style={styles.settingsBtn}
               >
                 <Ionicons name="settings-sharp" size={22} color={theme.textDim} />
-              </Pressable>
+              </Tappable>
             </View>
 
             <View style={styles.page}>

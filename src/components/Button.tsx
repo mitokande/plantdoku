@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
-import { audio } from "../audio";
 import { radius, theme, typography } from "../theme";
+import { Tappable } from "./Tappable";
 
 interface Props {
   label: string;
@@ -86,18 +86,9 @@ export function Button({
           ? styles.faceDanger
           : styles.faceGhost;
   return (
-    <Pressable
-      onPress={() => {
-        audio.play("button");
-        onPress();
-      }}
-      onLongPress={
-        onLongPress &&
-        (() => {
-          audio.play("button");
-          onLongPress();
-        })
-      }
+    <Tappable
+      onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -149,7 +140,7 @@ export function Button({
           )}
         </>
       )}
-    </Pressable>
+    </Tappable>
   );
 }
 

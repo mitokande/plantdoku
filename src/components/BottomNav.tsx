@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { shadow, theme, typography } from "../theme";
+import { Tappable } from "./Tappable";
 
 export type Tab = "home" | "cards" | "daily";
 
@@ -45,7 +46,7 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
         {TABS.map(({ key, icon, iconOff, label }) => {
           const active = key === tab;
           return (
-            <Pressable
+            <Tappable
               key={key}
               onPress={() => onTab(key)}
               accessibilityRole="tab"
@@ -72,7 +73,7 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
               <Text style={[styles.label, active && styles.labelActive]}>
                 {label}
               </Text>
-            </Pressable>
+            </Tappable>
           );
         })}
       </View>

@@ -12,7 +12,6 @@ import {
   Animated,
   Easing,
   Image,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -21,6 +20,7 @@ import {
 import { REGION_COLORS } from "../game/palette";
 import { PLANT_SOURCES } from "../game/plants";
 import { radius, space, theme, typography } from "../theme";
+import { Tappable } from "./Tappable";
 
 /** Whole beat, from first frame to the fade-out finishing. */
 export const SPLASH_MS = 2900;
@@ -185,7 +185,11 @@ export function SplashScreen({ onDone }: Props) {
         colors={["#F8FAF1", theme.bg, "#EDF4E1"]}
         style={StyleSheet.absoluteFill}
       />
-      <Pressable
+      {/* Silent: skipping the intro is impatience rather than a control, and
+          the splash runs before the player has chosen to be in the app at all —
+          a click here would be the first sound the game ever makes. */}
+      <Tappable
+        silent
         style={styles.stage}
         onPress={() => skipRef.current()}
         accessibilityRole="button"
@@ -282,7 +286,7 @@ export function SplashScreen({ onDone }: Props) {
           </View>
           <Text style={styles.loadingCopy}>Growing your garden</Text>
         </Animated.View>
-      </Pressable>
+      </Tappable>
     </Animated.View>
   );
 }
