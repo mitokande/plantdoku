@@ -513,16 +513,19 @@ export function HomeScreen({
                     <View style={styles.playRow}>
                       <Ionicons name="leaf" size={22} color={theme.onAccent} />
                       <Text style={styles.playLabel} numberOfLines={1}>
-                        {resume ? `Continue ${resumeLabel(resume)}` : `Play level ${current}`}
+                        {resume ? `Continue ${resumeLabel(resume)}` : `Level ${current}`}
                       </Text>
                     </View>
-                    <Text style={styles.playSub} numberOfLines={1}>
-                      {resume
-                        ? `${resume.placed}/${resume.size} planted · ${formatTime(
-                            resume.seconds,
-                          )} elapsed`
-                        : `Level ${current} of ${LEVEL_COUNT}`}
-                    </Text>
+                    {/* Only a resumed board has anything to add: how far in it
+                        is. A fresh level's number is already the label, so the
+                        "Level X of N" line under it only said it twice. */}
+                    {resume && (
+                      <Text style={styles.playSub} numberOfLines={1}>
+                        {`${resume.placed}/${resume.size} planted · ${formatTime(
+                          resume.seconds,
+                        )} elapsed`}
+                      </Text>
+                    )}
                   </View>
                 )}
               </Tappable>
@@ -880,8 +883,8 @@ const styles = StyleSheet.create({
   },
 
   // ---- primary action -----------------------------------------------------
-  // Play : Endless = 3 : 1. Endless is a quarter and stays cream, so the row
-  // reads as one primary action with a door beside it.
+  // Play : Endless = 2 : 1. Endless stays cream, so the row still reads as one
+  // primary action with a door beside it.
   ctaRow: {
     ...CARD_W,
     flexDirection: "row",
@@ -889,10 +892,12 @@ const styles = StyleSheet.create({
     gap: space(2),
     marginTop: space(2),
   },
-  // `flex: n` in RN is grow n / shrink 1 / **basis 0**, so these are a true 3:1
+  // `flex: n` in RN is grow n / shrink 1 / **basis 0**, so these are a true 2:1
   // split of the row's width and the Play label can't widen its own column.
+  // Play was three quarters of the row when its label was `Play level 12` over
+  // a subtitle; a bare `Level 12` doesn't need that much face.
   ctaMain: {
-    flex: 3,
+    flex: 2,
   },
   ctaSide: {
     flex: 1,
@@ -908,10 +913,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.accentDark,
     ...shadow.raised,
   },
+  // Play is what gives the row its height, and the Endless quarter stretches to
+  // match — so this padding is also what has to fit Endless' icon + label +
+  // `N/15` line. Don't tighten it without checking that side.
   play: {
     alignItems: "center",
     backgroundColor: theme.accent,
-    paddingVertical: space(3),
+    paddingVertical: space(5),
     borderRadius: radius.btn,
     marginBottom: EDGE,
   },

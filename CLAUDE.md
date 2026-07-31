@@ -838,8 +838,12 @@ cut for exactly that reason. Don't put them back; the meta that survived moved
   bottom "Next unlocks" strip, which showed three cards the player couldn't act
   on. Falls back to a decorative sprite once the collection is complete.
 - **One primary action, with a door beside it.** Play and Endless share one row
-  at **3:1** (`ctaRow` / `ctaMain` / `ctaSide`). A saved board *is* the big green
-  button (`Continue <board>`, with `N/M planted · time elapsed` on its face);
+  at **2:1** (`ctaRow` / `ctaMain` / `ctaSide`) — it was 3:1 back when Play
+  carried a longer label and a subtitle. The button is a leaf icon and
+  `Level N` and nothing else — the `Level N of 60` subtitle under it was cut for
+  saying the same number twice. A saved board *is* the big green
+  button (`Continue <board>`, with `N/M planted · time elapsed` on its face —
+  the one case where the subtitle earns its line);
   Endless is the quarter, in the cream key rather than green so it reads as a
   door and not a peer. Its three difficulties don't fit a quarter, so they lift
   into a small popover **above** the button (`endlessPop`, `bottom: 100%`) on
