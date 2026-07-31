@@ -52,10 +52,58 @@ the red with the mark); re-planting a red-✕ cell is a **no-op**, so one slip
 can't drain two hearts; and `solved` is just "board full" (`wrongCells` stays
 empty by construction but still feeds `isSolved` as a guard). Losing the last
 heart sets `failed`: the board locks, the timer stops, and `FailOverlay` offers
-**Try again** (`useGame.retry()` rebuilds the same board with hearts/timer
-reset) or Menu. Undo never refunds a spent heart (so it can't be used to probe
-cells). Hearts render in `Hearts.tsx` (header row, pops when one breaks);
-`MAX_HEARTS` lives in `useGame.ts`.
+**Revive** (paid — see Coins below), **Try again** (`useGame.retry()` rebuilds
+the same board with hearts/timer reset) or Menu. Undo never refunds a spent
+heart (so it can't be used to probe cells). Hearts render in `Hearts.tsx`
+(header row, pops when one breaks); `MAX_HEARTS` lives in `useGame.ts`.
+
+**Coins / revive** (`src/game/economy.ts`, pure/headless-safe): the app's one
+currency, and it exists for one sink — buying a failed board back. **Stars
+could never be it**: they are simultaneously a per-level skill *record* and the
+card-unlock currency, and they are finite (180), so spending them would erase
+the rating and the faucet would run dry. Coins are the repeatably-earnable
+half. Every tunable number lives in that one module (`REVIVE_COST` 500,
+`COINS_PER_LEVEL` 20, `COINS_PER_DAILY` 20 + a capped streak bonus,
+`endlessCoins` 10/15/20, `STARTING_COINS`) and is covered by runTests; the UI
+never imports them, it reads `coins` / `reviveCost` / `canRevive` off `useGame`.
+
+The faucet is **first-clear-only for levels** — the award sits inside the
+existing `if (level === unlockedLevel)` block, which *is* the first-clear test,
+so replaying a cleared level can't mint coins — with daily (gated on the same
+`firstToday` the streak uses) and endless as the ongoing income. Endless paying
+at all is new: it is the first reward that mode has ever given.
+
+`REVIVE` is the exact opposite of `RETRY`: **+1 heart and nothing else
+touched**, because continuing the solve you were losing is the entire thing
+being bought. Three details are load-bearing:
+
+- **`history: []`.** `UNDO` is guarded by `state.failed`, so clearing `failed`
+  re-arms it — and `mistakes` rides inside each `Snapshot`, so an undo would
+  step back past the fatal placement and erase the red ✕ the player just paid
+  500 coins to survive. `RESTORE` starts with a clean stack for the same reason.
+- The fatal cell **keeps** its red ✕, and `PLACE` already no-ops on a `mistakes`
+  cell — so the bought heart can't be spent re-tapping the cell that took the
+  last one.
+- Coins are debited by the `revive()` wrapper *before* it dispatches, and it
+  returns false when unaffordable; the reducer owns no currency. Balance
+  mutations go through **`coinsRef`**, not `coins` — an award and a spend can
+  land in the same tick (the same hazard `stateRef` / `slotsRef` exist for).
+
+Stars after a revive are **unchanged** — `starsFor` stays a function of time +
+hints. The revive buys back the attempt, not the rating, and the clock kept
+running, so under-par is already harder. Resume needs no schema change
+(`RESUME_VERSION` stays 2): `toSnapshot` bails while `failed`, so the slot is
+dropped at the fail and the auto-save effect re-creates it once the revive
+clears it (`state.hearts` is already in that effect's deps). **Don't add a
+`revives` counter to `GameState`** — it would have to enter `ResumeSnapshot` to
+survive a resume, forcing a version bump for something the `revive_used` event
+already answers.
+
+NOTE the affordability curve: at 20 a level the first revive lands around level
+25, while most fails are in the medium band (L9–20), so players meet the button
+before they can use it. That is why `FailOverlay` renders an unaffordable revive
+as a **progress line (`340 / 500`), never a dead control**. `STARTING_COINS` is
+the knob if it needs softening.
 
 Difficulties: **Easy 6×6 · Medium 8×8 · Hard 9×9** — each also gated by deduction
 tier (see Generator), so every board is solvable by pure logic, no guessing.
@@ -193,6 +241,10 @@ Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 `level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
 `board_abandoned`/`board_resumed`, `mistake_made`, `hint_requested`,
 `card_unlocked`, `undo_used`/`board_reset`/`board_retried`,
+`coins_earned`/`coins_spent`/`revive_used` (the last one matters most — it is
+the only sink, so it measures whether the currency does anything; it also means
+`hearts_left` on the *_completed events no longer implies the board never
+dropped to one heart),
 `onboarding_completed`, `data_flushed` — which also calls `analytics.reset()`),
 `GameScreen.tsx` (`tutorial_step`) and `App.tsx` (`screen_viewed` per
 tab/game). Keep analytics **out of `src/game/*`** so the headless Node tests
@@ -454,7 +506,10 @@ section exists).
   progress, active selection · `forest` = the board screen's one hero action
   (Hint) · `text` dark forest green = type/icons · `gold` =
   stars, rewards, rarity (**never** a plain card border) · `bed*` = the
-  board's tray only, `soil` = the Home wordmark's mound only · `danger` = mistakes and hearts only. `onAccent` /
+  board's tray only, `soil` = the Home wordmark's mound only · `danger` = mistakes and hearts only.
+  The **coin wallet is a deliberate exception** to "gold = stars": a coin *is*
+  gold, and it sits beside the star pill in the HUD, so the two are told apart
+  by glyph (`cash` vs `star`), not by colour. `onAccent` /
   `onForest` / `onGold` / `onDanger` are the type colours on those fills (very
   dark greens and browns, or white on `forest` — never pure black).
 - Surface hierarchy, lightest first: `panel` (white — cards *and* modal cards) >
@@ -749,6 +804,8 @@ src/game/
   daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
                  date math — pure data, headless-safe
   stars.ts       par times (size+tier) + starsFor — headless-safe
+  economy.ts     coin faucet + revive price (every tunable number) —
+                 headless-safe; the UI reads these off useGame, never directly
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
   palette.ts     PLANT_IDS (17, one picked per board) + REGION_COLORS
@@ -762,6 +819,7 @@ src/game/
   validator.ts   findConflicts (row/col/cluster/adjacency) + isSolved
   runTests.ts    headless correctness tests (npm test)
 src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
+                 REVIVE (paid +1 heart, board kept) + the coin balance,
                  boardPlant (board species = the card being chased),
                  RESTORE (resume), timer, unlocked level + per-level stars +
                  onboarded + soundOn + resume slots (AsyncStorage)
@@ -791,7 +849,7 @@ src/components/
   Button.tsx (solid/forest/ghost/warm/danger + pill/small/iconOnly/
   compact, optional long-press), WinFlourish.tsx (big plant
   bloom before the win modal), WinOverlay.tsx (card-flip reveal + Continue),
-  FailOverlay.tsx (out-of-hearts game over: Try again / Menu),
+  FailOverlay.tsx (out-of-hearts game over: paid Revive / Try again / Menu),
   Hearts.tsx (lives row), Confetti.tsx
 src/theme.ts     design tokens: colour · radius · shadow · typography · space
 src/format.ts

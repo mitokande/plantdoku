@@ -141,6 +141,13 @@ export default function App() {
                 <Ionicons name="star" size={15} color={theme.gold} />
                 <Text style={styles.pillTxt}>{game.totalStars}</Text>
               </Tappable>
+              {/* Coins. Gold here is a deliberate exception to "gold = stars,
+                  rewards, rarity" — a coin *is* gold — so the wallet and the
+                  star pill are told apart by glyph, not by colour. */}
+              <View style={styles.pill}>
+                <Ionicons name="cash" size={15} color={theme.gold} />
+                <Text style={styles.pillTxt}>{game.coins}</Text>
+              </View>
               {game.dailyStreak > 0 && (
                 <View style={styles.pill}>
                   <Ionicons name="flame" size={15} color={theme.danger} />

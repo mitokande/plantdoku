@@ -45,6 +45,14 @@ export type EventName =
   | "board_failed"
   | "board_retried"
   | "board_reset"
+  // Coin economy. `revive_used` is the one that matters: it is the only sink,
+  // so it measures whether the currency does anything at all. NOTE it also
+  // changes how `hearts_left` on the three *_completed events reads — a
+  // revived board can finish with more hearts than it ever "kept", so join on
+  // revive_used before treating hearts_left as a difficulty signal.
+  | "coins_earned"
+  | "coins_spent"
+  | "revive_used"
   | "board_abandoned" // left an unfinished board (drop-off signal)
   | "board_resumed" // picked a saved board back up
   | "hint_requested"

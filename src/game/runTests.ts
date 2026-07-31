@@ -7,6 +7,15 @@
 
 import { CARDS, newlyUnlocked, nextCard, unlockedCards } from "./cards";
 import { DAILY_DIFFICULTY, dailyNumber, dailySeed, isConsecutive } from "./daily";
+import {
+  canAfford,
+  COINS_PER_DAILY,
+  COINS_PER_LEVEL,
+  dailyCoins,
+  endlessCoins,
+  REVIVE_COST,
+  STARTING_COINS,
+} from "./economy";
 import { generatePuzzle, generateUniqueBoard } from "./generator";
 import { LEVELS } from "./levels";
 import { PLANT_IDS } from "./palette";
@@ -291,6 +300,47 @@ check(
   newlyUnlocked(0, CARDS[0].stars).length === 1 &&
     newlyUnlocked(CARDS[0].stars, CARDS[0].stars).length === 0,
   "newlyUnlocked must report exactly the crossed thresholds",
+);
+console.log("  ok");
+
+// ---------------------------------------------------------------------------
+// Part 2e — coin economy: payouts must be whole positive numbers (a fractional
+// coin would render as "20.5" in the HUD), the daily streak bonus must rise but
+// stay capped, every difficulty must have an endless payout, and canAfford must
+// survive a corrupt stored balance.
+// ---------------------------------------------------------------------------
+console.log("economy: checking payouts...");
+const whole = (n: number) => Number.isInteger(n) && n > 0;
+check(
+  whole(COINS_PER_LEVEL) && whole(COINS_PER_DAILY) && whole(REVIVE_COST),
+  "coin constants must be whole positive numbers",
+);
+check(STARTING_COINS >= 0 && Number.isInteger(STARTING_COINS), "STARTING_COINS must be a non-negative integer");
+for (const d of DIFFICULTY_ORDER) {
+  check(whole(endlessCoins(d)), `endless payout missing/invalid for ${d}`);
+}
+check(
+  DIFFICULTY_ORDER.every(
+    (d, i) => i === 0 || endlessCoins(d) >= endlessCoins(DIFFICULTY_ORDER[i - 1]),
+  ),
+  "endless payout must not fall as difficulty rises",
+);
+check(whole(dailyCoins(0)) && dailyCoins(0) >= COINS_PER_DAILY, "daily base payout");
+for (let s = 1; s <= 40; s++) {
+  check(
+    whole(dailyCoins(s)) && dailyCoins(s) >= dailyCoins(s - 1),
+    `daily payout must be whole and non-decreasing at streak ${s}`,
+  );
+}
+check(
+  dailyCoins(1000) === dailyCoins(10) && dailyCoins(10) < REVIVE_COST,
+  "daily streak bonus must be capped, and a single daily must not buy a revive",
+);
+check(
+  canAfford(REVIVE_COST, REVIVE_COST) &&
+    !canAfford(REVIVE_COST - 1, REVIVE_COST) &&
+    !canAfford(NaN, REVIVE_COST),
+  "canAfford must be inclusive at the price and reject NaN",
 );
 console.log("  ok");
 

@@ -7,12 +7,33 @@ import { Button } from "./Button";
 
 interface Props {
   title: string; // e.g. "Level 7" / "Daily #12" / "Endless"
+  /** Current balance, so the card can show progress toward an unaffordable revive. */
+  coins: number;
+  reviveCost: number;
+  onRevive: () => void;
   onRetry: () => void;
   onMenu: () => void;
 }
 
-/** Game-over card shown when the player runs out of hearts on a board. */
-export function FailOverlay({ title, onRetry, onMenu }: Props) {
+/**
+ * Game-over card shown when the player runs out of hearts on a board.
+ *
+ * Revive is the hero here — it is the one action that keeps the board the
+ * player was losing, which is the whole point of the currency. When it can't
+ * be afforded it stays visible as a **progress line** (`340 / 500`) rather than
+ * disappearing or reading as a dead control: at 20 coins a level the first
+ * revive lands around level 25, so most players meet this button before they
+ * can use it, and it has to read as a goal.
+ */
+export function FailOverlay({
+  title,
+  coins,
+  reviveCost,
+  onRevive,
+  onRetry,
+  onMenu,
+}: Props) {
+  const affordable = coins >= reviveCost;
   // Springy entrance, matching WinOverlay.
   const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -51,18 +72,37 @@ export function FailOverlay({ title, onRetry, onMenu }: Props) {
         <Text style={styles.title}>Out of hearts</Text>
         <Text style={styles.sub}>{title}</Text>
         <Text style={styles.body}>
-          Too many plants in the wrong spot. Take another run at it!
+          {affordable
+            ? "Buy a heart back and pick up right where you left off."
+            : "Too many plants in the wrong spot. Take another run at it!"}
         </Text>
+
+        {/* The paid continue, at full width above the free options. */}
+        <View style={styles.revive}>
+          <Button
+            label={`Revive · ${reviveCost}`}
+            icon="heart"
+            variant="solid"
+            disabled={!affordable}
+            onPress={onRevive}
+          />
+          <View style={styles.reviveMeta}>
+            <Ionicons
+              name="cash"
+              size={13}
+              color={affordable ? theme.gold : theme.textDim}
+            />
+            <Text style={styles.reviveMetaTxt}>
+              {affordable
+                ? `${coins} coins · keeps your board`
+                : `${coins} / ${reviveCost} coins`}
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.actions}>
           <Button label="Menu" icon="menu" onPress={onMenu} flex />
-          <Button
-            label="Try again"
-            icon="refresh"
-            variant="solid"
-            onPress={onRetry}
-            flex
-          />
+          <Button label="Try again" icon="refresh" onPress={onRetry} flex />
         </View>
       </Animated.View>
     </Animated.View>
@@ -111,10 +151,29 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 12,
   },
+  // The paid continue sits alone at full width; Menu / Try again share the row
+  // below it, so the hierarchy is unmistakable without shouting.
+  revive: {
+    alignSelf: "stretch",
+    marginTop: 20,
+  },
+  reviveMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    marginTop: 8,
+  },
+  reviveMetaTxt: {
+    color: theme.textDim,
+    fontSize: 12.5,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+  },
   actions: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 22,
+    marginTop: 14,
     alignSelf: "stretch",
   },
 });

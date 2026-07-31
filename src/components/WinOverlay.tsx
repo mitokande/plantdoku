@@ -34,6 +34,8 @@ interface Props {
   newCards?: PlantCard[];
   /** Total stars across all levels — drives the next-card progress bar. */
   totalStars?: number;
+  /** Coins this solve paid out. 0 on a replay, which shows no line at all. */
+  coinsEarned?: number;
   onShare?: () => void;
   onNext: () => void;
   onMenu: () => void;
@@ -53,6 +55,7 @@ export function WinOverlay({
   stars,
   newCards = [],
   totalStars = 0,
+  coinsEarned = 0,
   onShare,
   onNext,
   onMenu,
@@ -277,6 +280,15 @@ export function WinOverlay({
           </>
         )}
 
+        {/* The payout, only when there was one — a replay pays nothing and a
+            "+0 coins" line would read as a penalty. */}
+        {coinsEarned > 0 && (
+          <View style={styles.coins}>
+            <Ionicons name="cash" size={15} color={theme.gold} />
+            <Text style={styles.coinsTxt}>{`+${coinsEarned} coins`}</Text>
+          </View>
+        )}
+
         <Text style={styles.timeLine}>
           {`Solved in ${formatTime(seconds)}`}
           {daily ? `  ·  🔥 ${daily.streak}` : ""}
@@ -451,6 +463,22 @@ const styles = StyleSheet.create({
   },
   goalDone: {
     color: theme.text,
+  },
+  coins: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: space(3),
+    paddingVertical: 4,
+    paddingHorizontal: space(3),
+    borderRadius: 999,
+    backgroundColor: theme.bgAlt,
+  },
+  coinsTxt: {
+    ...typography.caption,
+    color: theme.text,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   timeLine: {
     ...typography.caption,

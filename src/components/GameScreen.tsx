@@ -806,6 +806,7 @@ export function GameScreen({ game, onMenu }: Props) {
           }
           newCards={game.mode === "level" ? game.newCards : []}
           totalStars={game.totalStars}
+          coinsEarned={game.coinsEarned}
           onShare={() => {
             if (game.mode !== "daily" || !game.dailyKey) return;
             const streak = game.dailyStreak;
@@ -835,6 +836,9 @@ export function GameScreen({ game, onMenu }: Props) {
                 ? `${DIFF_LABEL[game.endlessDifficulty]} board`
                 : `Level ${game.level}`
           }
+          coins={game.coins}
+          reviveCost={game.reviveCost}
+          onRevive={game.revive}
           onRetry={game.retry}
           onMenu={leave}
         />

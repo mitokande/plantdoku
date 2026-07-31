@@ -15,6 +15,14 @@ import {
   isConsecutive,
   todayKey,
 } from "../game/daily";
+import {
+  canAfford,
+  COINS_PER_LEVEL,
+  dailyCoins,
+  endlessCoins,
+  REVIVE_COST,
+  STARTING_COINS,
+} from "../game/economy";
 import { generatePuzzle } from "../game/generator";
 import { getLevel, LEVEL_COUNT } from "../game/levels";
 import { starsFor } from "../game/stars";
@@ -102,6 +110,7 @@ type Action =
   | { type: "RESET" }
   | { type: "HINT" } // place the next row's solution cell, clearing conflicts
   | { type: "RETRY" } // after a fail: rebuild the same board, hearts/timer reset
+  | { type: "REVIVE" } // paid: +1 heart, board kept exactly as it was
   | { type: "TICK" };
 
 const UNLOCKED_KEY = "plantdoku:unlocked";
@@ -121,6 +130,7 @@ const STARS_KEY = "plantdoku:stars"; // JSON {level: bestStars 1..3}
 const RESUME_KEY = "plantdoku:resume"; // JSON ResumeSnapshot of a live board
 const SOUND_KEY = "plantdoku:sound"; // "0" when SFX are muted (default: on)
 const NOTIF_KEY = "plantdoku:notifications"; // "0" when reminders off (default: on)
+const COINS_KEY = "plantdoku:coins"; // integer balance (see game/economy.ts)
 
 const emptyGrid = (size: number): CellState[][] =>
   Array.from({ length: size }, () => new Array<CellState>(size).fill("empty"));
@@ -469,6 +479,24 @@ function reducer(state: GameState, action: Action): GameState {
         history: [],
       };
 
+    // Paid revive (see game/economy.ts): the exact opposite of RETRY — one
+    // heart back and *nothing else touched*, because continuing the solve you
+    // were losing is the entire thing being bought. The coins are debited by
+    // the `revive()` wrapper; the reducer owns no currency.
+    //
+    // `history: []` is load-bearing, not tidiness. UNDO is guarded by
+    // `state.failed`, so clearing `failed` re-arms it — and `mistakes` rides
+    // inside each `Snapshot`, so an undo would step back past the fatal
+    // placement and erase the red ✕ the player just paid 500 coins to survive.
+    // RESTORE starts with a clean stack for the same reason.
+    //
+    // The fatal cell stays "marked" and stays in `mistakes`, which PLACE
+    // already no-ops on — so the freshly bought heart can't be spent re-tapping
+    // the cell that took the last one.
+    case "REVIVE":
+      if (!state.failed) return state;
+      return { ...state, hearts: 1, failed: false, history: [] };
+
     // After a fail: same puzzle (and same plant), blank board, hearts + timer
     // reset.
     case "RETRY":
@@ -533,6 +561,14 @@ export function useGame(initialLevel = 1) {
   const [solveStars, setSolveStars] = useState<number | null>(null);
   // Plant cards whose star milestone was crossed by the solve on screen.
   const [newCards, setNewCards] = useState<PlantCard[]>([]);
+  // Coin balance (see game/economy.ts) and the coins paid by the solve on
+  // screen, so the win overlay can show "+20".
+  const [coins, setCoins] = useState(STARTING_COINS);
+  const [coinsEarned, setCoinsEarned] = useState(0);
+  // Mirrors `coins` for the callbacks and effects below (same reason as
+  // `stateRef`/`slotsRef`): a solve award and a revive spend can land in the
+  // same tick, and reading stale state would silently mint or eat coins.
+  const coinsRef = useRef(coins);
   // Saved mid-solve boards, one per mode (drives the Home "Continue" card).
   const [slots, setSlots] = useState<ResumeSlots>({});
 
@@ -550,6 +586,7 @@ export function useGame(initialLevel = 1) {
         RESUME_KEY,
         SOUND_KEY,
         NOTIF_KEY,
+        COINS_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
       ];
       const pairs = await AsyncStorage.multiGet(keys);
@@ -595,6 +632,13 @@ export function useGame(initialLevel = 1) {
           audio.setMuted(!on);
         } else if (key === NOTIF_KEY) {
           setNotifsOnState(v !== "0");
+        } else if (key === COINS_KEY) {
+          // A corrupt/absent value must not poison the balance with NaN —
+          // canAfford guards it too, but the HUD would render "NaN".
+          const n = parseInt(v, 10);
+          const bal = Number.isFinite(n) && n >= 0 ? n : STARTING_COINS;
+          setCoins(bal);
+          coinsRef.current = bal;
         }
       }
       setEndlessBests(eb);
@@ -604,6 +648,34 @@ export function useGame(initialLevel = 1) {
       alive = false;
     };
   }, []);
+
+  // --- Coins ---------------------------------------------------------------
+  // Both helpers go through `coinsRef` rather than `coins`, so the balance is
+  // always computed from the freshest value (see the ref's comment above), and
+  // write straight through to storage like every other scalar here.
+  const setBalance = (next: number) => {
+    const bal = Math.max(0, Math.round(next));
+    coinsRef.current = bal;
+    setCoins(bal);
+    AsyncStorage.setItem(COINS_KEY, String(bal)).catch(() => {});
+    return bal;
+  };
+
+  /** Pay out `n` coins. Returns the new balance. */
+  const awardCoins = (n: number, reason: string) => {
+    if (!(n > 0)) return coinsRef.current;
+    const bal = setBalance(coinsRef.current + n);
+    analytics.track("coins_earned", { amount: n, reason, balance: bal });
+    return bal;
+  };
+
+  /** Debit `n` coins if affordable. Returns false (and changes nothing) if not. */
+  const spendCoins = (n: number, reason: string) => {
+    if (!canAfford(coinsRef.current, n)) return false;
+    const bal = setBalance(coinsRef.current - n);
+    analytics.track("coins_spent", { amount: n, reason, balance: bal });
+    return true;
+  };
 
   // --- Resume slot ---------------------------------------------------------
   // The live board is written to storage on every move (moves are far rarer
@@ -718,6 +790,11 @@ export function useGame(initialLevel = 1) {
             String(seconds),
           ).catch(() => {});
         }
+        // Endless has no first-clear notion, so every solve pays — this is the
+        // mode's first actual reward, and the ongoing half of the faucet.
+        const paid = endlessCoins(endlessDifficulty);
+        awardCoins(paid, "endless");
+        setCoinsEarned(paid);
         analytics.track("endless_completed", {
           mode: "endless",
           difficulty: endlessDifficulty,
@@ -742,6 +819,11 @@ export function useGame(initialLevel = 1) {
           : daily.streak;
         const log = improved ? { ...daily.log, [dailyKey]: seconds } : daily.log;
         setDaily({ streak, last: dailyKey, log });
+        // Coins follow the streak's own rule: only the first solve of a date
+        // pays, so replaying today can't be farmed.
+        const paid = firstToday ? dailyCoins(streak) : 0;
+        awardCoins(paid, "daily");
+        setCoinsEarned(paid);
         AsyncStorage.multiSet([
           [DAILY_STREAK_KEY, String(streak)],
           [DAILY_LAST_KEY, dailyKey],
@@ -801,16 +883,24 @@ export function useGame(initialLevel = 1) {
             });
           }
         }
+        // `level === unlockedLevel` *is* the first-clear test, so coins ride
+        // the same gate the unlock does: replaying a cleared level pays
+        // nothing, which is what stops level 1 being a coin mine.
         if (level === unlockedLevel) {
+          awardCoins(COINS_PER_LEVEL, "level");
+          setCoinsEarned(COINS_PER_LEVEL);
           const next = level + 1; // may be LEVEL_COUNT + 1 = "all complete"
           setUnlockedLevel(next);
           AsyncStorage.setItem(UNLOCKED_KEY, String(next)).catch(() => {});
+        } else {
+          setCoinsEarned(0);
         }
       }
     }
     if (!state.solved) {
       setSolveStars(null);
       setNewCards([]);
+      setCoinsEarned(0);
     }
     wasSolved.current = state.solved;
   }, [state.solved]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -915,6 +1005,12 @@ export function useGame(initialLevel = 1) {
     totalStars,
     solveStars,
     newCards,
+    // Coin balance, what the solve on screen paid, and the revive price — the
+    // UI never imports the economy constants itself.
+    coins,
+    coinsEarned,
+    reviveCost: REVIVE_COST,
+    canRevive: canAfford(coins, REVIVE_COST),
     canUndo: state.history.length > 0,
     undoDepth: state.history.length,
     hintsUsed: state.hintsUsed,
@@ -1017,6 +1113,7 @@ export function useGame(initialLevel = 1) {
         RESUME_KEY,
         SOUND_KEY,
         NOTIF_KEY,
+        COINS_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         // Not written any more; cleared so a flush still tidies old installs.
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => legacyLevelBestKey(i + 1)),
@@ -1028,6 +1125,9 @@ export function useGame(initialLevel = 1) {
       setUnlockedLevel(1);
       setEndlessBests({});
       setStarsByLevel({});
+      setCoins(STARTING_COINS);
+      coinsRef.current = STARTING_COINS;
+      setCoinsEarned(0);
       setOnboarded(false);
       setSoundOnState(true);
       audio.setMuted(false);
@@ -1093,6 +1193,27 @@ export function useGame(initialLevel = 1) {
         difficulty: boardDifficulty(),
       });
       dispatch({ type: "RETRY" });
+    },
+    // Buy the board back: debit the coins, then hand one heart to the reducer
+    // (which keeps every plant, ✕ and second exactly as they were). The spend
+    // happens first and gates the dispatch, so a failed payment can never
+    // revive for free. Returns false when the player can't afford it, so the
+    // UI can no-op instead of guessing at the balance itself.
+    revive: () => {
+      if (!stateRef.current.failed) return false;
+      if (!spendCoins(REVIVE_COST, "revive")) return false;
+      const s = stateRef.current;
+      analytics.track("revive_used", {
+        mode: s.mode,
+        level: s.level || undefined,
+        difficulty: boardDifficulty(),
+        seconds: s.seconds,
+        progress: Math.round((100 * s.placedCount) / s.puzzle.size),
+        cost: REVIVE_COST,
+        balance_after: coinsRef.current,
+      });
+      dispatch({ type: "REVIVE" });
+      return true;
     },
     // Places the next row's plant directly (one undoable step).
     requestHint: () => {
