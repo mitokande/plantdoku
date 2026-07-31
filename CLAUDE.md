@@ -906,7 +906,8 @@ src/components/
                  current one), Play/Continue + Endless quarter (level-15 lock)
   CardsScreen.tsx Cards tab: full collection grid (locked = silhouette + ★ cost)
   DailyScreen.tsx Daily tab: today's puzzle CTA, streak, solve-history list
-  BottomNav.tsx  hand-rolled 3-tab bar (Home/Cards/Daily, dot = daily not done)
+  BottomNav.tsx  hand-rolled 3-tab bar (Cards/Home/Daily — Home is the middle,
+                 thumb-reachable slot; dot = daily not done)
   TutorialOverlay.tsx  spotlight blackout + coach card (first-play tutorial)
   HelpOverlay.tsx  "How to play" card
   SplashScreen.tsx animated launch splash (tray + tiles pop in, sprout rises,

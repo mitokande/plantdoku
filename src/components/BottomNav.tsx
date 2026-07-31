@@ -10,8 +10,10 @@ export type Tab = "home" | "cards" | "daily";
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
 const TABS: { key: Tab; icon: IoniconName; iconOff: IoniconName; label: string }[] = [
-  { key: "home", icon: "home", iconOff: "home-outline", label: "Home" },
+  // Home sits in the middle: it is the default tab and the one thumb-reachable
+  // slot on the bar, with the two meta tabs flanking it.
   { key: "cards", icon: "albums", iconOff: "albums-outline", label: "Cards" },
+  { key: "home", icon: "home", iconOff: "home-outline", label: "Home" },
   { key: "daily", icon: "sunny", iconOff: "sunny-outline", label: "Daily" },
 ];
 
@@ -54,21 +56,29 @@ export function BottomNav({ tab, onTab, dailyDot }: Props) {
               accessibilityLabel={label}
               style={styles.tab}
             >
-              {/* The selection marker hugs the icon: a full-width green capsule
-                  pulls attention off the screen's own content. It is always
-                  mounted, carrying its colour AND its radius from the first
-                  render, and only its opacity changes — see `pill`. */}
+              {/* The selection marker covers the whole tab — icon and label
+                  together — so the selected section reads as one lit block
+                  rather than a capsule floating over a dim caption. It is
+                  always mounted, carrying its colour AND its radius from the
+                  first render, and only its opacity changes — see `pill`. */}
+              <View
+                pointerEvents="none"
+                style={[styles.pill, { opacity: active ? 1 : 0 }]}
+              />
               <View style={styles.iconSlot}>
-                <View
-                  pointerEvents="none"
-                  style={[styles.pill, { opacity: active ? 1 : 0 }]}
-                />
                 <Ionicons
                   name={active ? icon : iconOff}
                   size={21}
                   color={active ? theme.onAccent : theme.textDim}
                 />
-                {key === "daily" && dailyDot && <View style={styles.dot} />}
+                {key === "daily" && dailyDot && (
+                  <View
+                    style={[
+                      styles.dot,
+                      { borderColor: active ? theme.accent : theme.panel },
+                    ]}
+                  />
+                )}
               </View>
               <Text style={[styles.label, active && styles.labelActive]}>
                 {label}
@@ -99,6 +109,7 @@ const styles = StyleSheet.create({
   tab: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     height: TAB_H,
     paddingVertical: TAB_PAD_V,
   },
@@ -117,9 +128,12 @@ const styles = StyleSheet.create({
   //  2. The radius is half the height, not `999`; an out-of-spec radius is at
   //     the platform's mercy when it clamps.
   // Selection is therefore pure opacity on a view that is always mounted.
+  // It fills the tab, inset 2px so neighbouring sections never share an edge,
+  // and its radius is half the tab's own (fixed) height for the same reason.
   pill: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: SLOT_H / 2,
+    marginHorizontal: 2,
+    borderRadius: TAB_H / 2,
     backgroundColor: theme.accent,
   },
   dot: {
@@ -140,8 +154,10 @@ const styles = StyleSheet.create({
     lineHeight: LABEL_LINE,
     marginTop: LABEL_GAP,
   },
+  // On the lit pill the label sits on `accent`, so it takes that fill's own
+  // type colour — `accentDark` on green is the low-contrast pair.
   labelActive: {
-    color: theme.accentDark,
+    color: theme.onAccent,
     fontWeight: "900",
   },
 });
