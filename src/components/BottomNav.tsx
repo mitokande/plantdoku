@@ -14,7 +14,7 @@ const TABS: { key: Tab; icon: IoniconName; iconOff: IoniconName; label: string }
   // slot on the bar, with the two meta tabs flanking it.
   { key: "cards", icon: "albums", iconOff: "albums-outline", label: "Cards" },
   { key: "home", icon: "home", iconOff: "home-outline", label: "Home" },
-  { key: "daily", icon: "sunny", iconOff: "sunny-outline", label: "Daily" },
+  { key: "daily", icon: "calendar", iconOff: "calendar-outline", label: "Daily" },
 ];
 
 // The bar and the selection pill are **capsules with exact radii**, not

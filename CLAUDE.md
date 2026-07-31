@@ -128,9 +128,12 @@ tier (see Generator), so every board is solvable by pure logic, no guessing.
 **Progression is level-based** (no difficulty picker): 60 curated levels in
 `src/game/levels.ts`, each `{difficulty, seed}` — generation is **seeded and
 deterministic**, so every player gets the identical board for level N. Curve:
-ramp with breathers (L1–8 easy, L9–19 medium with an easy breather at L12,
-L20+ hard with medium breathers at L21/L25, finale L26–30), then a veteran
-batch L31–60 (hard-leaning, medium breathers at L36/L40/L45/L50/L55).
+a **15-level easy warm-up** (all 6×6; the ramp inside it is deduction depth,
+tier 1 for L1–6 then tier 2 — `PREFER_TIER` in the seed picker is what buys
+that, since "first in-band seed wins" would otherwise scatter the tiers), then
+L16–19 medium, L20+ hard with medium breathers at L21/L25, finale L26–30, then
+a veteran batch L31–60 (hard-leaning, medium breathers at L36/L40/L45/L50/L55).
+Note the easy run now ends exactly where Endless unlocks (level 15).
 Completing the highest unlocked level unlocks the next; after L60 the menu
 shows "more levels coming soon". Seeds are minted offline by
 `scripts/pick_level_seeds.ts` (`npx tsx`) from its CURVE array, which verifies
