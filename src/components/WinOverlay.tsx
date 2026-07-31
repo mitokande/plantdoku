@@ -1,14 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { Animated, Image, StyleSheet, Text, View } from "react-native";
 
-import {
-  CARDS,
-  nextCard,
-  RARITY_COLORS,
-  unlockedCards,
-  type PlantCard,
-} from "../game/cards";
+import { nextCard, RARITY_COLORS, type PlantCard } from "../game/cards";
 import { PLANT_SOURCES } from "../game/plants";
 import { formatTime } from "../format";
 import { overlayZ, radius, scrim, shadow, space, theme, typography } from "../theme";
@@ -45,8 +39,9 @@ interface Props {
   onMenu: () => void;
 }
 
-// The card-unlock reveal: silhouette holds, flips, full-colour plant lands,
-// then the name. Tapping the backdrop skips straight to the end.
+// The card-unlock reveal: silhouette holds, flips, full-colour plant lands —
+// and that is the whole beat, nothing arrives after it. Tapping the backdrop
+// skips straight to the end.
 const REVEAL_DELAY = 320;
 const REVEAL_MS = 620;
 
@@ -67,7 +62,6 @@ export function WinOverlay({
   // one — null once the whole collection is unlocked.
   const upcoming = !wonCard && stars != null ? nextCard(totalStars) : null;
   const progress = upcoming ? Math.min(totalStars / upcoming.stars, 1) : 0;
-  const collected = unlockedCards(totalStars).length;
 
   // Springy entrance: backdrop fades while the card scales up with overshoot.
   const enter = useRef(new Animated.Value(0)).current;
@@ -81,8 +75,10 @@ export function WinOverlay({
   }, [enter]);
 
   // The won card is the hero: it flips from face-down silhouette to the plant.
+  // Nothing renders off "the flip has finished" any more, so it is tracked in a
+  // ref — a state flag here would re-render the card for no visible reason.
   const flip = useRef(new Animated.Value(0)).current;
-  const [named, setNamed] = useState(false);
+  const revealed = useRef(false);
   useEffect(() => {
     if (!wonCard) return;
     const anim = Animated.timing(flip, {
@@ -91,16 +87,18 @@ export function WinOverlay({
       duration: REVEAL_MS,
       useNativeDriver: true,
     });
-    anim.start(({ finished }) => finished && setNamed(true));
+    anim.start(({ finished }) => {
+      if (finished) revealed.current = true;
+    });
     return () => anim.stop();
   }, [wonCard, flip]);
 
   /** Jump the reveal to its end — the reward beat must never be a wait. */
   const skipReveal = () => {
-    if (!wonCard || named) return;
+    if (!wonCard || revealed.current) return;
     flip.stopAnimation();
     flip.setValue(1);
-    setNamed(true);
+    revealed.current = true;
   };
 
   const fade = enter.interpolate({
@@ -225,14 +223,11 @@ export function WinOverlay({
                 />
               </Animated.View>
             </View>
-            {named && (
-              <Text style={styles.heroMeta}>
-                <Text style={{ color: RARITY_COLORS[wonCard.rarity] }}>
-                  {wonCard.rarity}
-                </Text>
-                {`  ·  ${collected}/${CARDS.length}`}
-              </Text>
-            )}
+            {/* Nothing under the hero. The rarity + `N/17 collected` line used
+                to land *after* the flip, so the card grew a line of text a beat
+                late — a reward beat that twitches. The rarity is already in the
+                glow and the frame, and the collection count lives on the Cards
+                tab. */}
           </View>
         ) : upcoming ? (
           <View style={styles.progressWrap}>
@@ -248,12 +243,9 @@ export function WinOverlay({
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { width: `${progress * 100}%` }]} />
             </View>
-            {/* No sentence here either — the "?" card above already says what
-                is being worked toward, so the bar just needs its number. */}
-            <Text style={styles.barLabel}>
-              <Ionicons name="star" size={12} color={theme.gold} />
-              {`  ${totalStars}/${upcoming.stars}`}
-            </Text>
+            {/* The bar alone. The "?" card above says what is being worked
+                toward and the fill says how far along it is — the `★ 34/40`
+                under it was the same fact spelled out. */}
           </View>
         ) : null}
 
@@ -358,12 +350,6 @@ const styles = StyleSheet.create({
   heroFace: {
     position: "absolute",
   },
-  heroMeta: {
-    ...typography.caption,
-    color: theme.textDim,
-    marginTop: space(2),
-    textTransform: "capitalize",
-  },
   progressWrap: {
     alignSelf: "stretch",
     alignItems: "center",
@@ -394,11 +380,6 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 4,
     backgroundColor: theme.gold,
-  },
-  barLabel: {
-    ...typography.caption,
-    color: theme.textDim,
-    marginTop: space(2),
   },
   stars: {
     flexDirection: "row",
