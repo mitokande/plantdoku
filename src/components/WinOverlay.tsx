@@ -30,7 +30,7 @@ interface Props {
   /** Coins this solve paid out. 0 on a replay, which shows no line at all. */
   coinsEarned?: number;
   /** Set when the solve reached a chest level — celebrated on its own line. */
-  milestone?: { level: number; coins: number } | null;
+  milestone?: { level: number; coins: number; hints: number } | null;
   /**
    * The card's only action: "Continue" leaves the board for Home. There is
    * deliberately no next-level / new-board shortcut here — the win card ends
@@ -127,6 +127,11 @@ export function WinOverlay({
       : []),
     ...(milestone
       ? [{ icon: "gift" as const, value: `+${milestone.coins}`, gold: true }]
+      : []),
+    // The chest's hint half rides in as its own number, not folded into the
+    // gift chip — they are different currencies and the row is icon+number.
+    ...(milestone && milestone.hints > 0
+      ? [{ icon: "bulb" as const, value: `+${milestone.hints}`, gold: true }]
       : []),
   ];
 

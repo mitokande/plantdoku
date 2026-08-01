@@ -24,6 +24,7 @@ import { Button } from "./Button";
 import { FailOverlay } from "./FailOverlay";
 import { Hearts } from "./Hearts";
 import { HelpOverlay } from "./HelpOverlay";
+import { HintOverlay } from "./HintOverlay";
 import { Tappable } from "./Tappable";
 import { TutorialOverlay, type Hole } from "./TutorialOverlay";
 import { FLOURISH_MS, WinFlourish } from "./WinFlourish";
@@ -148,6 +149,9 @@ const RULES = [
 export function GameScreen({ game, onMenu, onHome }: Props) {
   const { size } = game.puzzle;
   const [showHelp, setShowHelp] = useState(false);
+  // The out-of-hints offer. Opened only by a Hint press that found the stock
+  // empty — the button never advertises the ad on its own.
+  const [hintOffer, setHintOffer] = useState(false);
   // Which collapsed rule chip is showing its explanation (null = none).
   const [openRule, setOpenRule] = useState<number | null>(null);
   // Reset throws away real work, so it asks once when there is any to throw
@@ -174,6 +178,24 @@ export function GameScreen({ game, onMenu, onHome }: Props) {
   const onReset = () => {
     if (resetArmed || game.placedCount === 0) resetNow();
     else armReset();
+  };
+
+  // Hints are consumable now, so the button has two jobs: spend one, or — when
+  // there are none — open the offer. `requestHint` returns false in exactly
+  // that case, which keeps the decision in the hook (it owns the stock) and the
+  // presentation here.
+  const onHint = () => {
+    if (game.requestHint()) return;
+    setHintOffer(true);
+  };
+
+  // Watching pays into the stock; it deliberately does NOT auto-spend the hint
+  // it just bought. The player asked for a hint a moment ago, but planting one
+  // the instant an ad ends takes the board out of their hands — they tap Hint
+  // again, now with a stocked button.
+  const watchForHint = async () => {
+    const earned = await game.watchAdForHints();
+    if (earned) setHintOffer(false);
   };
 
   // Every way out of the board goes through here: an unfinished board is
@@ -741,11 +763,11 @@ export function GameScreen({ game, onMenu, onHome }: Props) {
               stretches to full width on its own. */}
           <Button
             label="Hint"
-            icon="bulb"
+            icon={game.canHint ? "bulb" : "play-circle"}
             variant="forest"
-            onPress={game.requestHint}
+            onPress={onHint}
             disabled={tutorial}
-            badge={game.hintsUsed}
+            badge={game.hints}
             pill
           />
         </View>
@@ -766,6 +788,15 @@ export function GameScreen({ game, onMenu, onHome }: Props) {
       </View>
 
       {showHelp && <HelpOverlay onClose={() => setShowHelp(false)} />}
+
+      {hintOffer && (
+        <HintOverlay
+          hintsPerAd={game.hintsPerAd}
+          pending={game.adPending}
+          onWatch={watchForHint}
+          onClose={() => setHintOffer(false)}
+        />
+      )}
 
       {tutorial && (
         <TutorialOverlay

@@ -46,7 +46,16 @@
         }
       ],
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "iosAppId": "ca-app-pub-4604843322018757~5047930621",
+          "androidAppId": "ca-app-pub-4604843322018757~8222823109",
+          "userTrackingUsageDescription": "This lets us show ads that are more relevant to you. Plantdoku works exactly the same either way.",
+          "delayAppMeasurementInit": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -156,6 +156,70 @@ the old `placeClearingConflicts` helper is gone). One undoable step,
 never a mistake, no message or highlight — just the plant appearing. Counts
 toward `hintsUsed` (gates the "no hints" star, see Stars below).
 
+**Hints are consumable** — the game's *second* currency, and deliberately not
+priced in coins. A new player starts with `STARTING_HINTS` (5); the stock is
+persisted at `plantdoku:hints` and topped up by exactly two faucets: a chest
+level (`MILESTONE_HINTS` 2, paid on the same "reached, not cleared" edge as the
+chest coins) and a **rewarded ad** (`HINTS_PER_AD` 1). Every number is in
+`economy.ts` with the rest of the economy; the UI reads `hints` / `canHint` /
+`hintsPerAd` off `useGame` and never imports them.
+
+Coins were the obvious price and are the wrong one: they buy exactly one thing
+(a revive), and a second sink would turn every coin into a comparison — a hint
+should cost attention, not currency. Keep them separate.
+
+`requestHint()` therefore **returns a boolean**: it debits the stock and
+dispatches `HINT`, or returns false when the stock is empty (tracking
+`hint_blocked`, the demand signal). The hook deliberately does *not* open the ad
+offer itself — `GameScreen.onHint` does, so the reducer and the ad flow stay
+independent. `HintOverlay.tsx` is that offer: one Watch button, one "No thanks",
+and it is the only place in the app that mentions an ad — the Hint button itself
+never nags, it just runs out (its icon flips `bulb` → `play-circle` at zero, and
+its gold badge is the stock, not `hintsUsed`). **Watching does not auto-plant
+the hint it just bought**: the player taps Hint again, now with a stocked
+button, so an ad ending never takes the board out of their hands.
+
+Spending a hint still costs the "no hints" star, so a well-stocked player can't
+3★ everything — the two economies stay independent that way.
+
+**Ads (`src/ads/`)**: same facade shape as `src/analytics` and `src/audio` —
+`ads.showRewarded(placement)` resolves **whether the reward was earned**, and
+the caller owns the payout, so a dropped promise can't mint hints.
+`react-native-google-mobile-ads` (AdMob) is imported **nowhere else**, and
+`App.tsx` calls `ads.init()` once (SDK init + UMP consent + warming the first
+ad) fire-and-forget — a player who never runs out of hints never sees an ad.
+
+Four things here are load-bearing:
+
+- **The SDK is a platform split, not a lazy require.** Metro resolves every
+  `require` statically — even one inside a `try` — and the package imports RN
+  internals that don't exist on web, so naming it in `index.ts` broke
+  `expo export -p web` outright. `sdk.ts` (native) / `sdk.web.ts` (null) is the
+  fix; TypeScript resolves the extensionless one, which is why the real
+  implementation lives there rather than in a `.native.ts`.
+- **Never show a real ad in development.** `unitId()` forces `TestIds.REWARDED`
+  under `__DEV__`; developer clicks on a live unit are invalid traffic and get
+  AdMob accounts suspended.
+- **Failure grants.** An ad the player *dismissed early* resolves `false`, but
+  no SDK / no fill / an 8s load timeout / a thrown error all resolve `true`.
+  They asked for a hint and accepted the price; the ad network having a bad
+  minute is our problem, not theirs.
+- One ad is kept warm per placement and the next is fetched the moment one is
+  consumed, so an accepted offer doesn't sit on a spinner.
+
+`useGame.watchAdForHints()` guards re-entry with a **ref** (`adBusy`), not the
+`adPending` state, since two taps can land before a re-render.
+
+**Installing the SDK ended Expo Go for this project** — it is a native module,
+so `npm start` + Expo Go will crash on launch and testing needs
+`npx expo run:ios` or an EAS build. `npm test`, `npm run typecheck` and
+`expo export -p web` are unaffected (the facade no-ops with no SDK).
+
+IDs live in two places and must agree: **app IDs** in `app.json`'s plugin config
+(`iosAppId` / `androidAppId`) and **rewarded unit IDs** in `REWARDED_UNIT_IDS`.
+Both platforms carry the owner's live pairs; the only test IDs still in play are
+the ones `__DEV__` substitutes at runtime.
+
 **No auto-complete**: the last plant is placed by the player like every other
 one (a "Finish" button + staged sweep existed briefly and was removed — no
 `AUTO_COMPLETE` action, `canAutoComplete`, `FinishFab`, or `auto_completed`
@@ -242,6 +306,9 @@ re-derives from the board and cascades to the furthest completed stage.
 - Visuals: `expo-linear-gradient` (gameplay-screen background).
 - Analytics: **PostHog** (`posthog-react-native`) behind a thin facade in
   `src/analytics/` — see below.
+- Ads: **AdMob** (`react-native-google-mobile-ads`) behind the `src/ads/` facade
+  — a **native module**, so this project no longer runs in Expo Go; use
+  `npx expo run:ios` or an EAS dev build.
 - Web support is installed (`react-native-web`, `react-dom`, `@expo/metro-runtime`)
   so the app also runs in a browser and can be smoke-tested headlessly.
 
@@ -261,7 +328,9 @@ Events are fired from `useGame.ts` (the lifecycle funnel: `game_started`,
 `level_completed`/`daily_completed`/`endless_completed`, `board_failed`,
 `board_abandoned`/`board_resumed`, `mistake_made`, `hint_requested`,
 `card_unlocked`, `undo_used`/`board_reset`/`board_retried`,
-`coins_earned`/`coins_spent`/`revive_used`/`milestone_reached` (revive matters most — it is
+`coins_earned`/`coins_spent`/`revive_used`/`milestone_reached`,
+`hint_blocked`/`hints_earned`/`rewarded_ad` (the hint economy's whole ledger:
+demand, faucet, and whether the offered ad was watched through) (revive matters most — it is
 the only sink, so it measures whether the currency does anything; it also means
 `hearts_left` on the *_completed events no longer implies the board never
 dropped to one heart),
@@ -880,9 +949,10 @@ src/game/
   daily.ts       daily puzzle: date key -> seed (FNV-1a, golden-pinned) + streak
                  date math — pure data, headless-safe
   stars.ts       par times (size+tier) + starsFor — headless-safe
-  economy.ts     coin faucet + revive price + chest levels/bonus (every
-                 tunable number) — headless-safe; HomeScreen imports
-                 MILESTONE_* so the chest shown is the chest that pays
+  economy.ts     coin faucet + revive price + chest levels/bonus + the hint
+                 stock (start/ad/chest) — every tunable number, headless-safe;
+                 HomeScreen imports MILESTONE_* so the chest shown is the chest
+                 that pays
   cards.ts       plant-card collection: 17 cards + star milestones, unlock
                  helpers — headless-safe
   palette.ts     PLANT_IDS (17, one picked per board) + REGION_COLORS
@@ -902,6 +972,8 @@ src/state/useGame.ts   reducer hook: PAINT/ERASE/PLACE/TAP, undo/reset/hint,
                  onboarded + soundOn + resume slots (AsyncStorage)
 src/audio/index.ts     SFX facade over expo-audio (play(SoundName), mute) —
                  RN ONLY, no-op on web (do not import in core)
+src/ads/index.ts       rewarded-ad facade over AdMob (showRewarded -> earned?)
+                 + sdk.ts / sdk.web.ts platform split — RN ONLY, no-op on web
 src/components/
   Board.tsx      n×n grid + PanResponder gestures (the gesture brain) + highlight ring
   Cell.tsx       display-only cell; derives the available/excluded/planted
@@ -917,6 +989,7 @@ src/components/
                  thumb-reachable slot; dot = daily not done)
   TutorialOverlay.tsx  spotlight blackout + coach card (first-play tutorial)
   HelpOverlay.tsx  "How to play" card
+  HintOverlay.tsx  out-of-hints offer: watch a rewarded ad for +1 hint
   SplashScreen.tsx animated launch splash (tray + tiles pop in, sprout rises,
                  wordmark, loading bar) — cosmetic only, tap to skip
   SettingsOverlay.tsx settings modal: SFX toggle (useGame.soundOn/setSoundOn) +

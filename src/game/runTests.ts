@@ -9,16 +9,21 @@ import { CARDS, newlyUnlocked, nextCard, unlockedCards } from "./cards";
 import { DAILY_DIFFICULTY, dailyNumber, dailySeed, isConsecutive } from "./daily";
 import {
   canAfford,
+  canHint,
   COINS_PER_DAILY,
   COINS_PER_LEVEL,
   dailyCoins,
   endlessCoins,
+  HINTS_PER_AD,
   isMilestoneLevel,
   MILESTONE_COINS,
   MILESTONE_EVERY,
+  MILESTONE_HINTS,
   milestoneCoins,
+  milestoneHints,
   REVIVE_COST,
   STARTING_COINS,
+  STARTING_HINTS,
 } from "./economy";
 import { generatePuzzle, generateUniqueBoard } from "./generator";
 import { LEVELS } from "./levels";
@@ -367,6 +372,27 @@ check(
     !canAfford(REVIVE_COST - 1, REVIVE_COST) &&
     !canAfford(NaN, REVIVE_COST),
   "canAfford must be inclusive at the price and reject NaN",
+);
+
+// --- the hint stock (the second consumable) -------------------------------
+check(
+  whole(STARTING_HINTS) && whole(HINTS_PER_AD) && whole(MILESTONE_HINTS),
+  "hint constants must be whole positive numbers",
+);
+check(
+  canHint(1) && canHint(STARTING_HINTS) && !canHint(0) && !canHint(-1) && !canHint(NaN),
+  "canHint must require a positive stock and reject NaN",
+);
+check(
+  milestoneHints(MILESTONE_EVERY) === MILESTONE_HINTS &&
+    milestoneHints(MILESTONE_EVERY + 1) === 0,
+  "milestoneHints must pay only on chest levels",
+);
+// A player must be able to run out — the whole ad offer is unreachable
+// otherwise, and the "no hints" star would stop meaning anything.
+check(
+  STARTING_HINTS < LEVELS.length,
+  "STARTING_HINTS must be spendable within the level table",
 );
 console.log("  ok");
 

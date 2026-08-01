@@ -57,6 +57,16 @@ export type EventName =
   | "board_abandoned" // left an unfinished board (drop-off signal)
   | "board_resumed" // picked a saved board back up
   | "hint_requested"
+  // The hint economy. Hints are consumable and are NOT bought with coins, so
+  // this trio is its whole ledger: `hint_blocked` fires when the player wanted
+  // a hint and had none (the demand signal), `rewarded_ad` carries whether the
+  // ad they were offered was actually watched to the reward, and
+  // `hints_earned` is the faucet (reason = ad | milestone). A `hint_blocked`
+  // with no `rewarded_ad` behind it is an offer declined; a `rewarded_ad` with
+  // `earned: false` is one abandoned part-way.
+  | "hint_blocked"
+  | "hints_earned"
+  | "rewarded_ad"
   | "mistake_made"
   | "undo_used"
   | "card_unlocked"

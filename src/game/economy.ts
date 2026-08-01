@@ -43,6 +43,8 @@ export const STARTING_COINS = 0;
  */
 export const MILESTONE_EVERY = 10;
 export const MILESTONE_COINS = 100;
+/** A chest pays hints as well as coins — see the hint stock below. */
+export const MILESTONE_HINTS = 2;
 
 /** Whether `level` carries a chest. */
 export function isMilestoneLevel(level: number): boolean {
@@ -58,6 +60,33 @@ export function isMilestoneLevel(level: number): boolean {
  */
 export function milestoneCoins(level: number): number {
   return isMilestoneLevel(level) ? MILESTONE_COINS : 0;
+}
+
+/** The hint half of the same chest, paid on the same edge. */
+export function milestoneHints(level: number): number {
+  return isMilestoneLevel(level) ? MILESTONE_HINTS : 0;
+}
+
+// --- Hints ----------------------------------------------------------------
+// The second consumable, and deliberately *not* priced in coins. Coins buy
+// exactly one thing (a revive); giving them a second sink would make every
+// coin decision a comparison, and the hint's price is meant to be attention,
+// not currency. So the hint stock has its own faucet: a starting grant, the
+// chest levels, and a rewarded ad when the player runs dry.
+//
+// Note hints stay free of the *star* economy either way: spending one still
+// costs the "no hints" star, which is what keeps a stocked player from
+// three-starring everything.
+
+/** What a new (or freshly flushed) player starts with. */
+export const STARTING_HINTS = 5;
+
+/** What one completed rewarded ad pays. One ad, one hint. */
+export const HINTS_PER_AD = 1;
+
+/** Whether a hint can be spent at all. Guards NaN from a corrupt value. */
+export function canHint(hints: number): boolean {
+  return Number.isFinite(hints) && hints > 0;
 }
 
 /** Endless payout by board size — the mode's first actual reward. */

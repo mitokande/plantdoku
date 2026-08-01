@@ -5,6 +5,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { ads } from "../ads";
 import { analytics } from "../analytics";
 import { audio } from "../audio";
 import { notifications } from "../notifications";
@@ -17,12 +18,16 @@ import {
 } from "../game/daily";
 import {
   canAfford,
+  canHint,
   COINS_PER_LEVEL,
   dailyCoins,
   endlessCoins,
+  HINTS_PER_AD,
   milestoneCoins,
+  milestoneHints,
   REVIVE_COST,
   STARTING_COINS,
+  STARTING_HINTS,
 } from "../game/economy";
 import { generatePuzzle } from "../game/generator";
 import { getLevel, LEVEL_COUNT } from "../game/levels";
@@ -132,6 +137,7 @@ const RESUME_KEY = "plantdoku:resume"; // JSON ResumeSnapshot of a live board
 const SOUND_KEY = "plantdoku:sound"; // "0" when SFX are muted (default: on)
 const NOTIF_KEY = "plantdoku:notifications"; // "0" when reminders off (default: on)
 const COINS_KEY = "plantdoku:coins"; // integer balance (see game/economy.ts)
+const HINTS_KEY = "plantdoku:hints"; // integer hint stock (see game/economy.ts)
 
 const emptyGrid = (size: number): CellState[][] =>
   Array.from({ length: size }, () => new Array<CellState>(size).fill("empty"));
@@ -566,16 +572,30 @@ export function useGame(initialLevel = 1) {
   // screen, so the win overlay can show "+20".
   const [coins, setCoins] = useState(STARTING_COINS);
   const [coinsEarned, setCoinsEarned] = useState(0);
+  // The hint stock: the game's second consumable, and the only one that isn't
+  // bought with coins — it is topped up by a rewarded ad and by chest levels
+  // (see game/economy.ts for why it stays out of the coin economy).
+  const [hints, setHints] = useState(STARTING_HINTS);
+  // True while a rewarded ad is on screen, so the UI can show a pending state
+  // and refuse to start a second one.
+  const [adPending, setAdPending] = useState(false);
   // Set when the solve on screen reached a chest level, so the win card can
   // celebrate it separately from the ordinary per-level payout.
   const [milestone, setMilestone] = useState<{
     level: number;
     coins: number;
+    hints: number;
   } | null>(null);
   // Mirrors `coins` for the callbacks and effects below (same reason as
   // `stateRef`/`slotsRef`): a solve award and a revive spend can land in the
   // same tick, and reading stale state would silently mint or eat coins.
   const coinsRef = useRef(coins);
+  // Same hazard for hints: spending one and a chest paying two can land in the
+  // same tick (the finishing hint *is* what unlocks the next level).
+  const hintsRef = useRef(hints);
+  // Guards a second ad while one is in flight — a ref, because two taps can
+  // land before the pending state has re-rendered the button.
+  const adBusy = useRef(false);
   // Saved mid-solve boards, one per mode (drives the Home "Continue" card).
   const [slots, setSlots] = useState<ResumeSlots>({});
 
@@ -594,6 +614,7 @@ export function useGame(initialLevel = 1) {
         SOUND_KEY,
         NOTIF_KEY,
         COINS_KEY,
+        HINTS_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
       ];
       const pairs = await AsyncStorage.multiGet(keys);
@@ -646,6 +667,14 @@ export function useGame(initialLevel = 1) {
           const bal = Number.isFinite(n) && n >= 0 ? n : STARTING_COINS;
           setCoins(bal);
           coinsRef.current = bal;
+        } else if (key === HINTS_KEY) {
+          // Same NaN guard as the coin balance. Note an *absent* key can't fall
+          // back to STARTING_HINTS here — this branch only runs when the key
+          // exists, so a player who spends all five stays at zero.
+          const n = parseInt(v, 10);
+          const stock = Number.isFinite(n) && n >= 0 ? n : STARTING_HINTS;
+          setHints(stock);
+          hintsRef.current = stock;
         }
       }
       setEndlessBests(eb);
@@ -682,6 +711,26 @@ export function useGame(initialLevel = 1) {
     const bal = setBalance(coinsRef.current - n);
     analytics.track("coins_spent", { amount: n, reason, balance: bal });
     return true;
+  };
+
+  // --- Hints ---------------------------------------------------------------
+  // Same shape as the coin helpers above, and for the same reasons: every
+  // mutation goes through `hintsRef` so two changes in one tick compose, and
+  // writes go straight through to storage.
+  const setHintStock = (next: number) => {
+    const stock = Math.max(0, Math.round(next));
+    hintsRef.current = stock;
+    setHints(stock);
+    AsyncStorage.setItem(HINTS_KEY, String(stock)).catch(() => {});
+    return stock;
+  };
+
+  /** Pay out `n` hints. Returns the new stock. */
+  const awardHints = (n: number, reason: string) => {
+    if (!(n > 0)) return hintsRef.current;
+    const stock = setHintStock(hintsRef.current + n);
+    analytics.track("hints_earned", { amount: n, reason, stock });
+    return stock;
   };
 
   // --- Resume slot ---------------------------------------------------------
@@ -901,10 +950,18 @@ export function useGame(initialLevel = 1) {
           // now, as `next` becomes playable — which is the same moment the path
           // stops drawing it. Clearing level 9 collects the level-10 chest.
           const bonus = next <= LEVEL_COUNT ? milestoneCoins(next) : 0;
+          const bonusHints = next <= LEVEL_COUNT ? milestoneHints(next) : 0;
           if (bonus > 0) {
             awardCoins(bonus, "milestone");
-            setMilestone({ level: next, coins: bonus });
-            analytics.track("milestone_reached", { level: next, coins: bonus });
+            // The chest pays hints as well as coins, on the same edge — the
+            // hint stock has no other repeatable faucet but the ad.
+            awardHints(bonusHints, "milestone");
+            setMilestone({ level: next, coins: bonus, hints: bonusHints });
+            analytics.track("milestone_reached", {
+              level: next,
+              coins: bonus,
+              hints: bonusHints,
+            });
           } else {
             setMilestone(null);
           }
@@ -1035,6 +1092,12 @@ export function useGame(initialLevel = 1) {
     canUndo: state.history.length > 0,
     undoDepth: state.history.length,
     hintsUsed: state.hintsUsed,
+    // The consumable stock (what the Hint button spends), whether one can be
+    // spent right now, and whether an ad is already on screen.
+    hints,
+    canHint: canHint(hints),
+    hintsPerAd: HINTS_PER_AD,
+    adPending,
     // The most recent saved board, as the Home "Continue" card needs it.
     resume: resumeSummary(newestSlot(slots)),
     // Per-mode summaries, so Play / the Daily tab can pick their own board up
@@ -1135,6 +1198,7 @@ export function useGame(initialLevel = 1) {
         SOUND_KEY,
         NOTIF_KEY,
         COINS_KEY,
+        HINTS_KEY,
         ...ENDLESS_DIFFICULTIES.map(endlessBestKey),
         // Not written any more; cleared so a flush still tidies old installs.
         ...Array.from({ length: LEVEL_COUNT }, (_, i) => legacyLevelBestKey(i + 1)),
@@ -1148,6 +1212,8 @@ export function useGame(initialLevel = 1) {
       setStarsByLevel({});
       setCoins(STARTING_COINS);
       coinsRef.current = STARTING_COINS;
+      setHints(STARTING_HINTS);
+      hintsRef.current = STARTING_HINTS;
       setCoinsEarned(0);
       setOnboarded(false);
       setSoundOnState(true);
@@ -1236,14 +1302,49 @@ export function useGame(initialLevel = 1) {
       dispatch({ type: "REVIVE" });
       return true;
     },
-    // Places the next row's plant directly (one undoable step).
+    // Places the next row's plant directly (one undoable step), spending one
+    // from the stock. Returns false when there is none to spend, which is the
+    // UI's cue to offer the ad — the hook deliberately doesn't open that offer
+    // itself, so the reducer and the ad flow stay independent.
     requestHint: () => {
-      if (state.solved || state.failed) return;
+      if (state.solved || state.failed) return false;
+      if (!canHint(hintsRef.current)) {
+        analytics.track("hint_blocked", {
+          mode: state.mode,
+          level: state.level || undefined,
+        });
+        return false;
+      }
+      const stock = setHintStock(hintsRef.current - 1);
       analytics.track("hint_requested", {
         mode: state.mode,
         level: state.level || undefined,
+        stock_after: stock,
       });
       dispatch({ type: "HINT" });
+      return true;
+    },
+    // Watch a rewarded ad for hints. The payout happens here and only on a
+    // `true` from the facade, so an ad that was dismissed early pays nothing;
+    // an ad that could not be shown at all resolves `true` (see src/ads) —
+    // failing toward the player, never against them.
+    //
+    // `adBusy` is a ref, not the state flag, because two taps can land before a
+    // re-render and the second must not open a second ad.
+    watchAdForHints: async () => {
+      if (adBusy.current) return false;
+      adBusy.current = true;
+      setAdPending(true);
+      try {
+        const earned = await ads.showRewarded("hint");
+        analytics.track("rewarded_ad", { placement: "hint", earned });
+        if (!earned) return false;
+        awardHints(HINTS_PER_AD, "ad");
+        return true;
+      } finally {
+        adBusy.current = false;
+        setAdPending(false);
+      }
     },
   };
 }

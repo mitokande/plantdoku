@@ -12,7 +12,7 @@ import {
 import { nextCard, type PlantCard } from "../game/cards";
 // The chest levels and their payout come from the economy module, so the chest
 // the player is shown is always the chest that actually pays.
-import { MILESTONE_COINS, MILESTONE_EVERY } from "../game/economy";
+import { MILESTONE_COINS, MILESTONE_EVERY, MILESTONE_HINTS } from "../game/economy";
 import { PLANT_SOURCES } from "../game/plants";
 import { LEVEL_COUNT } from "../game/levels";
 import type { Difficulty } from "../game/types";
@@ -230,7 +230,7 @@ function LevelNode({
               <Text style={styles.calloutTitle}>Milestone</Text>
             </View>
             <Text style={styles.calloutSub}>
-              {`Reach level ${level}\nfor ${MILESTONE_COINS} coins!`}
+              {`Reach level ${level}\nfor ${MILESTONE_COINS} coins\n+ ${MILESTONE_HINTS} hints!`}
             </Text>
           </View>
         ) : showReward && reward ? (

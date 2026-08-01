@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import { ads } from "./src/ads";
 import { analytics } from "./src/analytics";
 import { BottomNav, type Tab } from "./src/components/BottomNav";
 import { CardsScreen } from "./src/components/CardsScreen";
@@ -124,6 +125,13 @@ export default function App() {
   // already on screen behind the native one — hand over.
   useEffect(() => {
     NativeSplash.hideAsync().catch(() => {});
+  }, []);
+
+  // Start the ad SDK, gather consent and warm the first rewarded ad. Fire and
+  // forget: `init` swallows its own failures, and nothing on screen waits for
+  // it — a player who never runs out of hints never sees an ad at all.
+  useEffect(() => {
+    ads.init();
   }, []);
 
   // Record the active screen (game board, or the current tab when in the shell).
