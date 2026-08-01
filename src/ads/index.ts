@@ -13,6 +13,17 @@
 // require below is lazy and every function degrades to the no-SDK path rather
 // than throwing. That path *grants* the reward (see `showRewarded`).
 
+// **The `react-native-google-mobile-ads` version is pinned exactly (16.0.0),
+// not caret-ranged, and that pin is load-bearing.** 16.1+ moves to
+// `play-services-ads` 25.x, whose classes carry Kotlin 2.3.0 metadata, while
+// Expo SDK 54's toolchain tops out at Kotlin 2.2.20 (its KSP map refuses
+// anything newer) — so the Android build dies in
+// `:react-native-google-mobile-ads:compileReleaseKotlin` with "Module was
+// compiled with an incompatible version of Kotlin". Forcing an older
+// play-services-ads under a newer library doesn't work either: 16.4's Kotlin
+// calls 25.x-only APIs (`AgeRestrictedTreatment`). Revisit only when Expo's
+// Kotlin moves past 2.3.
+
 import { Platform } from "react-native";
 
 import { sdk } from "./sdk";

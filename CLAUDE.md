@@ -210,6 +210,18 @@ Four things here are load-bearing:
 `useGame.watchAdForHints()` guards re-entry with a **ref** (`adBusy`), not the
 `adPending` state, since two taps can land before a re-render.
 
+**The AdMob package version is pinned exactly — `"react-native-google-mobile-ads": "16.0.0"`, no caret.** 16.1+ pulls
+`play-services-ads` 25.x, whose classes carry **Kotlin 2.3.0 metadata**, and
+Expo SDK 54 tops out at Kotlin 2.2.20 (`expo-root-project`'s KSP map rejects
+anything newer), so the Android build fails in
+`:react-native-google-mobile-ads:compileReleaseKotlin` with "Module was compiled
+with an incompatible version of Kotlin". Pinning the *ads SDK* down while
+keeping the newer library is not a workaround — 16.4's Kotlin calls 25.x-only
+APIs (`AgeRestrictedTreatment`), so it fails to compile a different way. Bump
+this only after Expo's Kotlin passes 2.3, and re-run
+`cd android && ./gradlew :react-native-google-mobile-ads:compileReleaseKotlin`
+before believing it.
+
 **Installing the SDK ended Expo Go for this project** — it is a native module,
 so `npm start` + Expo Go will crash on launch and testing needs
 `npx expo run:ios` or an EAS build. `npm test`, `npm run typecheck` and
