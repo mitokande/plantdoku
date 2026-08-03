@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef } from "react";
-import { Animated, Image, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
 
 import { PLANT_SOURCES } from "../game/plants";
 import type { CellState } from "../game/types";
@@ -58,13 +58,12 @@ function shade([r, g, b]: RGB, k: number): RGB {
  * "available" one; a planted cell is the most vivid thing on the board (the
  * player's payoff) and an eliminated one recedes.
  *
- * `rim` and `glyph` are the two deeper shades every tile draws in its *own*
- * hue — a 1px outline and the embossed plant. Both are "more saturated and a
- * little darker", never "mixed toward a neutral": mixing a pastel toward a dark
- * green turned the silhouette into a grey smudge and cost the tile the only cue
- * that says which cluster it belongs to. Keeping them on-hue is also what lets
- * the tray be lighter than the tiles (see `theme.bed`) — a tile is outlined by
- * itself, not by the gap around it.
+ * `rim` is the deeper shade every tile draws in its *own* hue for its 1px
+ * outline — "more saturated and a little darker", never "mixed toward a
+ * neutral", or a pastel turns grey and the tile loses the cue that says which
+ * cluster it belongs to. Keeping it on-hue is also what lets the tray be
+ * lighter than the tiles (see `theme.bed`) — a tile is outlined by itself, not
+ * by the gap around it.
  *
  * `excluded` is only *softened*, never drained: which cluster a cell belongs to
  * is live information the player is still reasoning with ("one plant per
@@ -79,7 +78,6 @@ function tileStates(color: string) {
     planted: toHex(mix(saturate(base, 1.55), WHITE, 0.04)),
     excluded: toHex(mix(saturate(base, 0.8), DRAIN, 0.16)),
     rim: toHex(shade(saturate(base, 1.5), 0.88)),
-    glyph: toHex(shade(saturate(base, 1.9), 0.76)),
   };
 }
 
@@ -156,32 +154,9 @@ function CellView({ px, state, plantId, color, mistake }: Props) {
           placed && styles.tilePlaced,
         ]}
       >
-        {/* Embossed watermark of the board's plant, hidden under the
-            full-colour sprite once the cell is planted.
-
-            This Image is **always mounted** and only fades — do NOT put it
-            behind `{!placed && …}`. Conditionally mounting it meant that on
-            Android a cell which had ever held a plant lost its silhouette
-            permanently: the tinted Image never drew again once it had been
-            unmounted and remounted into a recycled native view. It showed up
-            as blank tiles at every position planted earlier in the session. */}
-        <Image
-          source={PLANT_SOURCES[plantId]}
-          resizeMode="contain"
-          style={[
-            styles.glyph,
-            {
-              // On a mistake tile the silhouette follows the red, or the
-              // region's green would read as a smudge on the pink.
-              tintColor: mistake ? theme.dangerDark : tint.glyph,
-              // Full strength on an untouched tile: the silhouette is the
-              // cluster's second identity cue after its colour, and on a pastel
-              // grid the colours alone are a narrow band. It still recedes hard
-              // under an ✕ so the mark reads unobstructed.
-              opacity: placed ? 0 : state === "marked" ? 0.16 : 1,
-            },
-          ]}
-        />
+        {/* The tile is a plain colour field: no embossed plant watermark. A
+            cluster reads by its colour alone, and the only sprite on the board
+            is a plant the player actually placed. */}
       </View>
       {/* Plant + ✕ live outside the tile so the spring overshoot / scale
           animations aren't clipped by its rounded overflow:hidden box. */}
@@ -276,14 +251,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.26,
     shadowRadius: 5,
     elevation: 4,
-  },
-  // Opacity is set inline per state (see the render): 1 available · 0.16 under
-  // an ✕ — still readable, because the cluster's colour and shape is what the
-  // player reasons with and an eliminated cell is not out of the puzzle — · 0
-  // when planted.
-  glyph: {
-    width: "60%",
-    height: "60%",
   },
   plantWrap: {
     position: "absolute",

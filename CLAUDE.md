@@ -19,7 +19,8 @@ Every generated board has exactly **one** solution.
 used to be *n* different species, one per colour; now the whole board is a
 single species. Clusters are told apart by **colour alone** — which is why the
 palette's touching-cluster separation floor now carries that job by itself (see
-`palette.ts`), and why the embossed silhouette is texture rather than identity.
+`palette.ts`). The tiles carry no watermark at all, so colour is the *only* cue:
+that floor is load-bearing.
 
 Which species is **player state, not board data**: `boardPlant` in `useGame.ts`
 picks `nextCard(totalStars).plantId` — the card the ★ progress bar points at —
@@ -667,20 +668,22 @@ section exists).
 
 - Cells are **rounded tiles** (radius = 0.2 × tile) with a 1px gap between them
   (the bed's `bedGap` shows through), a **1px rim in a deeper shade of the
-  tile's own colour**, and a **full-strength embossed glyph** of the board's
-  plant (the same species on every tile — see One plant per board). Everything a tile needs is derived in `Cell.tsx` from the one base tint
+  tile's own colour**, and **no watermark** — the tile face is a plain colour
+  field. (An embossed silhouette of the board's plant sat on every tile once and
+  was removed; don't re-add it without asking.) Everything a tile needs is
+  derived in `Cell.tsx` from the one base tint
   in `REGION_COLORS` (which is the *available* colour): `available` · `excluded`
   (only *softened* — ~0.8 saturation and a touch paler) · `planted` (saturation
-  boosted, bright white rim, small drop shadow, full-colour sprite) · `rim` and
-  `glyph` (saturated up and scaled down in luminance). **Keep `rim`/`glyph`
-  on-hue**: mixing a pastel toward a dark neutral turns the silhouette into a
+  boosted, bright white rim, small drop shadow, full-colour sprite) · `rim`
+  (saturated up and scaled down in luminance). **Keep `rim`
+  on-hue**: mixing a pastel toward a dark neutral turns the outline into a
   grey smudge and costs the tile its cluster identity. **Do not drain
   `excluded`** either: which cluster a ✕'d cell belongs to is information the
   player is still reasoning with, so the hue must survive the mark — the ✕
   carries the eliminated state, the tile only steps back. A solved cell should
   be the most vivid, most physically raised thing on the board — that's the
   player's payoff.
-- **No bold cluster borders.** Clusters read by colour + glyph; tile gaps and
+- **No bold cluster borders.** Clusters read by colour alone; tile gaps and
   rims are uniform everywhere. There is **no bevel** — a top-light/bottom-shade
   pair only muddies a pastel; the rim does the separating.
 - The ✕ must be **legible at a glance but never louder than a plant.** Most
@@ -690,11 +693,11 @@ section exists).
   the working notes the whole deduction runs on. The restraint therefore comes
   from the **thin stroke, not from being small or washed out** — Ionicons'
   thinnest round-capped `close-outline` at ~0.66 of the tile, `theme.mark`
-  forest green at 0.85 opacity, over a silhouette that recedes to 0.14 under a
-  mark so the glyph reads on a clean field, stamping on with a short scale from
+  forest green at 0.85 opacity, on the tile's own clean colour field, stamping
+  on with a short scale from
   0.8 plus a few degrees of rotation. Ranked loudness on a tile, and the
-  ordering any future change has to preserve: **placed plant > embossed
-  silhouette-plus-tile-colour > ✕**. A *mistake* ✕ is the one exception — solid
+  ordering any future change has to preserve: **placed plant > tile colour >
+  ✕**. A *mistake* ✕ is the one exception — solid
   `close`, larger, near-opaque, `dangerDark` — because there are only ever a
   few of them and they mean something different.
 - The board sits in a **cream mat** (`theme.bed` face · `bedEdge` outer border ·
@@ -711,7 +714,7 @@ section exists).
   `GameScreen` lays the whole screen on a very faint vertical
   `expo-linear-gradient` in the warm ivory key.
 - A rejected guess is a **red ✕ cell**: the tile becomes opaque
-  `theme.dangerTile` (silhouette and ✕ both `dangerDark`) rather than taking a
+  `theme.dangerTile` (rim and ✕ both `dangerDark`) rather than taking a
   translucent red wash — red over a botanical green blends to muddy tan, not to
   "wrong". This is the one place a cluster's hue is sacrificed, and it's worth it
   because at most two mistake cells are ever on the board at once. No pulse:
@@ -1131,17 +1134,17 @@ interactive tutorial + Help overlay. Runs on iOS/Android (Expo Go) and web.
 ## Conventions / gotchas
 
 - Touch math: **locationX/locationY only** (see Interaction model).
-- **Never mount a cell's sprite conditionally, and keep the grid keyed by
-  board.** Two boards of the same size reconcile cell-for-cell, so React keeps
-  every `Cell` instance and its native views across a level change. Combined with
-  a `{!placed && <Image …>}` glyph that produced a real Android bug: a tinted
-  `Image` unmounted (cell planted) and later remounted into the recycled view
-  never drew again, so every cell planted earlier in the session showed as a
-  blank tile on later boards — accumulating level after level. The fix is both
-  halves: `Cell` keeps the glyph mounted and only animates its opacity, and
-  `Board` keys rows/cells with `boardKey` (size + solution) so each puzzle gets a
-  fresh grid. `retry()`/`RESET`/resume reuse the same puzzle, hence the same key,
-  and correctly do *not* remount.
+- **Keep the grid keyed by board, and be wary of conditionally mounting a
+  tinted sprite in a cell.** Two boards of the same size reconcile
+  cell-for-cell, so React keeps every `Cell` instance and its native views
+  across a level change. Combined with the old `{!placed && <Image …>}`
+  watermark that produced a real Android bug: a tinted `Image` unmounted (cell
+  planted) and later remounted into the recycled view never drew again, so every
+  cell planted earlier in the session showed as a blank tile on later boards —
+  accumulating level after level. The watermark is gone now (see Board), but
+  `Board` still keys rows/cells with `boardKey` (size + solution) so each puzzle
+  gets a fresh grid. `retry()`/`RESET`/resume reuse the same puzzle, hence the
+  same key, and correctly do *not* remount.
 - Keep `src/game/*` (except `plants.ts`) free of RN/asset imports so `npm test`
   works under Node.
 - After editing `palette.ts` plant ids, keep `plants.ts` and the slicer in sync.
